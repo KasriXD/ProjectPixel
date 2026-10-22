@@ -16,7 +16,8 @@ testing. This page states what is verified and what work remains.
 | Windows x64 (MSVC 2022) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `windows-2022`. Not yet run interactively on real hardware |
 | macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
 | Android, iOS | No | No | Planned, Milestone 7 |
-| Browser | No | No | Recommended for Milestone 2 (see ROADMAP) |
+| WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
+| Browser (WebAssembly + WebGL) | Yes: `px-player.html` | See "Browser run" below | Experimental CI job, headless Chromium |
 
 ## Desktop
 
@@ -42,19 +43,52 @@ Work required:
   ratios (virtual resolution + letterbox), performance budgets, background
   audio rules.
 
-## Browser (planned)
+## Browser
 
-A native binary cannot run in a browser. A browser runtime requires:
+**Status: experimental, verified in CI; not a supported product yet.**
+Decision and reasoning: [ADR 0012](adr/0012-browser-runtime.md).
 
-- Compiling the engine with **Emscripten** to WebAssembly.
-- A browser graphics backend: SDL3's `SDL_Renderer` has a WebGL path; a later
-  GPU backend would need WebGL2 or WebGPU.
-- No blocking main loop: already handled (SDL main callbacks).
-- File access through an `IFileSystem` backed by downloaded packages
-  (already abstracted), not the local disk.
-- Threads only with cross-origin isolation (`SharedArrayBuffer`); design for
-  single-threaded first.
-- Networking via WebSockets or WebTransport only (no raw UDP), which affects
-  the Milestone 4 transport choice.
-- Download size budgets: the browser runtime should load "compatible, less
-  demanding" games; the platform should flag which games qualify.
+### What was verified
+
+- Luau compiles to WebAssembly unmodified. Its error handling (C++
+  exceptions), CPU interrupt, memory cap and read-only sandbox were checked
+  in WebAssembly under Node.js.
+- With Emscripten 6.0.13, the whole engine compiles; all unit tests and the
+  scripted playthrough pass under Node.js, and the playthrough ends at the
+  same player position as the native Linux and Windows builds.
+- SDL3 + `px-player` build as `px-player.html` with the example project
+  preloaded: `px-player.wasm` 2.5 MB, `.js` 177 KB, `.data` 30 KB
+  (uncompressed).
+- Emscripten 3.1.6 (Ubuntu 24.04's package) is **too old**: its C++ library
+  lacks `std::format`.
+
+### Browser run
+
+Result pending: filled in from the CI run of the headless Chromium step.
+
+### Building it yourself
+
+```sh
+# Emscripten SDK 6.0.13 (https://emscripten.org/docs/getting_started/downloads.html)
+source /path/to/emsdk/emsdk_env.sh
+cmake --preset wasm && cmake --build --preset wasm
+cd build/wasm/apps/player && python3 -m http.server 8000
+# open http://localhost:8000/px-player.html
+```
+
+`cmake --preset wasm-headless` builds the engine and tests for Node.js
+(`ctest --preset wasm-headless`). URL parameters become command-line
+arguments: `px-player.html?arg=--debug`.
+
+### Remaining work for a real browser runtime
+
+- Loading projects from the platform (an `IFileSystem` over downloaded,
+  validated packages) instead of files baked into `.data`.
+- Download size: compression, `-Oz`, excluding unused SDL subsystems.
+- Graphics: SDL_Renderer's WebGL path today; WebGL2/WebGPU when a custom
+  GPU renderer exists.
+- Networking via WebSockets or WebTransport only (no raw UDP), which the
+  Milestone 4 transport choice must respect.
+- Threads only with cross-origin isolation (`SharedArrayBuffer`); the
+  engine is single-threaded today.
+- Page integration: loading screen, fullscreen, audio unlock on first input.
