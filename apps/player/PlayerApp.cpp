@@ -93,10 +93,24 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
     return o;
 }
 
+namespace {
+
+// Without a project argument: prefer examples/platformer next to the
+// executable (packaged builds), then the source tree's copy (dev builds).
+std::filesystem::path defaultProjectDir() {
+    if (const char* base = SDL_GetBasePath()) {
+        const auto packaged = std::filesystem::path(base) / "examples" / "platformer";
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(packaged / "project.json", ec)) return packaged;
+    }
+    return std::filesystem::path(PX_DEFAULT_PROJECT_DIR);
+}
+
+} // namespace
+
 Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     if (options.verbose) log::setMinLevel(log::Level::Debug);
-    std::filesystem::path dir = options.projectDir.empty() ? std::filesystem::path(PX_DEFAULT_PROJECT_DIR)
-                                                           : options.projectDir;
+    std::filesystem::path dir = options.projectDir.empty() ? defaultProjectDir() : options.projectDir;
     std::unique_ptr<PlayerApp> app(new PlayerApp(std::move(options), dir));
 
     auto manifest = project::loadProjectManifest(app->m_files);

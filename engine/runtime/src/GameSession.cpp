@@ -55,8 +55,8 @@ void GameSession::buildStaticCollision() {
         grid.cellSize = map.tileSize;
         grid.width = map.width;
         grid.height = map.height;
-        grid.solid.resize(map.tiles.size());
-        for (std::size_t i = 0; i < map.tiles.size(); ++i) grid.solid[i] = map.tiles[i] >= 0 ? 1 : 0;
+        grid.solid.reserve(map.tiles.size());
+        for (const int tile : map.tiles) grid.solid.push_back(tile >= 0 ? 1 : 0);
         m_collision.addGrid(std::move(grid));
     });
 
