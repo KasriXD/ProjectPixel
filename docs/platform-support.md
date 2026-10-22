@@ -13,8 +13,8 @@ testing. This page states what is verified and what work remains.
 | Linux (Wayland) | Compiled in | **Not tested** | |
 | Headless (no SDL) | Yes | Yes | `headless` preset, `px-headless` playthrough test |
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |
-| Windows x64 (MSVC) | **Not yet verified** | **Not yet verified** | CI job written (`windows-2022`) |
-| macOS (arm64) | **Not yet verified** | **Not yet verified** | CI job written (`macos-14`); needs macOS 13.3+ |
+| Windows x64 (MSVC 2022) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `windows-2022`. Not yet run interactively on real hardware |
+| macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
 | Android, iOS | No | No | Planned, Milestone 7 |
 | Browser | No | No | Recommended for Milestone 2 (see ROADMAP) |
 

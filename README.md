@@ -26,8 +26,8 @@ prototype) is complete on Linux. See [ROADMAP.md](ROADMAP.md) for detail.
 | Versioned project/scene file format with validation | Implemented, unit tested |
 | Headless simulation (no graphics) | Implemented; basis of the future dedicated server |
 | Example platformer, loaded from project files | Playable; scripted run collects all coins in an automated test |
-| Windows | MinGW-w64 build compiles with `-Werror`, all tests and the game run under Wine 9 (SDL `windows` driver, `direct3d` renderer). **MSVC and real Windows hardware not yet verified** (CI job included) |
-| macOS | **Not yet verified** (CI job included, runs on first push) |
+| Windows | Builds and passes all tests in CI with Visual Studio 2022; MinGW-w64 build runs the game under Wine 9 (Direct3D renderer). **Not yet played on a real Windows PC** |
+| macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough and player run clean under AddressSanitizer + UBSan with leak detection |
 | Gamepad, touch, audio, text/fonts, Luau scripting, Studio, multiplayer, platform services | Planned (Milestones 2-8) |
 

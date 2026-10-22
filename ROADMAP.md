@@ -5,14 +5,14 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0 and 1 are done on Linux. Next: verify Windows and macOS through
-CI, then Milestone 2 (Luau scripting).
+Milestones 0 and 1 are done. CI builds and tests on Linux, Windows (MSVC) and
+macOS. Next: Milestone 2 (Luau scripting).
 
 ## Blockers and open items
 
 | Item | Impact | Resolution |
 |---|---|---|
-| MSVC and macOS builds not yet compiled; Windows only tested via MinGW + Wine | Can't claim full desktop support | Push to GitHub: `.github/workflows/ci.yml` builds and tests on Windows (MSVC), macOS and Linux. Founder to try the Windows package on a real PC |
+| Game not yet played interactively on real Windows or macOS hardware (CI passes on both) | Rendering/input on real GPUs unconfirmed | Founder to try the Windows package on a real PC; a Mac check when one is available |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 
 ---
@@ -27,7 +27,7 @@ CI, then Milestone 2 (Luau scripting).
 - [x] Automated tests (doctest + CTest)
 - [x] Logging with sinks; `Result`/`Error` error handling
 - [x] Build documentation (README, CONTRIBUTING)
-- [x] CI workflow for Linux, Windows, macOS (written; **runs on first push**)
+- [x] CI on GitHub Actions: Linux GCC/Clang/ASan+UBSan/headless, Windows MSVC, macOS; all passing
 
 ## Milestone 1: Engine prototype 0.1 (**Done** on Linux)
 
