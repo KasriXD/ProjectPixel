@@ -116,3 +116,69 @@ jobs:
           name: screenshot-${{ matrix.os }}-${{ matrix.configure }}-${{ strategy.job-index }}
           path: build/${{ matrix.configure }}/tests/player_smoke.png
           if-no-files-found: ignore
+
+  # Experimental: proves the engine, Luau and SDL3 build for the browser.
+  # Does not block merges until the browser runtime is a supported target.
+  wasm:
+    name: WebAssembly (experimental)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    env:
+      EMSDK_VERSION: "6.0.13"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Emscripten
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+          git clone --depth 1 https://github.com/emscripten-core/emsdk.git "$HOME/emsdk"
+          "$HOME/emsdk/emsdk" install "$EMSDK_VERSION"
+          "$HOME/emsdk/emsdk" activate "$EMSDK_VERSION"
+
+      - name: Engine and tests under Node.js
+        shell: bash
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+          cmake --preset wasm-headless 2>&1 | tee configure.log
+          cmake --build --preset wasm-headless --parallel 2>&1 | tee build.log
+          ctest --preset wasm-headless 2>&1 | tee test.log
+          node build/wasm-headless/apps/headless/px-headless.js examples/platformer \
+            --input-script examples/platformer/tests/full_run.input --expect-level-complete \
+            --expect-no-script-errors 2>&1 | tee -a test.log
+
+      - name: Browser player
+        shell: bash
+        run: |
+          source "$HOME/emsdk/emsdk_env.sh"
+          cmake --preset wasm 2>&1 | tee -a configure.log
+          cmake --build --preset wasm --parallel 2>&1 | tee -a build.log
+          sizes=$(ls -l build/wasm/apps/player/px-player.* | awk '{printf "%s: %d KiB. ", $9, $5/1024}')
+          echo "::notice title=Browser build::${sizes}"
+
+      - name: Report failure details
+        if: failure()
+        shell: bash
+        run: |
+          annotate() {
+            local title="$1" file="$2"
+            [ -f "$file" ] || return 0
+            local body
+            body=$(tail -c 6000 "$file" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=${title}::${body}"
+          }
+          annotate "Configure output" configure.log
+          if [ -f build.log ]; then grep -E "error|FAILED" build.log | tail -40 > build-errors.log || true; fi
+          annotate "Build errors" build-errors.log
+          annotate "Test output" test.log
+
+      - name: Upload browser build
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: px-player-web
+          path: |
+            build/wasm/apps/player/px-player.html
+            build/wasm/apps/player/px-player.js
+            build/wasm/apps/player/px-player.wasm
+            build/wasm/apps/player/px-player.data

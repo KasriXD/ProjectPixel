@@ -16,6 +16,9 @@ target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
 px_target_defaults(px_tests)
+if(EMSCRIPTEN)
+    target_link_options(px_tests PRIVATE -sNODERAWFS=1 -sEXIT_RUNTIME=1)
+endif()
 
 # One CTest entry per doctest test case would be nicer; one entry keeps CI simple.
 add_test(NAME unit_tests COMMAND px_tests)
@@ -32,7 +35,7 @@ add_test(NAME example_platformer_playthrough
 # and software renderer, 120 deterministic frames, then a screenshot.
 # (The "offscreen" driver is not used: on macOS SDL makes its windows OpenGL
 # windows by default, and offscreen OpenGL needs EGL, which macOS lacks.)
-if(PX_BUILD_CLIENT)
+if(PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
     add_test(NAME player_smoke_headless_display
         COMMAND px_player "${PX_EXAMPLES_DIR}/platformer"
                 --frames 120 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/player_smoke.png")

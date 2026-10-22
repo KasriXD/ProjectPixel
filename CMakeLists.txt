@@ -29,6 +29,14 @@ option(PX_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(PX_ENABLE_SANITIZERS "Build with AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
+# WebAssembly (Emscripten) builds - experimental, see docs/platform-support.md#browser.
+if(EMSCRIPTEN)
+    # Luau and the project-file parser report errors with C++ exceptions,
+    # which Emscripten disables unless asked.
+    add_compile_options(-fexceptions)
+    add_link_options(-fexceptions -sALLOW_MEMORY_GROWTH=1 -sSTACK_SIZE=1048576)
+endif()
 include(PxCompilerOptions)
 include(PxDependencies)
 
