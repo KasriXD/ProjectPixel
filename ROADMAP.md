@@ -12,7 +12,7 @@ CI, then Milestone 2 (Luau scripting).
 
 | Item | Impact | Resolution |
 |---|---|---|
-| Windows and macOS builds never compiled yet | Can't claim desktop support beyond Linux | Push to GitHub: `.github/workflows/ci.yml` builds and tests on Windows (MSVC), macOS and Linux |
+| MSVC and macOS builds not yet compiled; Windows only tested via MinGW + Wine | Can't claim full desktop support | Push to GitHub: `.github/workflows/ci.yml` builds and tests on Windows (MSVC), macOS and Linux. Founder to try the Windows package on a real PC |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 
 ---
@@ -45,6 +45,8 @@ CI, then Milestone 2 (Luau scripting).
 - [x] Example platformer loaded entirely from project files
 - [x] Tests: 51 unit test cases; scripted full playthrough; offscreen smoke test
 - [x] Verified visually on Linux: X11 + OpenGL (Mesa) and offscreen + software renderer
+- [x] Windows build (MinGW-w64) runs under Wine: tests, playthrough, client with Direct3D renderer
+- [x] Clean under AddressSanitizer + UBSan (leak detection on); Release builds clean with `-Werror`
 
 Deliverable met: a playable 2D game loaded from project files with a
 controllable character, solid platforms and collectible objects.

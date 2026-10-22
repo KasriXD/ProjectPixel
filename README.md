@@ -26,7 +26,9 @@ prototype) is complete on Linux. See [ROADMAP.md](ROADMAP.md) for detail.
 | Versioned project/scene file format with validation | Implemented, unit tested |
 | Headless simulation (no graphics) | Implemented; basis of the future dedicated server |
 | Example platformer, loaded from project files | Playable; scripted run collects all coins in an automated test |
-| Windows, macOS builds | Expected to work, **not yet verified** (CI workflow included, runs on first push) |
+| Windows | MinGW-w64 build compiles with `-Werror`, all tests and the game run under Wine 9 (SDL `windows` driver, `direct3d` renderer). **MSVC and real Windows hardware not yet verified** (CI job included) |
+| macOS | **Not yet verified** (CI job included, runs on first push) |
+| Memory safety | Unit tests, headless playthrough and player run clean under AddressSanitizer + UBSan with leak detection |
 | Gamepad, touch, audio, text/fonts, Luau scripting, Studio, multiplayer, platform services | Planned (Milestones 2-8) |
 
 ## Building
@@ -61,6 +63,18 @@ ctest --preset dev            # unit tests, headless playthrough, player smoke t
 Other presets: `release`, `asan` (AddressSanitizer + UBSan), `headless` (no
 SDL or graphics at all), and `vs2022` on Windows
 (`cmake --preset vs2022` then `cmake --build --preset vs2022-debug`).
+
+Windows executables can also be cross-compiled from Linux with MinGW-w64:
+
+```sh
+sudo apt install g++-mingw-w64-x86-64-posix
+cmake -S . -B build/mingw -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-x86_64.cmake
+cmake --build build/mingw
+```
+
+The resulting `px-player.exe` needs no extra DLLs. Copy `examples/` next to it
+and it starts the example with no arguments.
 
 ### Run
 
