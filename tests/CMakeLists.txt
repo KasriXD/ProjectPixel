@@ -26,10 +26,12 @@ add_test(NAME example_platformer_playthrough
 
 # Smoke test for the real client: open a window with SDL's offscreen video
 # driver and software renderer, run 120 deterministic frames, save a screenshot.
+# SDL_FRAMEBUFFER_ACCELERATION=0 keeps SDL from presenting the software
+# framebuffer through OpenGL/EGL, which macOS does not provide offscreen.
 if(PX_BUILD_CLIENT)
     add_test(NAME player_smoke_offscreen
         COMMAND px_player "${PX_EXAMPLES_DIR}/platformer"
                 --frames 120 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/player_smoke.png")
     set_tests_properties(player_smoke_offscreen PROPERTIES
-        ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;SDL_RENDER_DRIVER=software;LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan_suppressions.txt")
+        ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0")
 endif()
