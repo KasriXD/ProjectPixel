@@ -21,7 +21,7 @@ whether to build the browser runtime now.
 | All 75 unit tests under Node.js | Pass | CI |
 | Scripted playthrough under Node.js | Level completed; final player position identical to native Linux and Windows builds | CI |
 | SDL3 + px-player browser build | Builds: `px-player.wasm` 2.5 MB, `.js` 177 KB, `.data` 30 KB (uncompressed) | CI |
-| Browser build runs in headless Chromium | see "Browser run" in docs/platform-support.md | CI |
+| Browser build runs in headless Chromium (Playwright) | Yes: WebGL 2.0, SDL `emscripten` driver + `opengles2` renderer; scripted level completed, 14/14 coins, 0 script errors, same simulated completion time as native | CI |
 
 Code changes that were needed: enabling C++ exceptions for Emscripten
 (Luau and the project parser rely on them), memory growth, a 1 MiB stack,

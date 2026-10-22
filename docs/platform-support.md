@@ -17,7 +17,7 @@ testing. This page states what is verified and what work remains.
 | macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
 | Android, iOS | No | No | Planned, Milestone 7 |
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
-| Browser (WebAssembly + WebGL) | Yes: `px-player.html` | See "Browser run" below | Experimental CI job, headless Chromium |
+| Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
 
 ## Desktop
 
@@ -64,7 +64,17 @@ Decision and reasoning: [ADR 0012](adr/0012-browser-runtime.md).
 
 ### Browser run
 
-Result pending: filled in from the CI run of the headless Chromium step.
+Verified in CI (run of 2026-10-23, Playwright 1.49.1, headless Chromium):
+the browser build loads `px-player.html`, reports **WebGL 2.0**, opens with
+SDL's `emscripten` video driver and `opengles2` renderer, loads the example
+project and its 3 Luau scripts from the preloaded data, plays the scripted
+route and completes the level with all 14 coins and 0 script errors. The
+in-game completion time (14.83 s of simulated time) is identical to the
+native builds. A screenshot taken at the win banner is attached to the CI
+run as the `px-player-web` artifact, together with the build.
+
+Not verified yet: a person playing it in a desktop or mobile browser
+(keyboard feel, focus handling, mobile browsers, Safari and Firefox).
 
 ### Building it yourself
 

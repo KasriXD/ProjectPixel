@@ -31,7 +31,7 @@ scripting) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | Windows | Builds and passes all tests in CI with Visual Studio 2022; MinGW-w64 build runs the game under Wine 9 (Direct3D renderer). **Not yet played on a real Windows PC** |
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough and player run clean under AddressSanitizer + UBSan with leak detection |
-| Browser (WebAssembly) | **Experimental**: engine and tests run under Node.js in CI; the browser build is played in headless Chromium in CI ([details](docs/platform-support.md#browser)) |
+| Browser (WebAssembly) | **Experimental**: engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
 | Gamepad, touch, audio, text/fonts, Studio, visual scripting, multiplayer, platform services | Planned (Milestones 3-8) |
 
 ## Building
