@@ -14,7 +14,7 @@ testing. This page states what is verified and what work remains.
 | Headless (no SDL) | Yes | Yes | `headless` preset, `px-headless` playthrough test |
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |
 | Windows x64 (MSVC) | **Not yet verified** | **Not yet verified** | CI job written (`windows-2022`) |
-| macOS (arm64) | **Not yet verified** | **Not yet verified** | CI job written (`macos-latest`); needs macOS 13.3+ |
+| macOS (arm64) | **Not yet verified** | **Not yet verified** | CI job written (`macos-14`); needs macOS 13.3+ |
 | Android, iOS | No | No | Planned, Milestone 7 |
 | Browser | No | No | Recommended for Milestone 2 (see ROADMAP) |
 
