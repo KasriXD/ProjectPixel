@@ -76,23 +76,38 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install ninja
 
-      - name: Cache downloaded dependencies
-        uses: actions/cache@v4
-        with:
-          path: build/${{ matrix.configure }}/_deps/*-subbuild
-          key: deps-${{ matrix.os }}-${{ hashFiles('cmake/PxDependencies.cmake') }}
-
       - name: Configure
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
-        run: cmake --preset ${{ matrix.configure }}
+        shell: bash
+        run: cmake --preset ${{ matrix.configure }} 2>&1 | tee configure.log
 
       - name: Build
-        run: cmake --build --preset ${{ matrix.build }} --parallel
+        shell: bash
+        run: cmake --build --preset ${{ matrix.build }} --parallel 2>&1 | tee build.log
 
       - name: Test
-        run: ctest --preset ${{ matrix.test }}
+        shell: bash
+        run: ctest --preset ${{ matrix.test }} 2>&1 | tee test.log
+
+      # Publishes the end of the CMake/CTest logs as annotations, so failures
+      # can be read through the GitHub API without downloading job logs.
+      - name: Report failure details
+        if: failure()
+        shell: bash
+        run: |
+          annotate() {
+            local title="$1" file="$2"
+            [ -f "$file" ] || return 0
+            local body
+            body=$(tail -c 6000 "$file" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::error title=${title}::${body}"
+          }
+          annotate "Configure output" configure.log
+          if [ -f build.log ]; then grep -E "error|FAILED" build.log | tail -40 > build-errors.log || true; fi
+          annotate "Build errors" build-errors.log
+          annotate "Test output" test.log
 
       - name: Upload smoke-test screenshot
         if: always() && matrix.configure != 'headless'
