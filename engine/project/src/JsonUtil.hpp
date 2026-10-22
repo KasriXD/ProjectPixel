@@ -94,11 +94,14 @@ private:
 // one line ("[16, 16]") so files stay compact and diff-friendly. Ends with '\n'.
 [[nodiscard]] std::string dumpPretty(const Json& json);
 
-using Migration = void (*)(Json& root);
+// Upgrades a document by one format version. Changes that alter behaviour
+// are described in `warnings`, which loaders pass on to the creator.
+using Migration = void (*)(Json& root, std::vector<std::string>& warnings);
 
 // Checks the "format" tag and "formatVersion", then applies migrations in
 // order. migrations[i] upgrades version i+1 to i+2.
 void checkAndMigrate(Json& root, std::string_view expectedFormat, int currentVersion,
-                     std::span<const Migration> migrations, std::string_view fileKind);
+                     std::span<const Migration> migrations, std::string_view fileKind,
+                     std::vector<std::string>& warnings);
 
 } // namespace px::project::detail

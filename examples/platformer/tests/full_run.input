@@ -1,4 +1,4 @@
-# Scripted route that collects all 12 coins in Level 1.
+# Scripted route that collects all 14 coins in Level 1 and completes it.
 # Used by the automated playthrough test (tests/CMakeLists.txt) and by
 # `px-player --input-script` for demos. Format: docs/input-scripts.md.
 # If you change the level layout or the PlatformerController tuning,
@@ -24,5 +24,10 @@
 6  move_right
 26 move_right+jump       # jump from the high platform: coin 9, land on the last stretch
 72 move_right            # coins 10 and 11 are on the path
-30 move_right+jump       # final jump: coin 12
+30 move_right+jump       # jump: coin 12
+20 -                     # stand at the edge of the wide pit
+133 -                    # wait for the moving platform (scripts/moving_platform.luau) to arrive
+30 move_right            # step onto it
+88 -                     # ride without input: the platform carries the player through coin 13
+90 move_right            # step off at the far side; coin 14 completes the level (scripts/level_rules.luau)
 20 -

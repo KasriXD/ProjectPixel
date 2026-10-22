@@ -58,6 +58,20 @@ ProjectSettings readSettings(const Json& j, const std::string& path) {
         }
         d.finish();
     }
+    if (const Json* scripting = r.find("scripting")) {
+        const std::string scriptingPath = detail::childPath(path, "scripting");
+        ObjectReader sr(*scripting, scriptingPath);
+        sr.optional("apiVersion", settings.scripting.apiVersion);
+        const int v = settings.scripting.apiVersion;
+        if (v < 1) fail(detail::childPath(scriptingPath, "apiVersion"), "must be 1 or higher");
+        if (v > kScriptApiVersion) {
+            fail(detail::childPath(scriptingPath, "apiVersion"),
+                 std::format("this project needs scripting API version {}, but this engine provides version {}; "
+                             "update the engine",
+                             v, kScriptApiVersion));
+        }
+        sr.finish();
+    }
     r.finish();
     return settings;
 }
@@ -127,7 +141,8 @@ void readAssets(const Json& j, const std::string& path, assets::AssetRegistry& r
 }
 
 ProjectManifest readManifest(Json& root) {
-    detail::checkAndMigrate(root, "px.project", kProjectFormatVersion, kProjectMigrations, "project");
+    std::vector<std::string> warnings; // no project migrations exist yet
+    detail::checkAndMigrate(root, "px.project", kProjectFormatVersion, kProjectMigrations, "project", warnings);
     ProjectManifest m;
     ObjectReader r(root, "");
     (void)r.find("format");
@@ -181,7 +196,9 @@ std::string serializeProjectManifest(const ProjectManifest& m) {
     display["virtualResolution"] = detail::toJson(m.settings.display.virtualResolution);
     display["scaling"] = m.settings.display.scaling == ScalingMode::Integer ? "integer" : "letterbox";
     display["windowScale"] = m.settings.display.windowScale;
-    root["settings"] = Json{{"tickRate", m.settings.tickRate}, {"display", display}};
+    root["settings"] = Json{{"tickRate", m.settings.tickRate},
+                            {"display", display},
+                            {"scripting", Json{{"apiVersion", m.settings.scripting.apiVersion}}}};
 
     Json actions = Json::object();
     for (const auto& action : m.input.actions) {

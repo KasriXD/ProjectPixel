@@ -57,7 +57,8 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 5);
+    CHECK(manifest->assets.size() == 9);
+    CHECK(manifest->settings.scripting.apiVersion == 1);
 }
 
 TEST_CASE("Example scene loads with all expected content") {
@@ -72,12 +73,13 @@ TEST_CASE("Example scene loads with all expected content") {
     const Entity player = scene->findByName("Player");
     REQUIRE_FALSE(player.isNull());
     CHECK(scene->tryGet<PlatformerController>(player) != nullptr);
-    CHECK(scene->registry().count<Collectible>() == 12);
+    CHECK(scene->registry().count<Tags>() == 14);
+    CHECK(scene->registry().count<Script>() == 16); // 14 coins, the moving platform, the level rules
     CHECK(scene->registry().count<Tilemap>() == 1);
     const Entity level = scene->findByName("Level");
     const auto* map = scene->tryGet<Tilemap>(level);
     REQUIRE(map != nullptr);
-    CHECK(map->width == 64);
+    CHECK(map->width == 84);
     CHECK(map->height == 14);
     CHECK(map->tileAt(0, 0) == 2); // stone wall
 }

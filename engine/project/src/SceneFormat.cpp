@@ -2,9 +2,14 @@
 
 #include "JsonUtil.hpp"
 
+#include "px/core/Log.hpp"
+
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <format>
 #include <sstream>
+#include <type_traits>
 
 namespace px::project {
 
@@ -17,21 +22,60 @@ using namespace px::scene;
 
 namespace {
 
+// --- Migrations ---------------------------------------------------------------
+
+// Version 1 -> 2: the built-in Collectible component was removed; collecting
+// is now done by scripts. Each Collectible becomes a tag with its `kind`, so
+// scripts can still find these entities, and the creator is warned that the
+// behaviour itself must now come from a script.
+void migrateScene1To2(Json& root, std::vector<std::string>& warnings) {
+    auto entities = root.find("entities");
+    if (entities == root.end() || !entities->is_array()) return;
+    int converted = 0;
+    for (auto& entity : *entities) {
+        if (!entity.is_object()) continue;
+        auto components = entity.find("components");
+        if (components == entity.end() || !components->is_object()) continue;
+        auto collectible = components->find("Collectible");
+        if (collectible == components->end()) continue;
+        std::string kind = "coin";
+        if (collectible->is_object()) {
+            if (auto k = collectible->find("kind"); k != collectible->end() && k->is_string()) kind = k->get<std::string>();
+        }
+        components->erase("Collectible");
+        auto& tags = (*components)["Tags"];
+        if (!tags.is_array()) tags = Json::array();
+        if (std::find(tags.begin(), tags.end(), Json(kind)) == tags.end()) tags.push_back(kind);
+        ++converted;
+    }
+    if (converted > 0) {
+        warnings.push_back(std::format(
+            "scene format 1 -> 2: {} Collectible component(s) were converted to tags. Collecting is now done by "
+            "scripts; add a Script component (see examples/platformer/scripts/coin.luau)",
+            converted));
+    }
+}
+
 // Scene format migrations: kSceneMigrations[i] upgrades version i+1 to i+2.
-constexpr std::array<detail::Migration, 0> kSceneMigrations{};
+constexpr std::array<detail::Migration, 1> kSceneMigrations{&migrateScene1To2};
 
 struct ReadContext {
     const assets::AssetRegistry* assets = nullptr;
 };
 
-void checkTexture(const ReadContext& ctx, const assets::AssetId& id, const std::string& path) {
-    if (id.isNil()) fail(path, "a texture is required");
+void checkAsset(const ReadContext& ctx, const assets::AssetId& id, assets::AssetType type, const std::string& path) {
+    if (id.isNil()) fail(path, std::format("a {} asset id is required", assets::assetTypeName(type)));
     if (ctx.assets == nullptr) return;
     const auto* entry = ctx.assets->find(id);
     if (entry == nullptr) fail(path, std::format("refers to asset {}, which is not in the project", id.toString()));
-    if (entry->type != assets::AssetType::Texture) {
-        fail(path, std::format("asset '{}' is a {}, not a texture", entry->name, assets::assetTypeName(entry->type)));
+    if (entry->type != type) {
+        fail(path, std::format("asset '{}' is a {}, not a {}", entry->name, assets::assetTypeName(entry->type),
+                               assets::assetTypeName(type)));
     }
+}
+
+void checkTexture(const ReadContext& ctx, const assets::AssetId& id, const std::string& path) {
+    checkAsset(ctx, id, assets::AssetType::Texture, path);
 }
 
 // --- Tilemap rows -------------------------------------------------------------
@@ -273,18 +317,106 @@ bool writePlatformerController(const Scene& s, Entity e, Json& out) {
     return true;
 }
 
-void readCollectible(Scene& s, Entity e, const Json& j, const std::string& path, const ReadContext&) {
-    Collectible c;
-    ObjectReader r(j, path);
-    r.optional("kind", c.kind);
-    r.optional("value", c.value);
-    r.finish();
-    s.set(e, c);
+constexpr std::size_t kMaxTags = 32;
+constexpr std::size_t kMaxTagLength = 64;
+constexpr std::size_t kMaxScriptProperties = 64;
+constexpr std::size_t kMaxScriptStringLength = 1000;
+
+bool isIdentifier(std::string_view name) {
+    if (name.empty() || name.size() > 64) return false;
+    if (!((name[0] >= 'a' && name[0] <= 'z') || (name[0] >= 'A' && name[0] <= 'Z') || name[0] == '_')) return false;
+    for (const char c : name) {
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    return true;
 }
-bool writeCollectible(const Scene& s, Entity e, Json& out) {
-    const auto* c = s.tryGet<Collectible>(e);
-    if (!c) return false;
-    out = Json{{"kind", c->kind}, {"value", c->value}};
+
+void readTags(Scene& s, Entity e, const Json& j, const std::string& path, const ReadContext&) {
+    if (!j.is_array()) fail(path, "expected an array of tag strings, e.g. [\"coin\"]");
+    if (j.size() > kMaxTags) fail(path, std::format("too many tags; the limit is {}", kMaxTags));
+    Tags tags;
+    for (std::size_t i = 0; i < j.size(); ++i) {
+        std::string tag;
+        detail::readValue(j[i], detail::indexPath(path, i), tag);
+        if (tag.empty() || tag.size() > kMaxTagLength) {
+            fail(detail::indexPath(path, i), std::format("tags must be 1 to {} characters", kMaxTagLength));
+        }
+        if (!tags.has(tag)) tags.values.push_back(std::move(tag));
+    }
+    s.set(e, std::move(tags));
+}
+bool writeTags(const Scene& s, Entity e, Json& out) {
+    const auto* tags = s.tryGet<Tags>(e);
+    if (!tags) return false;
+    out = Json::array();
+    for (const auto& t : tags->values) out.push_back(t);
+    return true;
+}
+
+ScriptValue readScriptValue(const Json& j, const std::string& path) {
+    if (j.is_boolean()) return j.get<bool>();
+    if (j.is_number()) {
+        float checked = 0.0f;
+        detail::readValue(j, path, checked); // rejects NaN, infinity and out-of-range values
+        return j.get<double>();
+    }
+    if (j.is_string()) {
+        std::string text = j.get<std::string>();
+        if (text.size() > kMaxScriptStringLength) {
+            fail(path, std::format("text is longer than {} characters", kMaxScriptStringLength));
+        }
+        return text;
+    }
+    if (j.is_array()) {
+        Vec2 v;
+        detail::readValue(j, path, v);
+        return v;
+    }
+    fail(path, "script properties must be a number, true/false, a string, or a vector [x, y]");
+}
+
+Json scriptValueToJson(const ScriptValue& value) {
+    return std::visit(
+        [](const auto& v) -> Json {
+            using T = std::decay_t<decltype(v)>;
+            if constexpr (std::is_same_v<T, double>) {
+                if (std::floor(v) == v && std::abs(v) < 1.0e15) return static_cast<long long>(v);
+                return v;
+            } else if constexpr (std::is_same_v<T, Vec2>) {
+                return toJson(v);
+            } else {
+                return v;
+            }
+        },
+        value);
+}
+
+void readScript(Scene& s, Entity e, const Json& j, const std::string& path, const ReadContext& ctx) {
+    Script script;
+    ObjectReader r(j, path);
+    r.required("script", script.script);
+    checkAsset(ctx, script.script, assets::AssetType::Script, childPath(path, "script"));
+    if (const Json* props = r.find("properties")) {
+        const std::string propsPath = childPath(path, "properties");
+        if (!props->is_object()) fail(propsPath, "expected an object mapping property names to values");
+        if (props->size() > kMaxScriptProperties) {
+            fail(propsPath, std::format("too many properties; the limit is {}", kMaxScriptProperties));
+        }
+        for (const auto& [name, value] : props->items()) {
+            const std::string propPath = childPath(propsPath, name);
+            if (!isIdentifier(name)) fail(propPath, "property names must be identifiers (letters, digits, '_')");
+            script.properties.push_back({name, readScriptValue(value, propPath)});
+        }
+    }
+    r.finish();
+    s.set(e, std::move(script));
+}
+bool writeScript(const Scene& s, Entity e, Json& out) {
+    const auto* script = s.tryGet<Script>(e);
+    if (!script) return false;
+    Json props = Json::object();
+    for (const auto& p : script->properties) props[p.name] = scriptValueToJson(p.value);
+    out = Json{{"script", toJson(script->script)}, {"properties", props}};
     return true;
 }
 
@@ -320,7 +452,7 @@ bool writeCamera(const Scene& s, Entity e, Json& out) {
 }
 
 // Order here is the order components are written in files.
-constexpr std::array<ComponentCodec, 10> kCodecs{{
+constexpr std::array<ComponentCodec, 11> kCodecs{{
     {"Transform", readTransform, writeTransform},
     {"Sprite", readSprite, writeSprite},
     {"SpriteAnimation", readSpriteAnimation, writeSpriteAnimation},
@@ -328,9 +460,10 @@ constexpr std::array<ComponentCodec, 10> kCodecs{{
     {"BoxCollider", readBoxCollider, writeBoxCollider},
     {"KinematicBody", readKinematicBody, writeKinematicBody},
     {"PlatformerController", readPlatformerController, writePlatformerController},
-    {"Collectible", readCollectible, writeCollectible},
     {"Player", readPlayer, writePlayer},
     {"Camera", readCamera, writeCamera},
+    {"Tags", readTags, writeTags},
+    {"Script", readScript, writeScript},
 }};
 
 const ComponentCodec* findCodec(std::string_view name) {
@@ -348,8 +481,8 @@ std::vector<std::string> codecNames() {
 
 // --- Scene --------------------------------------------------------------------
 
-Scene readScene(Json& root, const ReadContext& ctx) {
-    detail::checkAndMigrate(root, "px.scene", kSceneFormatVersion, kSceneMigrations, "scene");
+Scene readScene(Json& root, const ReadContext& ctx, std::vector<std::string>& warnings) {
+    detail::checkAndMigrate(root, "px.scene", kSceneFormatVersion, kSceneMigrations, "scene", warnings);
     Scene scene;
     ObjectReader r(root, "");
     (void)r.find("format");
@@ -420,10 +553,20 @@ Scene readScene(Json& root, const ReadContext& ctx) {
 
 } // namespace
 
-Result<Scene> parseScene(std::string_view json, std::string_view sourceName, const assets::AssetRegistry* assets) {
+Result<Scene> parseScene(std::string_view json, std::string_view sourceName, const assets::AssetRegistry* assets,
+                         std::vector<std::string>* warnings) {
     try {
         Json root = detail::parseJsonText(json);
-        return readScene(root, ReadContext{assets});
+        std::vector<std::string> migrationWarnings;
+        Scene scene = readScene(root, ReadContext{assets}, migrationWarnings);
+        for (const auto& w : migrationWarnings) {
+            if (warnings != nullptr) {
+                warnings->push_back(std::format("{}: {}", sourceName, w));
+            } else {
+                log::warn("{}: {}", sourceName, w);
+            }
+        }
+        return scene;
     } catch (const detail::FormatError& e) {
         return makeError(ErrorCode::InvalidData, "{}: {}", sourceName, e.what());
     }

@@ -2,9 +2,11 @@
 """Generates the example platformer project in examples/platformer/.
 
 Produces:
-  assets/tiles.png, assets/player.png, assets/coin.png, assets/scenery.png
+  assets/tiles.png, assets/player.png, assets/coin.png, assets/scenery.png,
+  assets/platform.png
   scenes/level1.scene.json
   project.json
+The Luau scripts in scripts/ are hand-written and not generated.
 
 All art is original and drawn procedurally here. Ids are deterministic
 (UUIDv5 from fixed names) so regenerating produces identical files.
@@ -261,22 +263,50 @@ def make_scenery():
     return img
 
 
+def make_platform():
+    """48x16 moving platform: wooden planks on a metal frame."""
+    img = Image.new("RGBA", (48, 16), (0, 0, 0, 0))
+    frame, frame_lt, frame_dk = hexrgb("#6f86a3"), hexrgb("#a9bed6"), hexrgb("#4a5d75")
+    wood, wood_lt, wood_dk = hexrgb("#b07a3c"), hexrgb("#d39a55"), hexrgb("#7a5226")
+    for y in range(0, 10):
+        for x in range(48):
+            edge = y in (0, 9) or x in (0, 47)
+            img.putpixel((x, y), wood_dk if edge else (wood_lt if y == 1 else wood))
+    for x in range(8, 48, 8):
+        for y in range(1, 9):
+            img.putpixel((x, y), wood_dk)
+    for y in range(10, 14):
+        for x in list(range(2, 8)) + list(range(40, 46)):
+            img.putpixel((x, y), frame_dk if y == 13 or x in (2, 7, 40, 45) else frame)
+    for x in (4, 42):
+        img.putpixel((x, 11), frame_lt)
+    return img
+
+
 # ------------------------------------------------------------------------- level
 
 # Legend: G grass, L grass-left-edge, R grass-right-edge, D dirt, E deep dirt,
 # S stone, C crate, M metal, o coin, P player spawn, c cloud, b bush, f flowers,
-# s sign. '.' is empty. The level is 64 x 14 tiles of 16x16 pixels.
-LEVEL_WIDTH, LEVEL_HEIGHT = 64, 14
+# s sign. '.' is empty. The level is 84 x 14 tiles of 16x16 pixels.
+LEVEL_WIDTH, LEVEL_HEIGHT = 84, 14
 
 # (first column, last column, surface row) of each ground segment; gaps are pits.
-GROUND = [(2, 12, 11), (16, 25, 11), (28, 33, 11), (34, 38, 10), (42, 47, 10), (48, 61, 11)]
+# The pit between columns 62 and 69 is too wide to jump: a scripted moving
+# platform (PLATFORM below) carries the player across.
+GROUND = [(2, 12, 11), (16, 25, 11), (28, 33, 11), (34, 38, 10), (42, 47, 10), (48, 61, 11), (70, 81, 11)]
 BLOCKS = [("C", 21, 9), ("C", 22, 9), ("C", 21, 10), ("C", 22, 10),          # crate stack
           ("M", 28, 9), ("M", 29, 9), ("M", 30, 9), ("M", 31, 9),            # low metal platform
           ("M", 44, 8), ("M", 45, 8), ("M", 46, 8)]                          # high metal platform
-COINS = [(6, 10), (10, 9), (14, 8), (22, 8), (29, 8), (30, 8), (36, 9), (40, 7), (45, 6), (52, 10), (55, 10), (58, 8)]
-DECOR = [("c", 7, 1), ("c", 18, 3), ("c", 27, 1), ("c", 42, 3), ("c", 46, 1), ("c", 57, 2),
-         ("s", 4, 10), ("f", 8, 10), ("b", 24, 10), ("b", 50, 10), ("f", 60, 10), ("f", 37, 9)]
+COINS = [(6, 10), (10, 9), (14, 8), (22, 8), (29, 8), (30, 8), (36, 9), (40, 7), (45, 6), (52, 10), (55, 10), (58, 8),
+         (66, 10), (76, 10)]
+DECOR = [("c", 7, 1), ("c", 18, 3), ("c", 27, 1), ("c", 42, 3), ("c", 46, 1), ("c", 57, 2), ("c", 66, 2), ("c", 77, 1),
+         ("s", 4, 10), ("f", 8, 10), ("b", 24, 10), ("b", 50, 10), ("f", 60, 10), ("f", 37, 9), ("b", 73, 10),
+         ("f", 79, 10)]
 SPAWN = (3, 10)
+# Moving platform: left edge at the first pit column, top level with the ground,
+# travelling right until it touches the far side.
+PLATFORM_COLUMN, PLATFORM_ROW, PLATFORM_TILES = 62, 11, 3
+PLATFORM_TRAVEL = (70 - 62 - PLATFORM_TILES) * 16
 
 
 def build_level():
@@ -346,8 +376,10 @@ def main():
     make_player().save(ROOT / "assets" / "player.png")
     make_coin().save(ROOT / "assets" / "coin.png")
     make_scenery().save(ROOT / "assets" / "scenery.png")
+    make_platform().save(ROOT / "assets" / "platform.png")
 
-    tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery")}
+    tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery", "platform")}
+    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform")}
     scene_id = gid("asset/level1")
     player_id = gid("entity/player")
 
@@ -376,7 +408,8 @@ def main():
                     "Sprite": {"texture": tex["coin"], "source": [0, 0, 16, 16], "size": [16, 16], "layer": 5},
                     "SpriteAnimation": {"frames": [[i * 16, 0, 16, 16] for i in range(4)], "framesPerSecond": 8},
                     "BoxCollider": {"size": [10, 12], "isTrigger": True},
-                    "Collectible": {"kind": "coin", "value": 1}}})
+                    "Tags": ["coin"],
+                    "Script": {"script": script["coin"], "properties": {"value": 1}}}})
             elif ch in scenery_sources:
                 source, size, layer = scenery_sources[ch]
                 name = {"c": "Cloud", "b": "Bush", "f": "Flowers", "s": "Sign"}[ch]
@@ -388,6 +421,17 @@ def main():
             elif ch == "P":
                 spawn = [cx, cy]
 
+    width_px = PLATFORM_TILES * 16
+    entities.append({"id": gid("entity/moving-platform"), "name": "Moving Platform", "components": {
+        "Transform": {"position": [PLATFORM_COLUMN * 16 + width_px // 2, PLATFORM_ROW * 16 + 8]},
+        "Sprite": {"texture": tex["platform"], "size": [width_px, 16], "layer": 1},
+        "BoxCollider": {"size": [width_px, 16]},
+        "Script": {"script": script["moving_platform"],
+                   "properties": {"offset": [PLATFORM_TRAVEL, 0], "period": 4}}}})
+    entities.append({"id": gid("entity/level-rules"), "name": "Level Rules", "components": {
+        "Script": {"script": script["level_rules"],
+                   "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}}}})
+
     entities.append({"id": player_id, "name": "Player", "components": {
         "Transform": {"position": spawn},
         "Sprite": {"texture": tex["player"], "size": [16, 16], "layer": 10},
@@ -398,7 +442,7 @@ def main():
 
     scene = {
         "format": "px.scene",
-        "formatVersion": 1,
+        "formatVersion": 2,
         "name": "Level 1",
         "settings": {"backgroundColor": "#9bd4f0", "killPlaneY": num(len(LEVEL) * 16 + 40)},
         "entities": entities,
@@ -410,10 +454,11 @@ def main():
         "formatVersion": 1,
         "id": gid("project/example-platformer"),
         "name": "Example Platformer",
-        "engineVersion": "0.1.0",
+        "engineVersion": "0.2.0",
         "startScene": scene_id,
         "settings": {"tickRate": 60,
-                     "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3}},
+                     "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3},
+                     "scripting": {"apiVersion": 1}},
         "input": {"actions": {
             "move_left": ["Left", "A"],
             "move_right": ["Right", "D"],
@@ -425,6 +470,11 @@ def main():
             {"id": tex["player"], "type": "texture", "name": "Player", "path": "assets/player.png", "filter": "nearest"},
             {"id": tex["coin"], "type": "texture", "name": "Coin", "path": "assets/coin.png", "filter": "nearest"},
             {"id": tex["scenery"], "type": "texture", "name": "Scenery", "path": "assets/scenery.png", "filter": "nearest"},
+            {"id": tex["platform"], "type": "texture", "name": "Platform", "path": "assets/platform.png", "filter": "nearest"},
+            {"id": script["coin"], "type": "script", "name": "Coin", "path": "scripts/coin.luau"},
+            {"id": script["level_rules"], "type": "script", "name": "Level Rules", "path": "scripts/level_rules.luau"},
+            {"id": script["moving_platform"], "type": "script", "name": "Moving Platform",
+             "path": "scripts/moving_platform.luau"},
             {"id": scene_id, "type": "scene", "name": "Level 1", "path": "scenes/level1.scene.json"},
         ],
     }

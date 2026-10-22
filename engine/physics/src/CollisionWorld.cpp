@@ -16,11 +16,13 @@ void CollisionWorld::addGrid(SolidGrid grid) {
     m_grids.push_back(std::move(grid));
 }
 
-void CollisionWorld::addBox(const Rect& box) {
-    if (!box.empty()) m_boxes.push_back(box);
+void CollisionWorld::addBox(const Rect& box, SolidOwner owner) {
+    if (!box.empty()) m_boxes.push_back(Solid{box, owner});
 }
 
-void CollisionWorld::querySolids(const Rect& region, std::vector<Rect>& out) const {
+void CollisionWorld::clearBoxes() { m_boxes.clear(); }
+
+void CollisionWorld::querySolids(const Rect& region, std::vector<Solid>& out) const {
     for (const auto& grid : m_grids) {
         const float localLeft = (region.left() - grid.origin.x) / grid.cellSize.x;
         const float localRight = (region.right() - grid.origin.x) / grid.cellSize.x;
@@ -37,17 +39,19 @@ void CollisionWorld::querySolids(const Rect& region, std::vector<Rect>& out) con
         for (int y = y0; y <= y1; ++y) {
             for (int x = x0; x <= x1; ++x) {
                 if (!grid.isSolid(x, y)) continue;
-                out.push_back(Rect{grid.origin.x + static_cast<float>(x) * grid.cellSize.x,
-                                   grid.origin.y + static_cast<float>(y) * grid.cellSize.y, grid.cellSize.x,
-                                   grid.cellSize.y});
+                out.push_back(Solid{Rect{grid.origin.x + static_cast<float>(x) * grid.cellSize.x,
+                                         grid.origin.y + static_cast<float>(y) * grid.cellSize.y, grid.cellSize.x,
+                                         grid.cellSize.y},
+                                    kNoOwner});
             }
         }
     }
-    for (const auto& box : m_boxes) {
+    for (const auto& solid : m_boxes) {
         // Inclusive test so touching solids are returned as contact candidates.
+        const Rect& box = solid.rect;
         if (box.left() <= region.right() && box.right() >= region.left() && box.top() <= region.bottom() &&
             box.bottom() >= region.top()) {
-            out.push_back(box);
+            out.push_back(solid);
         }
     }
 }
@@ -58,13 +62,14 @@ MoveResult CollisionWorld::moveBox(const Rect& box, Vec2 delta) const {
 
     Rect swept = unite(box, box.translated(delta));
     swept = {swept.x - kSkin, swept.y - kSkin, swept.w + 2.0f * kSkin, swept.h + 2.0f * kSkin};
-    std::vector<Rect> solids;
+    std::vector<Solid> solids;
     querySolids(swept, solids);
 
     // X axis.
     if (delta.x != 0.0f) {
         float dx = delta.x;
-        for (const Rect& s : solids) {
+        for (const Solid& solid : solids) {
+            const Rect& s = solid.rect;
             const bool overlapY = result.box.bottom() > s.top() + kSkin && result.box.top() < s.bottom() - kSkin;
             if (!overlapY) continue;
             if (dx > 0.0f && s.left() >= result.box.right() - kSkin) {
@@ -88,7 +93,8 @@ MoveResult CollisionWorld::moveBox(const Rect& box, Vec2 delta) const {
     // Y axis, using the post-X position.
     if (delta.y != 0.0f) {
         float dy = delta.y;
-        for (const Rect& s : solids) {
+        for (const Solid& solid : solids) {
+            const Rect& s = solid.rect;
             const bool overlapX = result.box.right() > s.left() + kSkin && result.box.left() < s.right() - kSkin;
             if (!overlapX) continue;
             if (dy > 0.0f && s.top() >= result.box.bottom() - kSkin) {
@@ -96,6 +102,7 @@ MoveResult CollisionWorld::moveBox(const Rect& box, Vec2 delta) const {
                 if (allowed < dy) {
                     dy = allowed;
                     result.hitBottom = true;
+                    result.groundOwner = solid.owner;
                 }
             } else if (dy < 0.0f && s.bottom() <= result.box.top() + kSkin) {
                 const float allowed = s.bottom() - result.box.top();
@@ -113,9 +120,9 @@ MoveResult CollisionWorld::moveBox(const Rect& box, Vec2 delta) const {
 }
 
 bool CollisionWorld::overlapsSolid(const Rect& box) const {
-    std::vector<Rect> solids;
+    std::vector<Solid> solids;
     querySolids(box, solids);
-    return std::any_of(solids.begin(), solids.end(), [&](const Rect& s) { return s.intersects(box); });
+    return std::any_of(solids.begin(), solids.end(), [&](const Solid& s) { return s.rect.intersects(box); });
 }
 
 } // namespace px::physics

@@ -25,6 +25,16 @@ struct SolidGrid {
     }
 };
 
+// Identifies who owns a solid box (e.g. an entity), so movement results can
+// say what a body is standing on. kNoOwner is used for tile grids.
+using SolidOwner = std::uint32_t;
+inline constexpr SolidOwner kNoOwner = 0;
+
+struct Solid {
+    Rect rect;
+    SolidOwner owner = kNoOwner;
+};
+
 struct MoveResult {
     Rect box;            // final box
     Vec2 moved{};        // actual displacement applied
@@ -32,6 +42,7 @@ struct MoveResult {
     bool hitRight = false;
     bool hitTop = false;    // ceiling (moving up, Y-down world)
     bool hitBottom = false; // ground (moving down)
+    SolidOwner groundOwner = kNoOwner; // owner of the solid that stopped downward movement
 };
 
 class CollisionWorld {
@@ -43,7 +54,9 @@ public:
 
     void clear();
     void addGrid(SolidGrid grid);
-    void addBox(const Rect& box);
+    void addBox(const Rect& box, SolidOwner owner = kNoOwner);
+    // Removes all boxes but keeps grids (boxes may move every tick).
+    void clearBoxes();
 
     // Moves `box` by `delta`, first along X then along Y, stopping at solids.
     // Never tunnels: every solid in the swept region is considered.
@@ -52,15 +65,15 @@ public:
     // True if `box` strictly overlaps any solid.
     [[nodiscard]] bool overlapsSolid(const Rect& box) const;
 
-    // Appends the rectangles of all solids overlapping `region`.
-    void querySolids(const Rect& region, std::vector<Rect>& out) const;
+    // Appends all solids overlapping or touching `region`.
+    void querySolids(const Rect& region, std::vector<Solid>& out) const;
 
     [[nodiscard]] const std::vector<SolidGrid>& grids() const { return m_grids; }
-    [[nodiscard]] const std::vector<Rect>& boxes() const { return m_boxes; }
+    [[nodiscard]] const std::vector<Solid>& boxes() const { return m_boxes; }
 
 private:
     std::vector<SolidGrid> m_grids;
-    std::vector<Rect> m_boxes;
+    std::vector<Solid> m_boxes;
 };
 
 } // namespace px::physics

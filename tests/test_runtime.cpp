@@ -3,6 +3,7 @@
 #include "px/core/FileSystem.hpp"
 #include "px/project/Project.hpp"
 #include "px/project/SceneFormat.hpp"
+#include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
 #include "px/runtime/Input.hpp"
 #include "px/runtime/InputScript.hpp"
@@ -76,12 +77,21 @@ T& need(T* component) {
 const Transform& transformOf(GameSession& s, Entity e) { return need(s.scene().tryGet<Transform>(e)); }
 const KinematicBody& bodyOf(GameSession& s, Entity e) { return need(s.scene().tryGet<KinematicBody>(e)); }
 
+// Starts a session; scenes in these tests have no scripts unless a library is given.
+std::unique_ptr<GameSession> makeSession(const project::ProjectManifest& project, Scene scene,
+                                         std::shared_ptr<const scripting::ScriptLibrary> scripts = nullptr) {
+    auto session = GameSession::create(project, std::move(scene), std::move(scripts));
+    if (!session) throw std::runtime_error(session.error().message);
+    return std::move(session.value());
+}
+
 // Holds jump for `holdTicks` (from the ground) and returns the highest point
 // reached, as the smallest Y of the player's position.
 float jumpApex(int holdTicks) {
     Scene scene = floorScene();
     const Entity p = addPlayer(scene, {100, 153});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     run(s, 5);
     const std::uint32_t jumpBit = 1u << s.actions().find("jump");
     float apex = transformOf(s, p).position.y;
@@ -100,7 +110,8 @@ float jumpApex(int holdTicks) {
 TEST_CASE("Player falls, lands and stays grounded") {
     Scene scene = floorScene();
     const Entity p = addPlayer(scene, {100, 100});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     run(s, 60);
     CHECK(bodyOf(s, p).onGround);
     CHECK(transformOf(s, p).position.y == doctest::Approx(160.0f - 7.0f)); // collider bottom on the floor
@@ -113,7 +124,8 @@ TEST_CASE("Player falls, lands and stays grounded") {
 TEST_CASE("Horizontal movement accelerates to max speed and decelerates") {
     Scene scene = floorScene();
     const Entity p = addPlayer(scene, {100, 153});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     run(s, 2);
     run(s, 30, hold(s, {"move_right"}));
     CHECK(bodyOf(s, p).velocity.x == doctest::Approx(110.0f));
@@ -144,7 +156,8 @@ TEST_CASE("Coyote time allows a jump just after leaving a ledge") {
     const auto jumpAfterLeaving = [](int ticksAfterLedge) {
         Scene scene = floorScene(true);
         const Entity p = addPlayer(scene, {300, 153});
-        GameSession s(testProject(), std::move(scene));
+        auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
         run(s, 2);
         const InputFrame right = hold(s, {"move_right"});
         int airborneTicks = 0;
@@ -163,7 +176,8 @@ TEST_CASE("Coyote time allows a jump just after leaving a ledge") {
 TEST_CASE("A jump pressed just before landing is buffered") {
     Scene scene = floorScene();
     const Entity p = addPlayer(scene, {100, 100});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     const InputFrame jump = hold(s, {"jump"});
     // Fall until just above the floor (3 ticks of fall left).
     while (transformOf(s, p).position.y < 140.0f) s.tick({});
@@ -180,52 +194,19 @@ TEST_CASE("Walls stop the player") {
     scene.set(wall, Transform{{200, 120}});
     scene.set(wall, BoxCollider{{16, 80}, {}, false});
     const Entity p = addPlayer(scene, {150, 153});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     run(s, 120, hold(s, {"move_right"}));
     CHECK(transformOf(s, p).position.x == doctest::Approx(192.0f - 5.0f));
     CHECK(bodyOf(s, p).hitWall);
-}
-
-TEST_CASE("Collectibles are collected once, raise events and finish the level") {
-    Scene scene = floorScene();
-    const Entity p = addPlayer(scene, {100, 153});
-    for (int i = 0; i < 2; ++i) {
-        const Entity coin = scene.createEntity("Coin");
-        scene.set(coin, Transform{{130.0f + 30.0f * static_cast<float>(i), 150.0f}});
-        scene.set(coin, BoxCollider{{10, 12}, {}, true});
-        scene.set(coin, Collectible{"coin", 5});
-    }
-    GameSession s(testProject(), std::move(scene));
-    CHECK(s.state().collectiblesTotal == 2);
-    (void)p;
-
-    int collectedEvents = 0;
-    int completeEvents = 0;
-    const InputFrame right = hold(s, {"move_right"});
-    for (int i = 0; i < 120; ++i) {
-        s.tick(right);
-        for (const auto& ev : s.events()) {
-            if (ev.type == GameEvent::Type::Collected) {
-                ++collectedEvents;
-                CHECK(ev.kind == "coin");
-                CHECK(ev.value == 5);
-            }
-            if (ev.type == GameEvent::Type::AllCollected) ++completeEvents;
-        }
-    }
-    CHECK(collectedEvents == 2);
-    CHECK(completeEvents == 1);
-    CHECK(s.state().score == 10);
-    CHECK(s.state().allCollected);
-    CHECK(s.scene().registry().count<Collectible>() == 0);
-    CHECK(s.scene().findByName("Coin").isNull());
 }
 
 TEST_CASE("Falling below the kill plane respawns the player at the spawn point") {
     Scene scene = floorScene(true);
     scene.settings().killPlaneY = 260.0f;
     const Entity p = addPlayer(scene, {300, 153});
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     bool respawned = false;
     for (int i = 0; i < 240 && !respawned; ++i) {
         s.tick(hold(s, {"move_right"}));
@@ -244,7 +225,8 @@ TEST_CASE("Camera follows its target and stays inside the level") {
     Camera camera;
     camera.follow = need(scene.tryGet<EntityInfo>(p)).id;
     scene.set(cam, camera);
-    GameSession s(testProject(), std::move(scene)); // view 320 x 180
+    auto sOwner = makeSession(testProject(), std::move(scene)); // view 320 x 180
+    GameSession& s = *sOwner;
     const auto& c = need(s.scene().tryGet<Camera>(cam));
     CHECK(c.position.x == doctest::Approx(160.0f)); // clamped at the left edge
     CHECK(c.position.y == doctest::Approx(102.0f)); // 192 - 90
@@ -263,7 +245,8 @@ TEST_CASE("Sprite animation advances and loops") {
     anim.frames = {{0, 0, 16, 16}, {16, 0, 16, 16}, {32, 0, 16, 16}};
     anim.framesPerSecond = 10;
     scene.set(e, anim);
-    GameSession s(testProject(), std::move(scene));
+    auto sOwner = makeSession(testProject(), std::move(scene));
+    GameSession& s = *sOwner;
     run(s, 7); // 0.1167 s -> frame 1
     CHECK(need(s.scene().tryGet<Sprite>(e)).source.x == doctest::Approx(16.0f));
     run(s, 12); // 0.3167 s -> frame 3 -> wraps to 0
@@ -319,32 +302,34 @@ TEST_CASE("Input scripts parse and play back with press edges") {
     CHECK_FALSE(InputScript::parse("3", actions).ok());
 }
 
-TEST_CASE("Example level: scripted playthrough collects every coin, deterministically") {
+TEST_CASE("Example level: scripted playthrough completes the level, deterministically") {
     DirectoryFileSystem fs(kExampleDir);
-    auto manifest = project::loadProjectManifest(fs);
-    REQUIRE(manifest.ok());
-    auto scene = project::loadScene(fs, manifest.value(), manifest->startScene);
-    REQUIRE(scene.ok());
+    auto game = loadGame(fs);
+    REQUIRE_MESSAGE(game.ok(), (game.ok() ? "" : game.error().message));
     auto scriptText = fs.readText("tests/full_run.input");
     REQUIRE(scriptText.ok());
 
-    const auto play = [&](Scene start) {
-        GameSession session(manifest.value(), std::move(start));
+    const auto play = [&]() {
+        auto created = startSession(game.value());
+        REQUIRE_MESSAGE(created.ok(), (created.ok() ? "" : created.error().message));
+        GameSession& session = *created.value();
         auto script = InputScript::parse(scriptText.value(), session.actions());
         REQUIRE(script.ok());
         InputScriptPlayer player(std::move(script.value()));
         while (!player.finished()) session.tick(player.next());
         const Entity p = session.player();
-        return std::tuple{session.state().allCollected, session.state().score, session.state().respawns,
-                          need(session.scene().tryGet<Transform>(p)).position, session.tickCount()};
+        return std::tuple{session.state().levelComplete, session.state().score, session.state().respawns,
+                          session.state().scriptErrors, need(session.scene().tryGet<Transform>(p)).position,
+                          session.tickCount()};
     };
-    const auto first = play(scene.value());
-    const auto second = play(scene.value());
+    const auto first = play();
+    const auto second = play();
     CHECK(std::get<0>(first));
-    CHECK(std::get<1>(first) == 12);
+    CHECK(std::get<1>(first) == 14);
     CHECK(std::get<2>(first) == 0);
+    CHECK(std::get<3>(first) == 0);
     // Same input, same result, bit for bit: required for replays and server reconciliation.
-    CHECK(std::get<3>(first).x == std::get<3>(second).x);
-    CHECK(std::get<3>(first).y == std::get<3>(second).y);
-    CHECK(std::get<4>(first) == std::get<4>(second));
+    CHECK(std::get<4>(first).x == std::get<4>(second).x);
+    CHECK(std::get<4>(first).y == std::get<4>(second).y);
+    CHECK(std::get<5>(first) == std::get<5>(second));
 }

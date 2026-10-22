@@ -6,6 +6,7 @@
 #   scene     - entities, components, scenes
 #   physics   - collision world (kinematic AABB movement, triggers)
 #   project   - versioned project/scene file formats (JSON)
+#   scripting - Luau sandbox, limits, gameplay API, Script lifecycle
 #   runtime   - headless game simulation (fixed tick, input actions, gameplay systems)
 #   render    - renderer interface, camera, scene-to-draw-call extraction (no backend)
 #   platform_sdl - SDL3 window/input/renderer backend (client only)
@@ -15,6 +16,7 @@ add_subdirectory(assets)
 add_subdirectory(scene)
 add_subdirectory(physics)
 add_subdirectory(project)
+add_subdirectory(scripting)
 add_subdirectory(runtime)
 add_subdirectory(render)
 

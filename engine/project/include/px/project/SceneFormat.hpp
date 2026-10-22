@@ -7,21 +7,25 @@
 #include "px/scene/Scene.hpp"
 
 #include <string>
+#include <vector>
 #include <string_view>
 
 // Scene files ("*.scene.json"). Format reference: docs/project-format.md.
 namespace px::project {
 
-inline constexpr int kSceneFormatVersion = 1;
+inline constexpr int kSceneFormatVersion = 2;
 
 inline constexpr std::size_t kMaxEntitiesPerScene = 100000;
 inline constexpr int kMaxTilemapDimension = 4096;
 inline constexpr std::size_t kMaxAnimationFrames = 1024;
 
-// Parses a scene. When `assets` is given, texture references are checked
-// against it so broken references are reported at load time.
+// Parses a scene. When `assets` is given, texture and script references are
+// checked against it so broken references are reported at load time.
+// Older format versions are migrated; migration notes go to `warnings` if
+// given, otherwise to the log.
 [[nodiscard]] Result<scene::Scene> parseScene(std::string_view json, std::string_view sourceName,
-                                              const assets::AssetRegistry* assets = nullptr);
+                                              const assets::AssetRegistry* assets = nullptr,
+                                              std::vector<std::string>* warnings = nullptr);
 
 // Loads the scene asset `sceneId` of `project` from `fs`.
 [[nodiscard]] Result<scene::Scene> loadScene(const IFileSystem& fs, const ProjectManifest& project,

@@ -8,6 +8,7 @@ std::string_view assetTypeName(AssetType type) noexcept {
     switch (type) {
         case AssetType::Texture: return "texture";
         case AssetType::Scene: return "scene";
+        case AssetType::Script: return "script";
     }
     return "unknown";
 }
@@ -15,6 +16,7 @@ std::string_view assetTypeName(AssetType type) noexcept {
 std::optional<AssetType> assetTypeFromName(std::string_view name) noexcept {
     if (name == "texture") return AssetType::Texture;
     if (name == "scene") return AssetType::Scene;
+    if (name == "script") return AssetType::Script;
     return std::nullopt;
 }
 

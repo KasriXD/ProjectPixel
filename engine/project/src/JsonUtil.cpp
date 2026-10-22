@@ -250,7 +250,8 @@ Json parseJsonText(std::string_view text) {
 }
 
 void checkAndMigrate(Json& root, std::string_view expectedFormat, int currentVersion,
-                     std::span<const Migration> migrations, std::string_view fileKind) {
+                     std::span<const Migration> migrations, std::string_view fileKind,
+                     std::vector<std::string>& warnings) {
     if (!root.is_object()) fail("", std::format("a {} file must contain a JSON object", fileKind));
     const auto formatIt = root.find("format");
     if (formatIt == root.end() || !formatIt->is_string() || formatIt->get<std::string>() != expectedFormat) {
@@ -268,7 +269,7 @@ void checkAndMigrate(Json& root, std::string_view expectedFormat, int currentVer
             fileKind, version, currentVersion));
     }
     for (int v = version; v < currentVersion; ++v) {
-        migrations[static_cast<std::size_t>(v - 1)](root);
+        migrations[static_cast<std::size_t>(v - 1)](root, warnings);
         root["formatVersion"] = v + 1;
     }
 }

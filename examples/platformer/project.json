@@ -3,7 +3,7 @@
   "formatVersion": 1,
   "id": "af5d3a02-6054-58d1-a81c-23a97281ae0f",
   "name": "Example Platformer",
-  "engineVersion": "0.1.0",
+  "engineVersion": "0.2.0",
   "startScene": "e0464a98-2756-52ff-8acd-37c81877ff1a",
   "settings": {
     "tickRate": 60,
@@ -11,6 +11,9 @@
       "virtualResolution": [320, 180],
       "scaling": "integer",
       "windowScale": 3
+    },
+    "scripting": {
+      "apiVersion": 1
     }
   },
   "input": {
@@ -67,6 +70,31 @@
       "name": "Scenery",
       "path": "assets/scenery.png",
       "filter": "nearest"
+    },
+    {
+      "id": "bda48900-1124-5368-a40a-cd76590e706f",
+      "type": "texture",
+      "name": "Platform",
+      "path": "assets/platform.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+      "type": "script",
+      "name": "Coin",
+      "path": "scripts/coin.luau"
+    },
+    {
+      "id": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+      "type": "script",
+      "name": "Level Rules",
+      "path": "scripts/level_rules.luau"
+    },
+    {
+      "id": "fa1818e7-78c0-531f-8f97-c19bfcd1d9e1",
+      "type": "script",
+      "name": "Moving Platform",
+      "path": "scripts/moving_platform.luau"
     },
     {
       "id": "e0464a98-2756-52ff-8acd-37c81877ff1a",

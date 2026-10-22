@@ -33,9 +33,18 @@ struct DisplaySettings {
     int windowScale = 3; // initial desktop window size = virtualResolution * windowScale
 };
 
+// Version of the gameplay scripting API this engine provides. Projects state
+// the version they were written for; see docs/scripting.md#api-versioning.
+inline constexpr int kScriptApiVersion = 1;
+
+struct ScriptingSettings {
+    int apiVersion = kScriptApiVersion;
+};
+
 struct ProjectSettings {
     int tickRate = 60; // fixed simulation steps per second
     DisplaySettings display;
+    ScriptingSettings scripting;
 };
 
 struct InputAction {

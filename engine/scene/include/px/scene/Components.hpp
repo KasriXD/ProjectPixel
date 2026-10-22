@@ -4,8 +4,12 @@
 #include "px/core/Color.hpp"
 #include "px/core/Guid.hpp"
 #include "px/core/Math.hpp"
+#include "px/scene/Registry.hpp"
 
+#include <algorithm>
 #include <string>
+#include <string_view>
+#include <variant>
 #include <vector>
 
 // Built-in component types. Components are plain data. Fields marked
@@ -87,6 +91,7 @@ struct KinematicBody {
     bool onGround = false;   // runtime
     bool hitCeiling = false; // runtime
     bool hitWall = false;    // runtime
+    Entity ground;           // runtime: solid entity it stands on (null for tiles); used to carry riders
 };
 
 // Reusable side-view character movement. Requires Transform, BoxCollider and
@@ -108,10 +113,29 @@ struct PlatformerController {
     bool jumping = false;           // runtime
 };
 
-// Picked up when a Player's collider overlaps this entity's trigger collider.
-struct Collectible {
-    std::string kind = "coin";
-    int value = 1;
+// Labels for finding and classifying entities from scripts ("coin", "enemy").
+struct Tags {
+    std::vector<std::string> values;
+
+    [[nodiscard]] bool has(std::string_view tag) const {
+        return std::find(values.begin(), values.end(), tag) != values.end();
+    }
+};
+
+// A value a scene gives to a script property: number, boolean, string or 2D vector.
+using ScriptValue = std::variant<double, bool, std::string, Vec2>;
+
+struct ScriptProperty {
+    std::string name;
+    ScriptValue value;
+};
+
+// Attaches a Luau behaviour (a script asset) to the entity. `properties`
+// override the defaults the script declares; the script defines the
+// available names and their types. See docs/scripting.md.
+struct Script {
+    assets::AssetId script;
+    std::vector<ScriptProperty> properties;
 };
 
 // Marks the locally or remotely controlled player character.

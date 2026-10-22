@@ -4,10 +4,25 @@
 
 #include <algorithm>
 #include <cmath>
+#include <format>
 
 namespace px::runtime {
 
 using namespace px::scene;
+
+namespace {
+
+bool pairLess(const Entity& a1, const Entity& b1, const Entity& a2, const Entity& b2) {
+    if (a1.index != a2.index) return a1.index < a2.index;
+    if (a1.generation != a2.generation) return a1.generation < a2.generation;
+    if (b1.index != b2.index) return b1.index < b2.index;
+    return b1.generation < b2.generation;
+}
+
+// Solid owners in the collision world are entity index + 1 (0 = tiles).
+physics::SolidOwner ownerOf(Entity e) { return e.index + 1; }
+
+} // namespace
 
 GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
     : m_scene(std::move(scene)),
@@ -18,19 +33,38 @@ GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
     m_moveLeft = m_actions.find(actions::kMoveLeft);
     m_moveRight = m_actions.find(actions::kMoveRight);
     m_jump = m_actions.find(actions::kJump);
+}
 
-    auto& reg = m_scene.registry();
+GameSession::~GameSession() {
+    // Scripts reference the scene; release them first.
+    m_scripts.reset();
+}
+
+Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectManifest& project, Scene scene,
+                                                         std::shared_ptr<const scripting::ScriptLibrary> scripts,
+                                                         const SessionOptions& options) {
+    std::unique_ptr<GameSession> session(new GameSession(project, std::move(scene)));
+    auto& reg = session->m_scene.registry();
     if (reg.count<PlatformerController>() > 0 &&
-        (m_moveLeft == kInvalidAction || m_moveRight == kInvalidAction || m_jump == kInvalidAction)) {
+        (session->m_moveLeft == kInvalidAction || session->m_moveRight == kInvalidAction ||
+         session->m_jump == kInvalidAction)) {
         log::warn("Scene uses PlatformerController but the project does not define all of the "
                   "'move_left', 'move_right' and 'jump' input actions");
     }
-
     reg.each<Player, Transform>([](Entity, Player& player, Transform& t) { player.spawnPoint = t.position; });
-    m_state.collectiblesTotal = static_cast<int>(reg.count<Collectible>());
 
-    buildStaticCollision();
-    updateCameras();
+    scripting::ScriptSystemOptions scriptOptions;
+    scriptOptions.realm = scripting::Realm::Authority;
+    scriptOptions.limits = options.scriptLimits;
+    scriptOptions.seed = options.seed;
+    auto system = scripting::ScriptSystem::create(session->m_scene, std::move(scripts), *session, scriptOptions);
+    if (!system) return system.error();
+    session->m_scripts = std::move(system.value());
+
+    session->buildStaticCollision();
+    session->updateMovingSolids();
+    session->updateCameras();
+    return session;
 }
 
 Entity GameSession::player() const {
@@ -43,9 +77,7 @@ Entity GameSession::player() const {
 void GameSession::buildStaticCollision() {
     m_collision.clear();
     bool haveBounds = false;
-    auto& reg = m_scene.registry();
-
-    reg.each<Tilemap, Transform>([&](Entity, Tilemap& map, Transform& t) {
+    m_scene.registry().each<Tilemap, Transform>([&](Entity, Tilemap& map, Transform& t) {
         const Rect bounds = map.worldBounds(t.position);
         m_worldBounds = haveBounds ? unite(m_worldBounds, bounds) : bounds;
         haveBounds = true;
@@ -59,27 +91,100 @@ void GameSession::buildStaticCollision() {
         for (const int tile : map.tiles) grid.solid.push_back(tile >= 0 ? 1 : 0);
         m_collision.addGrid(std::move(grid));
     });
-
-    // Solid colliders without a KinematicBody are static level geometry.
-    reg.each<BoxCollider, Transform>([&](Entity e, BoxCollider& c, Transform& t) {
-        if (c.isTrigger || reg.has<KinematicBody>(e)) return;
-        m_collision.addBox(c.worldRect(t.position));
-    });
 }
+
+// --- tick --------------------------------------------------------------------------------
 
 void GameSession::tick(const InputFrame& input) {
     m_events.clear();
-    updatePlatformers(input);
+    m_input = input;
+    m_scripts->beginTick();
+
+    m_scripts->start();
+    flushPhase();
+    m_scripts->tick(m_dt);
+    flushPhase();
+
+    updateMovingSolids();
+    updatePlatformers();
     moveKinematicBodies();
-    updateCollectibles();
+    updateTriggers();
     updateKillPlane();
     updateAnimations();
     updateCameras();
     ++m_tick;
 }
 
-void GameSession::updatePlatformers(const InputFrame& input) {
+void GameSession::flushPhase() {
+    // Destroying entities can run Destroy handlers that emit events, and
+    // event handlers can destroy entities: repeat until both settle.
+    // Bounded by the per-tick event delivery limit.
+    for (int round = 0; round < 64; ++round) {
+        flushDestroyed();
+        if (!m_scripts->deliverEvents() && m_pendingDestroy.empty()) return;
+    }
+}
+
+void GameSession::requestDestroy(Entity entity) {
+    if (!m_scene.isAlive(entity)) return;
+    if (std::find(m_pendingDestroy.begin(), m_pendingDestroy.end(), entity) != m_pendingDestroy.end()) return;
+    m_pendingDestroy.push_back(entity);
+}
+
+void GameSession::flushDestroyed() {
+    for (std::size_t i = 0; i < m_pendingDestroy.size(); ++i) {
+        const Entity e = m_pendingDestroy[i];
+        if (!m_scene.isAlive(e)) continue;
+        // Partners of active trigger overlaps are told the overlap ended.
+        std::vector<TriggerPair> ended;
+        std::erase_if(m_triggerPairs, [&](const TriggerPair& p) {
+            if (p.trigger != e && p.other != e) return false;
+            ended.push_back(p);
+            return true;
+        });
+        for (const TriggerPair& p : ended) {
+            const Entity partner = p.trigger == e ? p.other : p.trigger;
+            m_scripts->triggerExit(partner, e);
+        }
+        m_scripts->entityDestroyed(e); // runs Destroy(); the entity is still readable
+        m_scene.destroyEntity(e);
+    }
+    m_pendingDestroy.clear();
+}
+
+void GameSession::updateMovingSolids() {
+    // Solid colliders without a KinematicBody are level geometry. They are
+    // rebuilt every tick because scripts may move them (moving platforms).
+    std::vector<SolidState> previous = std::move(m_solids);
+    m_solids.clear();
+    m_collision.clearBoxes();
+    for (const Entity e : m_scene.entities()) {
+        const auto* c = m_scene.tryGet<BoxCollider>(e);
+        const auto* t = m_scene.tryGet<Transform>(e);
+        if (c == nullptr || t == nullptr || c->isTrigger || m_scene.tryGet<KinematicBody>(e) != nullptr) continue;
+        m_collision.addBox(c->worldRect(t->position), ownerOf(e));
+        m_solids.push_back({e, t->position});
+    }
+
+    // Carry bodies that stood on a solid that moved since the last tick.
+    for (const SolidState& now : m_solids) {
+        const auto it = std::find_if(previous.begin(), previous.end(),
+                                     [&](const SolidState& s) { return s.entity == now.entity; });
+        if (it == previous.end()) continue;
+        const Vec2 delta = now.position - it->position;
+        if (delta.x == 0.0f && delta.y == 0.0f) continue;
+        m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
+            [&](Entity, KinematicBody& body, BoxCollider& c, Transform& t) {
+                if (!body.onGround || body.ground != now.entity) return;
+                const physics::MoveResult r = m_collision.moveBox(c.worldRect(t.position), delta);
+                t.position += r.moved;
+            });
+    }
+}
+
+void GameSession::updatePlatformers() {
     const float dt = m_dt;
+    const InputFrame& input = m_input;
     auto& reg = m_scene.registry();
     reg.each<PlatformerController, KinematicBody>([&](Entity e, PlatformerController& c, KinematicBody& body) {
         const float dir = (input.isHeld(m_moveRight) ? 1.0f : 0.0f) - (input.isHeld(m_moveLeft) ? 1.0f : 0.0f);
@@ -125,47 +230,84 @@ void GameSession::updatePlatformers(const InputFrame& input) {
 
 void GameSession::moveKinematicBodies() {
     const float dt = m_dt;
-    auto& reg = m_scene.registry();
-    reg.each<KinematicBody, BoxCollider, Transform>([&](Entity, KinematicBody& body, BoxCollider& c, Transform& t) {
-        const Rect box = c.worldRect(t.position);
-        const physics::MoveResult r = m_collision.moveBox(box, body.velocity * dt);
-        t.position += r.moved;
-        body.onGround = r.hitBottom;
-        body.hitCeiling = r.hitTop;
-        body.hitWall = r.hitLeft || r.hitRight;
-        if (r.hitBottom && body.velocity.y > 0.0f) body.velocity.y = 0.0f;
-        if (r.hitTop && body.velocity.y < 0.0f) body.velocity.y = 0.0f;
-        if ((r.hitLeft && body.velocity.x < 0.0f) || (r.hitRight && body.velocity.x > 0.0f)) body.velocity.x = 0.0f;
-    });
+    m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
+        [&](Entity, KinematicBody& body, BoxCollider& c, Transform& t) {
+            const Rect box = c.worldRect(t.position);
+            const physics::MoveResult r = m_collision.moveBox(box, body.velocity * dt);
+            t.position += r.moved;
+            body.onGround = r.hitBottom;
+            body.hitCeiling = r.hitTop;
+            body.hitWall = r.hitLeft || r.hitRight;
+            body.ground = kNullEntity;
+            if (r.hitBottom && r.groundOwner != physics::kNoOwner) {
+                for (const SolidState& s : m_solids) {
+                    if (ownerOf(s.entity) == r.groundOwner) {
+                        body.ground = s.entity;
+                        break;
+                    }
+                }
+            }
+            if (r.hitBottom && body.velocity.y > 0.0f) body.velocity.y = 0.0f;
+            if (r.hitTop && body.velocity.y < 0.0f) body.velocity.y = 0.0f;
+            if ((r.hitLeft && body.velocity.x < 0.0f) || (r.hitRight && body.velocity.x > 0.0f)) {
+                body.velocity.x = 0.0f;
+            }
+        });
 }
 
-void GameSession::updateCollectibles() {
-    auto& reg = m_scene.registry();
-    std::vector<Rect> playerBoxes;
-    reg.each<Player, BoxCollider, Transform>(
-        [&](Entity, Player&, BoxCollider& c, Transform& t) { playerBoxes.push_back(c.worldRect(t.position)); });
-    if (playerBoxes.empty()) return;
-
-    std::vector<Entity> collected;
-    reg.each<Collectible, BoxCollider, Transform>([&](Entity e, Collectible& item, BoxCollider& c, Transform& t) {
-        const Rect box = c.worldRect(t.position);
-        for (const Rect& p : playerBoxes) {
-            if (!p.intersects(box)) continue;
-            m_state.score += item.value;
-            ++m_state.collectiblesCollected;
-            const auto* info = reg.tryGet<EntityInfo>(e);
-            m_events.push_back({GameEvent::Type::Collected, info ? info->id : Guid{}, item.kind, item.value});
-            collected.push_back(e);
-            break;
+void GameSession::updateTriggers() {
+    // Trigger colliders against moving bodies. O(triggers x bodies), which is
+    // fine for the scene sizes of this milestone; a broadphase comes later.
+    struct Box {
+        Entity entity;
+        Rect rect;
+    };
+    std::vector<Box> triggers;
+    std::vector<Box> bodies;
+    for (const Entity e : m_scene.entities()) {
+        const auto* c = m_scene.tryGet<BoxCollider>(e);
+        const auto* t = m_scene.tryGet<Transform>(e);
+        if (c == nullptr || t == nullptr) continue;
+        if (c->isTrigger) {
+            triggers.push_back({e, c->worldRect(t->position)});
+        } else if (m_scene.tryGet<KinematicBody>(e) != nullptr) {
+            bodies.push_back({e, c->worldRect(t->position)});
         }
-    });
-    for (const Entity e : collected) m_scene.destroyEntity(e);
-
-    if (!m_state.allCollected && m_state.collectiblesTotal > 0 &&
-        m_state.collectiblesCollected >= m_state.collectiblesTotal) {
-        m_state.allCollected = true;
-        m_events.push_back({GameEvent::Type::AllCollected, Guid{}, {}, m_state.score});
     }
+    std::vector<TriggerPair> current;
+    for (const Box& trig : triggers) {
+        for (const Box& body : bodies) {
+            if (trig.entity != body.entity && trig.rect.intersects(body.rect)) current.push_back({trig.entity, body.entity});
+        }
+    }
+    const auto less = [](const TriggerPair& a, const TriggerPair& b) {
+        return pairLess(a.trigger, a.other, b.trigger, b.other);
+    };
+    std::sort(current.begin(), current.end(), less);
+
+    std::vector<TriggerPair> entered;
+    std::vector<TriggerPair> exited;
+    std::set_difference(current.begin(), current.end(), m_triggerPairs.begin(), m_triggerPairs.end(),
+                        std::back_inserter(entered), less);
+    std::set_difference(m_triggerPairs.begin(), m_triggerPairs.end(), current.begin(), current.end(),
+                        std::back_inserter(exited), less);
+    m_triggerPairs = std::move(current);
+
+    for (const TriggerPair& p : exited) {
+        if (m_scene.isAlive(p.trigger) && m_scene.isAlive(p.other)) {
+            m_scripts->triggerExit(p.trigger, p.other);
+            m_scripts->triggerExit(p.other, p.trigger);
+        }
+    }
+    for (const TriggerPair& p : entered) {
+        // An earlier handler in this phase may have destroyed one of them.
+        if (!m_scene.isAlive(p.trigger) || !m_scene.isAlive(p.other)) continue;
+        if (std::find(m_pendingDestroy.begin(), m_pendingDestroy.end(), p.trigger) != m_pendingDestroy.end()) continue;
+        if (std::find(m_pendingDestroy.begin(), m_pendingDestroy.end(), p.other) != m_pendingDestroy.end()) continue;
+        m_scripts->triggerEnter(p.trigger, p.other);
+        m_scripts->triggerEnter(p.other, p.trigger);
+    }
+    flushPhase();
 }
 
 void GameSession::updateKillPlane() {
@@ -224,6 +366,57 @@ void GameSession::updateCameras() {
         }
         cam.position = target;
     });
+}
+
+// --- IScriptHost -----------------------------------------------------------------------------
+
+int GameSession::findAction(std::string_view name) const {
+    const ActionId id = m_actions.find(name);
+    return id == kInvalidAction ? -1 : static_cast<int>(id);
+}
+
+std::vector<std::string> GameSession::actionNames() const {
+    std::vector<std::string> names;
+    for (std::size_t i = 0; i < m_actions.size(); ++i) names.emplace_back(m_actions.name(static_cast<ActionId>(i)));
+    return names;
+}
+
+bool GameSession::actionHeld(int action) const { return m_input.isHeld(static_cast<ActionId>(action)); }
+bool GameSession::actionPressed(int action) const { return m_input.wasPressed(static_cast<ActionId>(action)); }
+
+void GameSession::addScore(int amount) {
+    if (amount == 0) return;
+    m_state.score += amount;
+    m_events.push_back({GameEvent::Type::ScoreChanged, Guid{}, {}, m_state.score});
+}
+
+void GameSession::setObjective(std::string text) {
+    if (text == m_state.objective) return;
+    m_state.objective = std::move(text);
+    m_events.push_back({GameEvent::Type::ObjectiveChanged, Guid{}, m_state.objective, 0});
+}
+
+void GameSession::completeLevel(std::string message) {
+    if (m_state.levelComplete) return;
+    m_state.levelComplete = true;
+    m_state.completionMessage = std::move(message);
+    m_events.push_back({GameEvent::Type::LevelCompleted, Guid{}, m_state.completionMessage, m_state.score});
+}
+
+void GameSession::scriptLog(log::Level level, std::string_view script, std::string_view message) {
+    log::write(level, std::format("[{}] {}", script, message));
+}
+
+void GameSession::scriptError(const scripting::ScriptError& error) {
+    ++m_state.scriptErrors;
+    m_state.lastScriptError = error.describe();
+    log::error("{}", m_state.lastScriptError);
+    if (!error.traceback.empty()) log::debug("Traceback:\n{}", error.traceback);
+    m_events.push_back({GameEvent::Type::ScriptError, Guid{}, m_state.lastScriptError, 0});
+}
+
+void GameSession::scriptEvent(std::string_view name, std::string_view valueText) {
+    m_events.push_back({GameEvent::Type::ScriptEvent, Guid{}, std::format("{}: {}", name, valueText), 0});
 }
 
 } // namespace px::runtime

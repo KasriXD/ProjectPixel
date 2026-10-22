@@ -5,6 +5,9 @@ add_library(px_stb_image STATIC stb/stb_image_impl.c)
 target_include_directories(px_stb_image SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
 set_target_properties(px_stb_image PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# Luau: scripting language compiler and VM.
+add_subdirectory(luau)
+
 # doctest: header-only test framework.
 add_library(px_doctest INTERFACE)
 target_include_directories(px_doctest SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/doctest")

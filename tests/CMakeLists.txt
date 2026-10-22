@@ -6,23 +6,27 @@ add_executable(px_tests
     test_physics.cpp
     test_project.cpp
     test_runtime.cpp
-    test_render.cpp)
+    test_render.cpp
+    test_scripting.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
-    px::core px::assets px::scene px::physics px::project px::runtime px::render)
-target_compile_definitions(px_tests PRIVATE PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}")
+    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::render)
+target_compile_definitions(px_tests PRIVATE
+    PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
+    PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
 px_target_defaults(px_tests)
 
 # One CTest entry per doctest test case would be nicer; one entry keeps CI simple.
 add_test(NAME unit_tests COMMAND px_tests)
 
-# End-to-end: play the example level headlessly with a scripted route and
-# require that every coin is collected.
+# End-to-end: play the example level headlessly with a scripted route.
+# Coins, the moving platform and the win condition are Luau scripts; the
+# level must be completed without any script errors.
 add_test(NAME example_platformer_playthrough
     COMMAND px_headless "${PX_EXAMPLES_DIR}/platformer"
             --input-script "${PX_EXAMPLES_DIR}/platformer/tests/full_run.input"
-            --expect-all-collected)
+            --expect-level-complete --expect-no-script-errors)
 
 # Smoke test for the real client with no display: SDL's "dummy" video driver
 # and software renderer, 120 deterministic frames, then a screenshot.

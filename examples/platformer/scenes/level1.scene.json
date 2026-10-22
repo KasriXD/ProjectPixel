@@ -1,6 +1,6 @@
 {
   "format": "px.scene",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "Level 1",
   "settings": {
     "backgroundColor": "#9bd4f0",
@@ -35,20 +35,20 @@
           "solid": true,
           "layer": 0,
           "rows": [
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7 7 7 . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . 7 7 7 7 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
-            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . . . . . . . 4 0 0 0 5 . . . 4 0 0 0 0 5 . . . . . . . . . . . . . . 2 2",
-            "2 2 0 0 0 0 0 0 0 0 0 0 5 . . . 4 0 0 0 0 0 0 0 0 5 . . 4 0 0 0 0 0 1 1 1 1 1 . . . 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2",
-            "2 2 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 . . 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2",
-            "2 2 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 . . 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 2 2"
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7 7 7 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . 7 7 7 7 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . . . . . . . 4 0 0 0 5 . . . 4 0 0 0 0 5 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 0 0 0 0 0 0 0 0 0 0 5 . . . 4 0 0 0 0 0 0 0 0 5 . . 4 0 0 0 0 0 1 1 1 1 1 . . . 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 5 . . . . . . . . 4 0 0 0 0 0 0 0 0 0 0 0 2 2",
+            "2 2 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 . . 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 . . . . . . . . 1 1 1 1 1 1 1 1 1 1 1 1 2 2",
+            "2 2 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 . . 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 . . . . . . . . 6 6 6 6 6 6 6 6 6 6 6 6 2 2"
           ]
         }
       }
@@ -99,11 +99,41 @@
       }
     },
     {
+      "id": "61057c8e-034a-508b-93c4-70e136ba1634",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [1248, 24]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
       "id": "9e3ef4f6-75c4-59a5-98e3-51f1375df633",
       "name": "Cloud",
       "components": {
         "Transform": {
           "position": [928, 40]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "f502c53d-f5e5-53a8-ac5a-18f9c8793dde",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [1072, 40]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
@@ -169,9 +199,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -201,9 +236,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -233,9 +273,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -265,9 +310,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -297,9 +347,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -329,9 +384,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -361,9 +421,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -393,9 +458,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -425,9 +495,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -487,9 +562,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -564,9 +644,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -596,9 +681,14 @@
           "size": [10, 12],
           "isTrigger": true
         },
-        "Collectible": {
-          "kind": "coin",
-          "value": 1
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
         }
       }
     },
@@ -614,6 +704,147 @@
           "source": [0, 16, 16, 16],
           "size": [16, 16],
           "layer": -1
+        }
+      }
+    },
+    {
+      "id": "c17af2d4-2a99-52e7-9b7b-d20869bbedca",
+      "name": "Coin 13",
+      "components": {
+        "Transform": {
+          "position": [1064, 168]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "b042f25b-157e-5781-94a1-4fdedb8a21c9",
+      "name": "Bush",
+      "components": {
+        "Transform": {
+          "position": [1184, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [32, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "481ba1bd-0792-5802-9196-75581dfdd4ca",
+      "name": "Coin 14",
+      "components": {
+        "Transform": {
+          "position": [1224, 168]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Script": {
+          "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+          "properties": {
+            "value": 1
+          }
+        }
+      }
+    },
+    {
+      "id": "30d70bb1-c985-554c-85ec-89da51ff9d42",
+      "name": "Flowers",
+      "components": {
+        "Transform": {
+          "position": [1272, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 16, 16, 16],
+          "size": [16, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "5dcf63e6-7a6a-5e9e-a4ad-5b0cf373ff4c",
+      "name": "Moving Platform",
+      "components": {
+        "Transform": {
+          "position": [1016, 184]
+        },
+        "Sprite": {
+          "texture": "bda48900-1124-5368-a40a-cd76590e706f",
+          "size": [48, 16],
+          "layer": 1
+        },
+        "BoxCollider": {
+          "size": [48, 16]
+        },
+        "Script": {
+          "script": "fa1818e7-78c0-531f-8f97-c19bfcd1d9e1",
+          "properties": {
+            "offset": [80, 0],
+            "period": 4
+          }
+        }
+      }
+    },
+    {
+      "id": "bcd9b3d5-0412-50a3-b0eb-472b5c4c309e",
+      "name": "Level Rules",
+      "components": {
+        "Script": {
+          "script": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+          "properties": {
+            "tag": "coin",
+            "message": "ALL COINS COLLECTED!"
+          }
         }
       }
     },

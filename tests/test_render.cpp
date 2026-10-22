@@ -6,6 +6,7 @@
 #include "px/render/Camera2D.hpp"
 #include "px/render/SceneRenderer.hpp"
 #include "px/render/TextureCache.hpp"
+#include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
 
 #include <string>
@@ -163,7 +164,14 @@ TEST_CASE("Example level renders the visible part of the level") {
     auto scene = project::loadScene(fs, manifest.value(), manifest->startScene);
     REQUIRE(scene.ok());
     // As in the game: the session positions the camera on the player.
-    runtime::GameSession session(manifest.value(), std::move(scene.value()));
+    auto created = runtime::GameSession::create(manifest.value(), std::move(scene.value()), nullptr);
+    // The example scene has Script components; without a script library the session must refuse to start.
+    CHECK_FALSE(created.ok());
+    auto game = runtime::loadGame(fs);
+    REQUIRE(game.ok());
+    auto started = runtime::startSession(game.value());
+    REQUIRE(started.ok());
+    runtime::GameSession& session = *started.value();
     RecordingRenderer renderer;
     TextureCache cache(renderer, fs, manifest->assets);
     const Camera2D cam = cameraForScene(session.scene(), {320, 180});

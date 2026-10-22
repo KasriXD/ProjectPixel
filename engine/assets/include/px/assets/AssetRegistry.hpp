@@ -11,7 +11,7 @@
 
 namespace px::assets {
 
-enum class AssetType { Texture, Scene };
+enum class AssetType { Texture, Scene, Script };
 
 [[nodiscard]] std::string_view assetTypeName(AssetType type) noexcept;
 [[nodiscard]] std::optional<AssetType> assetTypeFromName(std::string_view name) noexcept;
