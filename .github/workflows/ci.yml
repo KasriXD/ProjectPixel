@@ -39,8 +39,8 @@ jobs:
             configure: asan
             build: asan
             test: asan
-            cc: clang-18
-            cxx: clang++-18
+            cc: gcc-13
+            cxx: g++-13
           - name: Linux headless (no SDL)
             os: ubuntu-24.04
             configure: headless
@@ -92,9 +92,6 @@ jobs:
         run: cmake --build --preset ${{ matrix.build }} --parallel
 
       - name: Test
-        env:
-          # Leak checks inside system graphics drivers are not our code.
-          ASAN_OPTIONS: detect_leaks=0
         run: ctest --preset ${{ matrix.test }}
 
       - name: Upload smoke-test screenshot

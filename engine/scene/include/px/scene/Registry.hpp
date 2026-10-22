@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 #include <memory>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -72,6 +73,9 @@ public:
         if (entityIndex >= m_sparse.size() || m_sparse[entityIndex] == npos) return nullptr;
         return &m_data[m_sparse[entityIndex]];
     }
+
+    // Precondition: contains(entityIndex).
+    [[nodiscard]] T& at(std::uint32_t entityIndex) { return m_data[m_sparse[entityIndex]]; }
 
     void remove(std::uint32_t entityIndex) override {
         if (entityIndex >= m_sparse.size() || m_sparse[entityIndex] == npos) return;
@@ -165,8 +169,15 @@ public:
     // of the iterated types to other entities.
     template <class T, class... Rest, class Fn>
     void each(Fn&& fn) {
-        auto* primary = pool<T>();
+        detail::ComponentPool<T>* const primary = pool<T>();
         if (primary == nullptr) return;
+        // Pools are looked up once; they are heap objects, so the pointers stay
+        // valid even if fn creates pools for other component types.
+        const std::tuple<detail::ComponentPool<Rest>*...> others{pool<Rest>()...};
+        if constexpr (sizeof...(Rest) > 0) {
+            const bool missingPool = ((std::get<detail::ComponentPool<Rest>*>(others) == nullptr) || ...);
+            if (missingPool) return;
+        }
         for (std::size_t i = primary->size(); i-- > 0;) {
             if (i >= primary->size()) continue;
             const std::uint32_t index = primary->entityIndexAt(i);
@@ -174,9 +185,8 @@ public:
             if constexpr (sizeof...(Rest) == 0) {
                 fn(entity, primary->dataAt(i));
             } else {
-                if ((pool<Rest>() && ...) && (pool<Rest>()->contains(index) && ...)) {
-                    fn(entity, primary->dataAt(i), *pool<Rest>()->get(index)...);
-                }
+                if (!(std::get<detail::ComponentPool<Rest>*>(others)->contains(index) && ...)) continue;
+                fn(entity, primary->dataAt(i), std::get<detail::ComponentPool<Rest>*>(others)->at(index)...);
             }
         }
     }

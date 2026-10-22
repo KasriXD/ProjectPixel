@@ -8,6 +8,7 @@
 #include "px/runtime/InputScript.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 #include <string>
 
 using namespace px;
@@ -65,8 +66,15 @@ void run(GameSession& s, int ticks, const InputFrame& frame = {}) {
     for (int i = 0; i < ticks; ++i) s.tick(frame);
 }
 
-const Transform& transformOf(GameSession& s, Entity e) { return *s.scene().tryGet<Transform>(e); }
-const KinematicBody& bodyOf(GameSession& s, Entity e) { return *s.scene().tryGet<KinematicBody>(e); }
+// Dereferences a component pointer, failing the test cleanly if it is missing.
+template <class T>
+T& need(T* component) {
+    if (component == nullptr) throw std::runtime_error("expected component is missing");
+    return *component;
+}
+
+const Transform& transformOf(GameSession& s, Entity e) { return need(s.scene().tryGet<Transform>(e)); }
+const KinematicBody& bodyOf(GameSession& s, Entity e) { return need(s.scene().tryGet<KinematicBody>(e)); }
 
 // Holds jump for `holdTicks` (from the ground) and returns the highest point
 // reached, as the smallest Y of the player's position.
@@ -234,10 +242,10 @@ TEST_CASE("Camera follows its target and stays inside the level") {
     const Entity p = addPlayer(scene, {20, 153});
     const Entity cam = scene.createEntity("Camera");
     Camera camera;
-    camera.follow = scene.tryGet<EntityInfo>(p)->id;
+    camera.follow = need(scene.tryGet<EntityInfo>(p)).id;
     scene.set(cam, camera);
     GameSession s(testProject(), std::move(scene)); // view 320 x 180
-    const auto& c = *s.scene().tryGet<Camera>(cam);
+    const auto& c = need(s.scene().tryGet<Camera>(cam));
     CHECK(c.position.x == doctest::Approx(160.0f)); // clamped at the left edge
     CHECK(c.position.y == doctest::Approx(102.0f)); // 192 - 90
     run(s, 180, hold(s, {"move_right"}));
@@ -257,9 +265,9 @@ TEST_CASE("Sprite animation advances and loops") {
     scene.set(e, anim);
     GameSession s(testProject(), std::move(scene));
     run(s, 7); // 0.1167 s -> frame 1
-    CHECK(s.scene().tryGet<Sprite>(e)->source.x == doctest::Approx(16.0f));
+    CHECK(need(s.scene().tryGet<Sprite>(e)).source.x == doctest::Approx(16.0f));
     run(s, 12); // 0.3167 s -> frame 3 -> wraps to 0
-    CHECK(s.scene().tryGet<Sprite>(e)->source.x == doctest::Approx(0.0f));
+    CHECK(need(s.scene().tryGet<Sprite>(e)).source.x == doctest::Approx(0.0f));
 }
 
 TEST_CASE("Input actions, key bindings and frames") {
@@ -328,7 +336,7 @@ TEST_CASE("Example level: scripted playthrough collects every coin, deterministi
         while (!player.finished()) session.tick(player.next());
         const Entity p = session.player();
         return std::tuple{session.state().allCollected, session.state().score, session.state().respawns,
-                          session.scene().tryGet<Transform>(p)->position, session.tickCount()};
+                          need(session.scene().tryGet<Transform>(p)).position, session.tickCount()};
     };
     const auto first = play(scene.value());
     const auto second = play(scene.value());

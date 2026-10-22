@@ -31,5 +31,5 @@ if(PX_BUILD_CLIENT)
         COMMAND px_player "${PX_EXAMPLES_DIR}/platformer"
                 --frames 120 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/player_smoke.png")
     set_tests_properties(player_smoke_offscreen PROPERTIES
-        ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;SDL_RENDER_DRIVER=software")
+        ENVIRONMENT "SDL_VIDEO_DRIVER=offscreen;SDL_RENDER_DRIVER=software;LSAN_OPTIONS=suppressions=${CMAKE_CURRENT_SOURCE_DIR}/lsan_suppressions.txt")
 endif()

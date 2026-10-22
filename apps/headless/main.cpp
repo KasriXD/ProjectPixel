@@ -129,11 +129,11 @@ int main(int argc, char** argv) {
 
     const auto describePlayer = [&session]() -> std::string {
         const auto player = session.player();
-        if (player.isNull()) return "none";
-        const auto& t = *session.scene().tryGet<scene::Transform>(player);
+        const auto* t = session.scene().tryGet<scene::Transform>(player);
+        if (t == nullptr) return "none";
         const auto* body = session.scene().tryGet<scene::KinematicBody>(player);
-        return std::format("position=({:.2f}, {:.2f}) velocity=({:.1f}, {:.1f}) onGround={}", t.position.x,
-                           t.position.y, body ? body->velocity.x : 0.0f, body ? body->velocity.y : 0.0f,
+        return std::format("position=({:.2f}, {:.2f}) velocity=({:.1f}, {:.1f}) onGround={}", t->position.x,
+                           t->position.y, body ? body->velocity.x : 0.0f, body ? body->velocity.y : 0.0f,
                            body != nullptr && body->onGround);
     };
 

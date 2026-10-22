@@ -263,9 +263,8 @@ void PlayerApp::drawHud() {
 void PlayerApp::drawDebugInfo() {
     auto& r = m_platform->renderer();
     std::string playerLine = "PLAYER -";
-    if (const auto p = m_session->player(); !p.isNull()) {
-        const auto& t = *m_session->scene().tryGet<scene::Transform>(p);
-        playerLine = std::format("PLAYER {:.1f},{:.1f}", t.position.x, t.position.y);
+    if (const auto* t = m_session->scene().tryGet<scene::Transform>(m_session->player())) {
+        playerLine = std::format("PLAYER {:.1f},{:.1f}", t->position.x, t->position.y);
     }
     const std::string lines[] = {
         std::format("FPS {:.0f}  TICK {}", m_fps, m_session->tickCount()),

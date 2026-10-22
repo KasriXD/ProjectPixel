@@ -12,8 +12,9 @@ namespace {
 
 struct DrawItem {
     int layer = 0;
-    bool isTilemap = false;
-    Entity entity;
+    const Transform* transform = nullptr;
+    const Tilemap* tilemap = nullptr; // exactly one of tilemap/sprite is set
+    const Sprite* sprite = nullptr;
 };
 
 // Rounds a screen rectangle to whole pixels so that adjacent tiles share
@@ -114,24 +115,23 @@ SceneRenderStats renderScene(const Scene& scene, const Camera2D& camera, IRender
     std::vector<DrawItem> items;
     items.reserve(scene.entityCount());
     for (const Entity e : scene.entities()) {
-        if (const auto* map = scene.tryGet<Tilemap>(e); map && scene.tryGet<Transform>(e)) {
-            items.push_back({map->layer, true, e});
-        }
+        const auto* t = scene.tryGet<Transform>(e);
+        const auto* map = scene.tryGet<Tilemap>(e);
+        if (t != nullptr && map != nullptr) items.push_back({map->layer, t, map, nullptr});
     }
     for (const Entity e : scene.entities()) {
-        if (const auto* sprite = scene.tryGet<Sprite>(e); sprite && sprite->visible && scene.tryGet<Transform>(e)) {
-            items.push_back({sprite->layer, false, e});
-        }
+        const auto* t = scene.tryGet<Transform>(e);
+        const auto* sprite = scene.tryGet<Sprite>(e);
+        if (t != nullptr && sprite != nullptr && sprite->visible) items.push_back({sprite->layer, t, nullptr, sprite});
     }
     std::stable_sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.layer < b.layer; });
 
     SceneRenderStats stats;
     for (const DrawItem& item : items) {
-        const auto& t = *scene.tryGet<Transform>(item.entity);
-        if (item.isTilemap) {
-            drawTilemap(*scene.tryGet<Tilemap>(item.entity), t, camera, renderer, textures, stats);
-        } else {
-            drawSprite(*scene.tryGet<Sprite>(item.entity), t, camera, renderer, textures, stats);
+        if (item.tilemap != nullptr) {
+            drawTilemap(*item.tilemap, *item.transform, camera, renderer, textures, stats);
+        } else if (item.sprite != nullptr) {
+            drawSprite(*item.sprite, *item.transform, camera, renderer, textures, stats);
         }
     }
     return stats;
