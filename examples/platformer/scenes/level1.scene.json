@@ -1,0 +1,646 @@
+{
+  "format": "px.scene",
+  "formatVersion": 1,
+  "name": "Level 1",
+  "settings": {
+    "backgroundColor": "#9bd4f0",
+    "killPlaneY": 264
+  },
+  "entities": [
+    {
+      "id": "1c5ec1d1-dade-5a99-88ca-56d3e03fcc6d",
+      "name": "Main Camera",
+      "components": {
+        "Transform": {
+          "position": [160, 112]
+        },
+        "Camera": {
+          "follow": "78e3a2b6-c252-54d7-a6b1-3f2e391edac0",
+          "zoom": 1,
+          "clampToBounds": true
+        }
+      }
+    },
+    {
+      "id": "ee9982b0-0d07-5157-ac16-ab8c3eef908d",
+      "name": "Level",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Tilemap": {
+          "tileset": "782c3432-d57a-558a-a29f-2eb189772494",
+          "tileSize": [16, 16],
+          "tilesetColumns": 4,
+          "solid": true,
+          "layer": 0,
+          "rows": [
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 7 7 7 . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . 7 7 7 7 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
+            "2 2 . . . . . . . . . . . . . . . . . . . 3 3 . . . . . . . . . . . 4 0 0 0 5 . . . 4 0 0 0 0 5 . . . . . . . . . . . . . . 2 2",
+            "2 2 0 0 0 0 0 0 0 0 0 0 5 . . . 4 0 0 0 0 0 0 0 0 5 . . 4 0 0 0 0 0 1 1 1 1 1 . . . 1 1 1 1 1 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 2 2",
+            "2 2 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 . . 1 1 1 1 1 1 1 1 1 1 1 . . . 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 2 2",
+            "2 2 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 . . 6 6 6 6 6 6 6 6 6 6 6 . . . 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 2 2"
+          ]
+        }
+      }
+    },
+    {
+      "id": "10b81439-17ce-5d49-90fa-d0b4e0303cbd",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [128, 24]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "885a9896-3b29-50c1-9e6e-852dee9513ea",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [448, 24]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "40cd2077-6bb9-5a7d-94c6-1077fd0874dd",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [752, 24]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "9e3ef4f6-75c4-59a5-98e3-51f1375df633",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [928, 40]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "58873769-8878-50f0-af9a-28440c57999e",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [304, 56]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "aa2e7187-a39f-533f-932d-587ddd379231",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [688, 56]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -20
+        }
+      }
+    },
+    {
+      "id": "9dbad1a9-a16e-578f-b6ed-916a184b01a3",
+      "name": "Coin 1",
+      "components": {
+        "Transform": {
+          "position": [728, 104]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "7acf8738-b8a2-587f-b431-a4c66336d26c",
+      "name": "Coin 2",
+      "components": {
+        "Transform": {
+          "position": [648, 120]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "4a72242e-dc45-5554-9fc2-2e69830a400d",
+      "name": "Coin 3",
+      "components": {
+        "Transform": {
+          "position": [232, 136]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "ae0dd03f-1f38-5f76-9c17-d719dca58eb0",
+      "name": "Coin 4",
+      "components": {
+        "Transform": {
+          "position": [360, 136]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "746a903a-7906-5748-af01-35332a883cb2",
+      "name": "Coin 5",
+      "components": {
+        "Transform": {
+          "position": [472, 136]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "85a9c210-69fd-5e01-8706-075dcf3cbd93",
+      "name": "Coin 6",
+      "components": {
+        "Transform": {
+          "position": [488, 136]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "6e4fcf89-1ce0-5212-8b39-ac563c94ec17",
+      "name": "Coin 7",
+      "components": {
+        "Transform": {
+          "position": [936, 136]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "a930e2ef-99f1-5f32-939b-958a1739edce",
+      "name": "Coin 8",
+      "components": {
+        "Transform": {
+          "position": [168, 152]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "9827a078-ffe8-58cf-9b5f-7e22101cfe8f",
+      "name": "Coin 9",
+      "components": {
+        "Transform": {
+          "position": [584, 152]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "1af923b2-352e-56e4-b0cd-651eda227703",
+      "name": "Flowers",
+      "components": {
+        "Transform": {
+          "position": [600, 152]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 16, 16, 16],
+          "size": [16, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "77db158f-97fd-51d7-a703-e98529cf1425",
+      "name": "Sign",
+      "components": {
+        "Transform": {
+          "position": [72, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [16, 16, 16, 16],
+          "size": [16, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "494cab31-467f-56a5-886a-7ff3091de3d8",
+      "name": "Coin 10",
+      "components": {
+        "Transform": {
+          "position": [104, 168]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "abe142ad-e88e-505e-beae-fbf34b57e8f7",
+      "name": "Flowers",
+      "components": {
+        "Transform": {
+          "position": [136, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 16, 16, 16],
+          "size": [16, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "594e8f0d-d112-587a-a1ee-83837de269ee",
+      "name": "Bush",
+      "components": {
+        "Transform": {
+          "position": [400, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [32, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "f4379ccd-2242-547e-b943-62ce485b507d",
+      "name": "Bush",
+      "components": {
+        "Transform": {
+          "position": [816, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [32, 0, 32, 16],
+          "size": [32, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "8b07951e-c4e7-503a-b5c1-28e6b7165b27",
+      "name": "Coin 11",
+      "components": {
+        "Transform": {
+          "position": [840, 168]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "173f2601-bf29-5343-8eb1-1533b2200326",
+      "name": "Coin 12",
+      "components": {
+        "Transform": {
+          "position": [888, 168]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "layer": 5
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "isTrigger": true
+        },
+        "Collectible": {
+          "kind": "coin",
+          "value": 1
+        }
+      }
+    },
+    {
+      "id": "a72bdbce-dfa7-544d-b66d-c598588b3aa5",
+      "name": "Flowers",
+      "components": {
+        "Transform": {
+          "position": [968, 168]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [0, 16, 16, 16],
+          "size": [16, 16],
+          "layer": -1
+        }
+      }
+    },
+    {
+      "id": "78e3a2b6-c252-54d7-a6b1-3f2e391edac0",
+      "name": "Player",
+      "components": {
+        "Transform": {
+          "position": [56, 168]
+        },
+        "Sprite": {
+          "texture": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd",
+          "size": [16, 16],
+          "layer": 10
+        },
+        "BoxCollider": {
+          "size": [10, 14],
+          "offset": [0, 1]
+        },
+        "KinematicBody": {},
+        "PlatformerController": {
+          "maxSpeed": 110,
+          "jumpSpeed": 300,
+          "gravity": 900
+        },
+        "Player": {}
+      }
+    }
+  ]
+}

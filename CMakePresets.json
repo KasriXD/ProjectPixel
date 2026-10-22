@@ -1,0 +1,63 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 24, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "binaryDir": "${sourceDir}/build/${presetName}",
+      "cacheVariables": { "CMAKE_EXPORT_COMPILE_COMMANDS": "ON" }
+    },
+    {
+      "name": "dev",
+      "displayName": "Development (Debug, Ninja)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "PX_WARNINGS_AS_ERRORS": "ON" }
+    },
+    {
+      "name": "release",
+      "displayName": "Release with debug info (Ninja)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+    },
+    {
+      "name": "asan",
+      "displayName": "Debug with AddressSanitizer + UBSan (GCC/Clang)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "PX_ENABLE_SANITIZERS": "ON", "PX_WARNINGS_AS_ERRORS": "ON" }
+    },
+    {
+      "name": "headless",
+      "displayName": "Headless: no SDL, no graphics (server-style build)",
+      "inherits": "base",
+      "generator": "Ninja",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug", "PX_BUILD_CLIENT": "OFF", "PX_WARNINGS_AS_ERRORS": "ON" }
+    },
+    {
+      "name": "vs2022",
+      "displayName": "Visual Studio 2022 (Windows)",
+      "inherits": "base",
+      "generator": "Visual Studio 17 2022",
+      "architecture": "x64",
+      "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "dev", "configurePreset": "dev" },
+    { "name": "release", "configurePreset": "release" },
+    { "name": "asan", "configurePreset": "asan" },
+    { "name": "headless", "configurePreset": "headless" },
+    { "name": "vs2022-debug", "configurePreset": "vs2022", "configuration": "Debug" },
+    { "name": "vs2022-release", "configurePreset": "vs2022", "configuration": "RelWithDebInfo" }
+  ],
+  "testPresets": [
+    { "name": "dev", "configurePreset": "dev", "output": { "outputOnFailure": true } },
+    { "name": "release", "configurePreset": "release", "output": { "outputOnFailure": true } },
+    { "name": "asan", "configurePreset": "asan", "output": { "outputOnFailure": true } },
+    { "name": "headless", "configurePreset": "headless", "output": { "outputOnFailure": true } },
+    { "name": "vs2022-debug", "configurePreset": "vs2022", "configuration": "Debug", "output": { "outputOnFailure": true } }
+  ]
+}

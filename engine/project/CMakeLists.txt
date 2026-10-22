@@ -1,0 +1,11 @@
+px_add_module(project
+    SOURCES
+        src/JsonUtil.cpp
+        src/ProjectFormat.cpp
+        src/SceneFormat.cpp
+    DEPS
+        px::core
+        px::assets
+        px::scene
+    PRIVATE_DEPS
+        nlohmann_json::nlohmann_json)

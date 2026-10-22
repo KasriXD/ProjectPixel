@@ -1,0 +1,19 @@
+# Build output
+/build/
+/out/
+CMakeUserPresets.json
+compile_commands.json
+
+# Editors and tools
+.vscode/
+.idea/
+.vs/
+.cache/
+*.swp
+.DS_Store
+
+# Screenshots taken with F2 in px-player
+px-screenshot-*.png
+
+# Python
+__pycache__/

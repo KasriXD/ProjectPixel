@@ -1,0 +1,28 @@
+# Scripted route that collects all 12 coins in Level 1.
+# Used by the automated playthrough test (tests/CMakeLists.txt) and by
+# `px-player --input-script` for demos. Format: docs/input-scripts.md.
+# If you change the level layout or the PlatformerController tuning,
+# re-check this route with: px-headless examples/platformer --input-script
+#   examples/platformer/tests/full_run.input --log-events --trace-every 4
+
+61 move_right            # run; coin 1 is on the path
+6  -                     # stop under coin 2
+25 jump                  # jump straight up: coin 2
+20 -                     # land
+22 move_right
+26 move_right+jump       # jump the first pit: coin 3 mid-air
+20 move_right
+24 move_right+jump       # up onto the crates: coin 4
+36 move_right            # drop off the crates (jump is buffered below)
+28 move_right+jump       # over the second pit onto the metal platform: coins 5 and 6
+30 move_right
+30 move_right+jump       # platform to the raised ground: coin 7
+31 move_right
+26 move_right+jump       # third pit: coin 8 mid-air
+14 move_right
+26 move_right+jump       # onto the high platform
+6  move_right
+26 move_right+jump       # jump from the high platform: coin 9, land on the last stretch
+72 move_right            # coins 10 and 11 are on the path
+30 move_right+jump       # final jump: coin 12
+20 -

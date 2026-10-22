@@ -1,0 +1,78 @@
+{
+  "format": "px.project",
+  "formatVersion": 1,
+  "id": "af5d3a02-6054-58d1-a81c-23a97281ae0f",
+  "name": "Example Platformer",
+  "engineVersion": "0.1.0",
+  "startScene": "e0464a98-2756-52ff-8acd-37c81877ff1a",
+  "settings": {
+    "tickRate": 60,
+    "display": {
+      "virtualResolution": [320, 180],
+      "scaling": "integer",
+      "windowScale": 3
+    }
+  },
+  "input": {
+    "actions": {
+      "move_left": [
+        "Left",
+        "A"
+      ],
+      "move_right": [
+        "Right",
+        "D"
+      ],
+      "move_up": [
+        "Up",
+        "W"
+      ],
+      "move_down": [
+        "Down",
+        "S"
+      ],
+      "jump": [
+        "Space",
+        "Z",
+        "Up",
+        "W"
+      ]
+    }
+  },
+  "assets": [
+    {
+      "id": "782c3432-d57a-558a-a29f-2eb189772494",
+      "type": "texture",
+      "name": "Tiles",
+      "path": "assets/tiles.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd",
+      "type": "texture",
+      "name": "Player",
+      "path": "assets/player.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "557af178-14ef-5774-a06e-707ebfa25910",
+      "type": "texture",
+      "name": "Coin",
+      "path": "assets/coin.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+      "type": "texture",
+      "name": "Scenery",
+      "path": "assets/scenery.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "e0464a98-2756-52ff-8acd-37c81877ff1a",
+      "type": "scene",
+      "name": "Level 1",
+      "path": "scenes/level1.scene.json"
+    }
+  ]
+}
