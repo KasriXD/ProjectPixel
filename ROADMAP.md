@@ -43,7 +43,7 @@ CI, then Milestone 2 (Luau scripting).
 - [x] Collectibles, kill plane and respawn, level-complete state, HUD
 - [x] Versioned project and scene formats with strict validation and migration hook
 - [x] Example platformer loaded entirely from project files
-- [x] Tests: 51 unit test cases; scripted full playthrough; offscreen smoke test
+- [x] Tests: 51 unit test cases; scripted full playthrough; windowless client smoke test
 - [x] Verified visually on Linux: X11 + OpenGL (Mesa) and offscreen + software renderer
 - [x] Windows build (MinGW-w64) runs under Wine: tests, playthrough, client with Direct3D renderer
 - [x] Clean under AddressSanitizer + UBSan (leak detection on); Release builds clean with `-Werror`

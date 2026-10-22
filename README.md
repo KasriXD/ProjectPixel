@@ -18,7 +18,7 @@ prototype) is complete on Linux. See [ROADMAP.md](ROADMAP.md) for detail.
 | Area | Status |
 |---|---|
 | CMake/C++20 build, pinned dependencies, warnings-as-errors | Implemented, verified on Linux (GCC 13, Clang 18) |
-| Window, main loop, keyboard input (SDL3) | Implemented, verified on Linux (X11 + OpenGL, offscreen + software) |
+| Window, main loop, keyboard input (SDL3) | Implemented, verified on Linux (X11 + OpenGL) and Windows (Direct3D, under Wine); windowless smoke test passes in CI on Linux, Windows and macOS |
 | 2D rendering: sprites, tilemaps, layers, camera, pixel-perfect scaling, debug text | Implemented, verified by screenshots |
 | Entity/component scene model with stable ids | Implemented, unit tested |
 | Kinematic collision: solid tiles/boxes, triggers | Implemented, unit tested |

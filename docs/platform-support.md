@@ -9,7 +9,7 @@ testing. This page states what is verified and what work remains.
 | Platform | Builds | Runs | Verified how |
 |---|---|---|---|
 | Linux x64 (X11) | Yes: GCC 13, Clang 18 | Yes: SDL `opengl` renderer on Mesa | Built and tested locally (Ubuntu 24.04), screenshots inspected |
-| Linux, no display | Yes | Yes: SDL `offscreen` driver + `software` renderer | CTest `player_smoke_offscreen` |
+| No display (any OS) | Yes | Yes: SDL `dummy` driver + `software` renderer | CTest `player_smoke_headless_display` |
 | Linux (Wayland) | Compiled in | **Not tested** | |
 | Headless (no SDL) | Yes | Yes | `headless` preset, `px-headless` playthrough test |
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |

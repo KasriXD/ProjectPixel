@@ -61,8 +61,8 @@ single header in `third_party/` and record it in `third_party/VERSIONS.md`.
 - `example_platformer_playthrough` replays `examples/platformer/tests/full_run.input`
   and requires every coin to be collected. If you change the level or the
   movement tuning, re-tune the script (see comments in the file).
-- `player_smoke_offscreen` runs the real client for 120 frames with SDL's
-  offscreen driver and software renderer, no display needed.
+- `player_smoke_headless_display` runs the real client for 120 frames with
+  SDL's dummy video driver and software renderer, no display needed.
 
 ## Commit messages
 
