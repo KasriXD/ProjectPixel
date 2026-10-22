@@ -851,8 +851,9 @@ TEST_CASE("Scene format 1 Collectible components migrate to tags with a warning"
     auto scene = project::parseScene(v1, "old.scene.json", nullptr, &warnings);
     REQUIRE_MESSAGE(scene.ok(), (scene.ok() ? "" : scene.error().message));
     const Entity coin = scene->findByName("Coin");
-    REQUIRE(scene->tryGet<Tags>(coin) != nullptr);
-    CHECK(scene->tryGet<Tags>(coin)->has("gem"));
+    const auto* tags = scene->tryGet<Tags>(coin);
+    REQUIRE(tags != nullptr);
+    CHECK((tags != nullptr && tags->has("gem")));
     REQUIRE(warnings.size() == 1);
     CHECK(contains(warnings[0], "old.scene.json: scene format 1 -> 2: 1 Collectible component(s) were converted"));
     // Saving writes the current version.
