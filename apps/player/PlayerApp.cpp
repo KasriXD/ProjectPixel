@@ -2,8 +2,8 @@
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
-#include "px/project/SceneFormat.hpp"
 #include "px/render/SceneRenderer.hpp"
+#include "px/runtime/GameLoader.hpp"
 
 #include <SDL3/SDL.h>
 
@@ -37,8 +37,8 @@ const char* playerUsage() {
            "  --debug             start with the debug overlay (toggle with F1)\n"
            "  --scale N           initial window scale (default: from the project)\n"
            "\n"
-           "  In game: arrows/WASD move, Space/Z/W jump, R restart, F1 debug overlay,\n"
-           "           F2 screenshot, Esc quit.\n";
+           "  In game: arrows/WASD move, Space/Z/W jump, R restart, F5 reload scripts and\n"
+           "           scenes from disk, F1 debug overlay, F2 screenshot, Esc quit.\n";
 }
 
 std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string& error) {
@@ -113,17 +113,16 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     std::filesystem::path dir = options.projectDir.empty() ? defaultProjectDir() : options.projectDir;
     std::unique_ptr<PlayerApp> app(new PlayerApp(std::move(options), dir));
 
-    auto manifest = project::loadProjectManifest(app->m_files);
-    if (!manifest) return manifest.error();
-    app->m_manifest = std::move(manifest.value());
-    auto scene = project::loadScene(app->m_files, app->m_manifest, app->m_manifest.startScene);
-    if (!scene) return scene.error();
-    app->m_startScene = std::move(scene.value());
-    log::info("Loaded project '{}' from {}", app->m_manifest.name, dir.generic_string());
+    auto game = runtime::loadGame(app->m_files);
+    if (!game) return game.error();
+    app->m_game = std::move(game.value());
+    for (const auto& w : app->m_game.warnings) log::warn("{}", w);
+    log::info("Loaded project '{}' from {} ({} scripts)", app->m_game.manifest.name, dir.generic_string(),
+              app->m_game.scripts->size());
 
-    const auto& display = app->m_manifest.settings.display;
+    const auto& display = app->m_game.manifest.settings.display;
     platform::WindowSettings window;
-    window.title = std::format("{} - {}", app->m_manifest.name, version::productName);
+    window.title = std::format("{} - {}", app->m_game.manifest.name, version::productName);
     window.virtualResolution = display.virtualResolution;
     window.presentation = display.scaling == project::ScalingMode::Integer ? platform::Presentation::IntegerScale
                                                                            : platform::Presentation::Letterbox;
@@ -134,11 +133,11 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     if (!platform) return platform.error();
     app->m_platform = std::move(platform.value());
     app->m_textures = std::make_unique<render::TextureCache>(app->m_platform->renderer(), app->m_files,
-                                                             app->m_manifest.assets);
+                                                             app->m_game.manifest.assets);
 
-    app->m_clock = FixedStepClock(1.0 / app->m_manifest.settings.tickRate);
+    app->m_clock = FixedStepClock(1.0 / app->m_game.manifest.settings.tickRate);
     app->m_showDebug = app->m_options.debugOverlay;
-    app->restart();
+    if (auto started = app->restart(); !started) return started.error();
 
     if (!app->m_options.inputScriptPath.empty()) {
         const auto& path = app->m_options.inputScriptPath;
@@ -158,12 +157,46 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
 PlayerApp::PlayerApp(PlayerOptions options, std::filesystem::path projectDir)
     : m_options(std::move(options)), m_files(std::move(projectDir)) {}
 
-void PlayerApp::restart() {
-    m_session = std::make_unique<runtime::GameSession>(m_manifest, m_startScene);
-    m_bindings = runtime::KeyBindings(m_manifest.input, m_session->actions());
+px::Status PlayerApp::restart() {
+    auto session = runtime::startSession(m_game);
+    if (!session) return session.error();
+    m_session = std::move(session.value());
+    m_bindings = runtime::KeyBindings(m_game.manifest.input, m_session->actions());
     m_previousHeld = 0;
     m_clock.reset();
+    m_loadError.clear();
     if (m_script) m_scriptPlayer.emplace(*m_script);
+    return {};
+}
+
+void PlayerApp::reload() {
+    // Reads project.json, the start scene and every script again, so edits to
+    // Luau scripts or scene files take effect without restarting the program.
+    // If anything fails to load, the current game keeps running and the
+    // error is shown on screen. (Window and resolution settings are not re-applied.)
+    auto game = runtime::loadGame(m_files);
+    if (!game) {
+        m_loadError = game.error().message;
+        log::error("Reload failed: {}", m_loadError);
+        return;
+    }
+    auto session = runtime::startSession(game.value());
+    if (!session) {
+        m_loadError = session.error().message;
+        log::error("Reload failed: {}", m_loadError);
+        return;
+    }
+    for (const auto& w : game->warnings) log::warn("{}", w);
+    m_session.reset(); // the old session references the old game's scripts
+    m_game = std::move(game.value());
+    m_textures = std::make_unique<render::TextureCache>(m_platform->renderer(), m_files, m_game.manifest.assets);
+    m_session = std::move(session.value());
+    m_bindings = runtime::KeyBindings(m_game.manifest.input, m_session->actions());
+    m_previousHeld = 0;
+    m_clock.reset();
+    m_loadError.clear();
+    if (m_script) m_scriptPlayer.emplace(*m_script);
+    log::info("Reloaded '{}' ({} scripts)", m_game.manifest.name, m_game.scripts->size());
 }
 
 runtime::InputFrame PlayerApp::nextInput() {
@@ -181,15 +214,18 @@ void PlayerApp::runTick() {
     m_session->tick(nextInput());
     for (const auto& event : m_session->events()) {
         switch (event.type) {
-            case runtime::GameEvent::Type::Collected:
-                log::info("Collected {} ({}/{})", event.kind, m_session->state().collectiblesCollected,
-                          m_session->state().collectiblesTotal);
+            case runtime::GameEvent::Type::ObjectiveChanged:
+                log::info("{}", event.text);
                 break;
             case runtime::GameEvent::Type::PlayerRespawned:
                 log::info("Player fell and respawned");
                 break;
-            case runtime::GameEvent::Type::AllCollected:
-                log::info("All collectibles collected after {:.2f} s", m_session->elapsedSeconds());
+            case runtime::GameEvent::Type::LevelCompleted:
+                log::info("Level complete after {:.2f} s: {}", m_session->elapsedSeconds(), event.text);
+                break;
+            case runtime::GameEvent::Type::ScoreChanged:
+            case runtime::GameEvent::Type::ScriptError: // already logged by the session
+            case runtime::GameEvent::Type::ScriptEvent:
                 break;
         }
     }
@@ -215,9 +251,9 @@ PlayerApp::Status PlayerApp::iterate() {
     drawFrame();
     ++m_frame;
     if (m_options.frames > 0 && m_frame >= m_options.frames) {
-        log::info("Finished {} frames: score {}, {}/{} collected, {} respawns", m_frame, m_session->state().score,
-                  m_session->state().collectiblesCollected, m_session->state().collectiblesTotal,
-                  m_session->state().respawns);
+        const auto& state = m_session->state();
+        log::info("Finished {} frames: score {}, objective \"{}\", level complete: {}, {} respawns, {} script errors",
+                  m_frame, state.score, state.objective, state.levelComplete, state.respawns, state.scriptErrors);
         return Status::Success;
     }
     return Status::Continue;
@@ -225,7 +261,7 @@ PlayerApp::Status PlayerApp::iterate() {
 
 void PlayerApp::drawFrame() {
     auto& renderer = m_platform->renderer();
-    const auto& res = m_manifest.settings.display.virtualResolution;
+    const auto& res = m_game.manifest.settings.display.virtualResolution;
     const Vec2 viewport{static_cast<float>(res.x), static_cast<float>(res.y)};
     const render::Camera2D camera = render::cameraForScene(m_session->scene(), viewport);
 
@@ -251,26 +287,42 @@ void PlayerApp::drawHud() {
         r.drawDebugText({p.x + 1, p.y + 1}, s, kHudShadow);
         r.drawDebugText(p, s, c);
     };
-    const float width = static_cast<float>(m_manifest.settings.display.virtualResolution.x);
-    const float height = static_cast<float>(m_manifest.settings.display.virtualResolution.y);
+    const float width = static_cast<float>(m_game.manifest.settings.display.virtualResolution.x);
+    const float height = static_cast<float>(m_game.manifest.settings.display.virtualResolution.y);
     constexpr float g = render::IRenderer2D::kDebugGlyphSize;
 
-    if (state.collectiblesTotal > 0) {
-        text({6, 6}, std::format("COINS {}/{}", state.collectiblesCollected, state.collectiblesTotal), kHudText);
-    }
-    if (m_session->elapsedSeconds() < 6.0 && !m_scriptPlayer) {
+    // The objective line is set by scripts (Game.setObjective).
+    if (!state.objective.empty()) text({6, 6}, state.objective, kHudText);
+    const std::string& error = !m_loadError.empty() ? m_loadError : state.lastScriptError;
+    if (m_session->elapsedSeconds() < 6.0 && !m_scriptPlayer && error.empty()) {
         const std::string hint = "ARROWS MOVE  SPACE JUMP  R RESTART";
         text({(width - g * static_cast<float>(hint.size())) * 0.5f, height - 14}, hint, colors::white);
     }
-    if (state.allCollected) {
-        const std::string line1 = "ALL COINS COLLECTED!";
+    if (state.levelComplete) {
+        std::string line1 = state.completionMessage.empty() ? std::string("LEVEL COMPLETE!") : state.completionMessage;
+        const std::size_t maxChars = static_cast<std::size_t>((width - 32) / g);
+        if (line1.size() > maxChars) line1.resize(maxChars);
         const std::string line2 = "PRESS R TO PLAY AGAIN";
-        const float boxW = g * static_cast<float>(line2.size()) + 24;
+        const float boxW = g * static_cast<float>(std::max(line1.size(), line2.size())) + 24;
         const Rect box{(width - boxW) * 0.5f, height * 0.5f - 22, boxW, 44};
         r.fillRect(box, Color{20, 16, 40, 200});
         r.drawRect(box, kHudText);
         text({(width - g * static_cast<float>(line1.size())) * 0.5f, box.y + 9}, line1, kHudText);
         text({(width - g * static_cast<float>(line2.size())) * 0.5f, box.y + 27}, line2, colors::white);
+    }
+
+    // Script and reload errors are shown on screen so creators notice them.
+    if (!error.empty()) {
+        const std::size_t perLine = static_cast<std::size_t>((width - 8) / g);
+        std::vector<std::string> lines = {!m_loadError.empty() ? "RELOAD FAILED (F5 TO RETRY):"
+                                                                : std::format("SCRIPT ERRORS: {}", state.scriptErrors)};
+        for (std::size_t i = 0; i < error.size() && lines.size() < 4; i += perLine) lines.push_back(error.substr(i, perLine));
+        const float boxH = static_cast<float>(lines.size()) * 10.0f + 4.0f;
+        const float y0 = height - boxH;
+        r.fillRect({0, y0, width, boxH}, Color{120, 20, 30, 220});
+        for (std::size_t i = 0; i < lines.size(); ++i) {
+            r.drawDebugText({4, y0 + 3 + static_cast<float>(i) * 10.0f}, lines[i], colors::white);
+        }
     }
 }
 
@@ -284,6 +336,8 @@ void PlayerApp::drawDebugInfo() {
         std::format("FPS {:.0f}  TICK {}", m_fps, m_session->tickCount()),
         std::format("ENTITIES {}", m_session->scene().entityCount()),
         playerLine,
+        std::format("SCRIPTS {}  LUAU {} KIB", m_session->scripts().stats().instances,
+                    m_session->scripts().stats().memoryBytes / 1024),
     };
     float y = 18;
     for (const auto& line : lines) {
@@ -310,7 +364,11 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
                 return Status::Success;
             case SDL_SCANCODE_R:
                 log::info("Restarting");
-                restart();
+                if (auto status = restart(); !status) m_loadError = status.error().message;
+                break;
+            case SDL_SCANCODE_F5:
+                log::info("Reloading project from disk");
+                reload();
                 break;
             case SDL_SCANCODE_F1:
                 m_showDebug = !m_showDebug;

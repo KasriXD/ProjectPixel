@@ -6,6 +6,7 @@
 #include "px/platform_sdl/SdlPlatform.hpp"
 #include "px/project/Project.hpp"
 #include "px/render/TextureCache.hpp"
+#include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
 #include "px/runtime/InputScript.hpp"
 #include "px/scene/Scene.hpp"
@@ -47,7 +48,8 @@ public:
 private:
     PlayerApp(PlayerOptions options, std::filesystem::path projectDir);
 
-    void restart();
+    [[nodiscard]] px::Status restart();
+    void reload();
     [[nodiscard]] runtime::InputFrame nextInput();
     void runTick();
     void drawFrame();
@@ -57,8 +59,8 @@ private:
 
     PlayerOptions m_options;
     DirectoryFileSystem m_files;
-    project::ProjectManifest m_manifest;
-    scene::Scene m_startScene; // pristine copy for restarts
+    runtime::LoadedGame m_game; // manifest, start scene and compiled scripts
+    std::string m_loadError;    // shown on screen when F5 reload fails
     std::unique_ptr<runtime::GameSession> m_session;
     std::unique_ptr<platform::SdlPlatform> m_platform;
     std::unique_ptr<render::TextureCache> m_textures;
