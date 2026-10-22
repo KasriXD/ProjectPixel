@@ -35,22 +35,34 @@ Component reference: [project-format.md](project-format.md#components).
 
 ## Simulation
 
-`runtime::GameSession` runs one game. It advances only through
-`tick(InputFrame)`, one fixed step of `1 / tickRate` seconds. Each tick runs,
-in order:
+`runtime::GameSession` runs one game. It is created with
+`GameSession::create` (or `runtime::startSession` for a loaded project),
+which fails with a clear error if the scene's scripts are invalid. It
+advances only through `tick(InputFrame)`, one fixed step of `1 / tickRate`
+seconds. Each tick runs, in order:
 
-1. **Platformer control**: reads actions, applies acceleration, gravity, jump
+1. **Scripts**: `Start` for new script instances, then `Tick`
+   ([scripting.md](scripting.md#execution-order)).
+2. **Moving solids**: solid colliders are re-read every tick (scripts may
+   move them); bodies standing on a solid that moved are carried by the same
+   offset, through collision.
+3. **Platformer control**: reads actions, applies acceleration, gravity, jump
    (with coyote time and jump buffering) and jump cut, flips the sprite.
-2. **Kinematic movement**: moves each body by `velocity * dt` through the
-   collision world, X then Y; sets ground/ceiling/wall contacts and zeroes
-   velocity into walls.
-3. **Collectibles**: player colliders against collectible colliders; raises
-   `Collected` and, once, `AllCollected` events.
-4. **Kill plane**: respawns players below `killPlaneY` (`PlayerRespawned`).
-5. **Animation**: advances `SpriteAnimation` and updates `Sprite.source`.
-6. **Cameras**: follow targets, clamp to level bounds.
+4. **Kinematic movement**: moves each body by `velocity * dt` through the
+   collision world, X then Y; sets ground/ceiling/wall contacts, records
+   which solid entity it stands on, and zeroes velocity into walls.
+5. **Triggers**: overlaps between trigger colliders and moving bodies are
+   compared with the previous tick; `TriggerExit`/`TriggerEnter` go to the
+   scripts of both entities.
+6. **Kill plane**: respawns players below `killPlaneY` (`PlayerRespawned`).
+7. **Animation**: advances `SpriteAnimation` and updates `Sprite.source`.
+8. **Cameras**: follow targets, clamp to level bounds.
 
-Events from the last tick are available from `events()`.
+After the script and trigger phases, entities destroyed by scripts are
+removed and queued script events are delivered. Game rules such as
+collecting coins and winning are scripts; the session keeps the
+authoritative `GameState` (score, objective, completion, script errors)
+and reports changes as `events()` of the last tick.
 
 The client converts real time to ticks with `FixedStepClock` (at most 8 ticks
 per frame; a longer stall drops time instead of freezing). Given the same

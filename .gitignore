@@ -17,3 +17,6 @@ px-screenshot-*.png
 
 # Python
 __pycache__/
+
+# Browser smoke test dependencies (installed by CI)
+tools/browser/node_modules/

@@ -11,7 +11,8 @@ if(EMSCRIPTEN)
     target_compile_definitions(px_player PRIVATE PX_DEFAULT_PROJECT_DIR="/examples/platformer")
     target_link_options(px_player PRIVATE
         "--preload-file=${PX_EXAMPLES_DIR}/platformer@/examples/platformer"
-        "--exclude-file=*.input")
+        "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
+    set_property(TARGET px_player APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
 else()
     # Development convenience: with no argument, play the bundled example.
     target_compile_definitions(px_player PRIVATE PX_DEFAULT_PROJECT_DIR="${PX_EXAMPLES_DIR}/platformer")

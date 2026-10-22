@@ -108,6 +108,10 @@ jobs:
           if [ -f build.log ]; then grep -E "error|FAILED" build.log | tail -40 > build-errors.log || true; fi
           annotate "Build errors" build-errors.log
           annotate "Test output" test.log
+          if [ -f test.log ]; then
+            grep -E "ERROR:|FAILED|Failed|test cases:|assertions:|tests passed|\.cpp(:|\()" test.log | head -60 > test-summary.log || true
+            annotate "Test summary" test-summary.log
+          fi
 
       - name: Upload smoke-test screenshot
         if: always() && matrix.configure != 'headless'
@@ -156,6 +160,25 @@ jobs:
           sizes=$(ls -l build/wasm/apps/player/px-player.* | awk '{printf "%s: %d KiB. ", $9, $5/1024}')
           echo "::notice title=Browser build::${sizes}"
 
+      - name: Play the browser build in headless Chromium
+        shell: bash
+        run: |
+          (cd tools/browser && npm install --no-save --no-audit --no-fund playwright@1.49.1 >/dev/null \
+            && npx playwright install --with-deps chromium >/dev/null)
+          python3 -m pip install --quiet pillow
+          (cd build/wasm/apps/player && python3 -m http.server 8000 >/dev/null 2>&1 &)
+          sleep 2
+          args="arg=--frames&arg=930&arg=--input-script&arg=/examples/platformer/tests/full_run.input"
+          set +e
+          node tools/browser/smoke_test.js "http://localhost:8000/px-player.html?${args}" browser.png \
+            2>&1 | tee browser.log
+          status=${PIPESTATUS[0]}
+          set -e
+          [ -f browser.png ] && python3 tools/browser/ascii_screenshot.py browser.png | tee browser-ascii.log
+          body=$(cat browser.log browser-ascii.log 2>/dev/null | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
+          echo "::notice title=Browser run (headless Chromium)::${body}"
+          exit $status
+
       - name: Report failure details
         if: failure()
         shell: bash
@@ -171,13 +194,18 @@ jobs:
           if [ -f build.log ]; then grep -E "error|FAILED" build.log | tail -40 > build-errors.log || true; fi
           annotate "Build errors" build-errors.log
           annotate "Test output" test.log
+          if [ -f test.log ]; then
+            grep -E "ERROR:|FAILED|Failed|test cases:|assertions:|tests passed|\.cpp(:|\()" test.log | head -60 > test-summary.log || true
+            annotate "Test summary" test-summary.log
+          fi
 
       - name: Upload browser build
-        if: success()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: px-player-web
           path: |
+            browser.png
             build/wasm/apps/player/px-player.html
             build/wasm/apps/player/px-player.js
             build/wasm/apps/player/px-player.wasm

@@ -909,8 +909,10 @@ TEST_CASE("API reference document is up to date") {
     DirectoryFileSystem docs(PX_DOCS_DIR);
     auto text = docs.readText("scripting-api.md");
     REQUIRE_MESSAGE(text.ok(), "docs/scripting-api.md is missing");
-    CHECK_MESSAGE(text.value() == scripting::generateApiReferenceMarkdown(),
-                  "docs/scripting-api.md is out of date; regenerate it with px-headless --print-api-reference");
+    std::string onDisk = text.value();
+    std::erase(onDisk, '\r'); // git may check text files out with CRLF line endings (Windows)
+    const bool upToDate = onDisk == scripting::generateApiReferenceMarkdown();
+    CHECK_MESSAGE(upToDate, "docs/scripting-api.md is out of date; regenerate it with px-headless --print-api-reference");
 
     // Every member is uniquely named within its group and documented.
     std::set<std::string> seen;

@@ -1,4 +1,6 @@
-# Project format (version 1)
+# Project format
+
+Current versions: project manifest **1**, scene **2**.
 
 A game project is a folder:
 
@@ -6,6 +8,7 @@ A game project is a folder:
 my-game/
   project.json            manifest (required, this exact name)
   scenes/*.scene.json     scenes
+  scripts/*.luau          Luau scripts (docs/scripting.md)
   assets/...              textures and other assets
 ```
 
@@ -36,7 +39,8 @@ or renaming a file therefore means editing one `path` entry.
   "startScene": "e0464a98-2756-52ff-8acd-37c81877ff1a",
   "settings": {
     "tickRate": 60,
-    "display": { "virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3 }
+    "display": { "virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3 },
+    "scripting": { "apiVersion": 1 }
   },
   "input": {
     "actions": {
@@ -47,7 +51,8 @@ or renaming a file therefore means editing one `path` entry.
   },
   "assets": [
     { "id": "782c3432-...", "type": "texture", "name": "Tiles", "path": "assets/tiles.png", "filter": "nearest" },
-    { "id": "e0464a98-...", "type": "scene", "name": "Level 1", "path": "scenes/level1.scene.json" }
+    { "id": "e0464a98-...", "type": "scene", "name": "Level 1", "path": "scenes/level1.scene.json" },
+    { "id": "4be1b3f2-...", "type": "script", "name": "Coin", "path": "scripts/coin.luau" }
   ]
 }
 ```
@@ -63,6 +68,7 @@ or renaming a file therefore means editing one `path` entry.
 | `settings.display.virtualResolution` | no ([320, 180]) | logical screen size in pixels |
 | `settings.display.scaling` | no (`"integer"`) | `"integer"` (whole-number scale, crisp pixels) or `"letterbox"` |
 | `settings.display.windowScale` | no (3) | initial desktop window size multiplier, 1-16 |
+| `settings.scripting.apiVersion` | no (1) | scripting API version the project was written for; newer than the engine's is refused |
 | `input.actions` | no | action name → list of default keys. At most 32 actions; names use `a-z`, `0-9`, `_`. Order defines action ids. |
 | `assets` | no | asset list, see below; at most 10 000 entries |
 
@@ -79,19 +85,22 @@ Standard actions used by built-in components: `move_left`, `move_right`,
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | asset GUID, unique |
-| `type` | yes | `"texture"` or `"scene"` |
+| `type` | yes | `"texture"`, `"scene"` or `"script"` |
 | `path` | yes | file path inside the project |
 | `name` | no | label for tools (defaults to the path) |
 | `filter` | no (`"nearest"`) | textures only: `"nearest"` for pixel art, `"linear"` for smooth art |
 
 Textures may be PNG, JPEG, BMP or TGA, at most 8192x8192 pixels.
+Scripts are Luau source files (UTF-8, at most 1 MiB). All scripts are
+compiled when the project loads; a syntax error stops loading and names the
+file and line.
 
 ## Scene files
 
 ```json
 {
   "format": "px.scene",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "name": "Level 1",
   "settings": { "backgroundColor": "#9bd4f0", "killPlaneY": 264 },
   "entities": [
@@ -160,14 +169,35 @@ solids.
 `jumpBufferTime 0.1`. All non-negative. Requires `Transform`, `BoxCollider` and
 `KinematicBody`. Reads the `move_left`, `move_right` and `jump` actions.
 
-**Collectible**: `kind "coin"`, `value 1`. Collected when a `Player`'s
-collider overlaps this entity's collider (normally a trigger).
+**Tags**: an array of strings, e.g. `["coin", "pickup"]` (at most 32
+tags of 1-64 characters). Scripts find tagged entities with
+`World.findWithTag` and test them with `entity:hasTag`.
+
+**Script**: `script` (*required*, script asset id), `properties` (object,
+default `{}`). Attaches a Luau behaviour to the entity. Each property
+overrides a default declared in the script's `properties` table and must
+have the same type: number, `true`/`false`, string, or vector `[x, y]`.
+Undeclared names and wrong types are load errors. See
+[scripting.md](scripting.md).
 
 **Player**: no fields. Marks the player character. Its start position is its
 respawn point.
 
 **Camera**: `follow` (entity id, optional), `zoom 1` (0-64, exclusive of 0),
 `clampToBounds true` (keep the view inside the union of all tilemaps).
+
+Solid `BoxCollider`s without a `KinematicBody` may be moved by scripts
+(moving platforms); bodies standing on them are carried along.
+
+## Format history
+
+| Scene format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.1 | Initial format | |
+| 2 | 0.2 | Added `Script` and `Tags`. Removed `Collectible`: collecting is now scripted | `Collectible { kind }` becomes a `kind` tag; `value` is dropped. A warning tells the creator to add a script (see the example's `coin.luau`) |
+
+The project manifest is still format 1; `script` assets and
+`settings.scripting` were added compatibly (older files remain valid).
 
 ## Versioning
 

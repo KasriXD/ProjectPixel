@@ -1,7 +1,7 @@
 # ADR 0008: Luau for creator scripting
 
-- Status: Accepted (implementation scheduled for Milestone 2)
-- Date: 2026-10-22
+- Status: Accepted, implemented in Milestone 2 (see ADRs 0009-0011 for the details)
+- Date: 2026-10-22, updated 2026-10-23
 
 ## Context
 Creators need a scripting language that is approachable, fast, safe to run
@@ -9,16 +9,18 @@ untrusted, and embeddable on desktop, mobile and web. Visual scripting must
 share the same capabilities.
 
 ## Decision
-Embed **Luau** (0.743 at evaluation time) unmodified as the language runtime.
-Project Pixel defines and versions its own gameplay API on top. Details:
-`docs/scripting.md`.
+Embed **Luau** unmodified as the language runtime (version 0.743, vendored;
+ADR 0009). Project Pixel defines and versions its own gameplay API on top
+(`docs/scripting.md`, `docs/scripting-api.md`).
 
-Verified from the Luau source:
+Verified from the Luau source and by our tests:
 - MIT license; CMake; C++17 libraries (VM C++11).
 - Sandboxing (`luaL_sandbox`, `luaL_sandboxthread`), execution limits via the
   `interrupt` callback at safepoints, memory limits via custom allocators.
-- Optional native code generation, which can be left out where JIT is not
-  permitted (iOS) or not available (browser).
+- Native code generation is optional and is not built (no JIT on iOS or in
+  browsers).
+- Compiles and runs in WebAssembly, including errors, interrupts and the
+  memory cap (ADR 0012).
 
 ## Alternatives considered
 - **Lua 5.4 / LuaJIT:** no gradual typing; LuaJIT is not maintained for all
@@ -32,6 +34,7 @@ Verified from the Luau source:
 ## Consequences
 - Creators familiar with Roblox scripting get a familiar language, while the
   API is our own.
-- Luau's type checker (`Luau.Analysis`) can power Studio autocompletion.
-- We must keep the API surface small and versioned, and keep server-only
-  APIs out of client VMs entirely.
+- Luau's type checker (`Luau.Analysis`) can power Studio autocompletion; it
+  is not vendored yet.
+- We must keep the API surface small and versioned, and keep authority-only
+  APIs out of client VMs entirely (ADR 0011).

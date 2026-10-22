@@ -11,6 +11,7 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | SDL3 | 3.4.18 | zlib | Downloaded release tarball, SHA-256 pinned, built as a static library; a system SDL3 ≥ 3.4 is used instead if found | `platform_sdl` (client only) |
 | nlohmann/json | 3.12.0 | MIT | Downloaded release tarball, SHA-256 pinned (header-only); system package ≥ 3.11 used if found | `project` (private) |
 | stb_image | 2.30 | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file with only PNG/JPEG/BMP/TGA enabled and no stdio | `assets` (private) |
+| Luau | 0.743 (`9d7748a4`) | MIT (`third_party/luau/LICENSE.txt`; Lua 5.1 parts: `lua_LICENSE.txt`) | Vendored subset in `third_party/luau` (Common, Ast, Bytecode, Compiler, VM), see [ADR 0009](adr/0009-luau-integration.md) | `scripting` (private) |
 | doctest | 2.5.3 | MIT | Vendored in `third_party/doctest` | tests only |
 
 ### SDL3
@@ -37,10 +38,28 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
   distribution (Milestone 6); clients will only receive platform-processed
   assets. See [security.md](security.md).
 
+### Luau
+- **Why:** the creator scripting language ([ADR 0008](adr/0008-scripting-luau.md)).
+  Fast interpreter, gradual typing, designed for sandboxing untrusted code.
+- **Maintenance:** actively developed by Roblox (weekly releases).
+- **Platforms:** C++17, no platform code in the parts we use; verified on
+  Linux, Windows (MSVC, MinGW), macOS and WebAssembly. Native code generation
+  (`CodeGen`) is not vendored: no JIT on iOS or in browsers.
+- **Build impact:** about 30 seconds of compilation on 2 cores; no network.
+
+#### Updating Luau
+1. `python3 tools/update_luau.py <tag>` (e.g. `0.744`). The script clones the
+   tag, replaces the vendored directories, records tag and commit in
+   `third_party/luau/VERSION` and regenerates `third_party/luau/sources.cmake`.
+2. Rebuild and run the full test suite, including the sanitizer preset. The
+   sandbox tests in `tests/test_scripting.cpp` fail if a new Luau version adds
+   globals or libraries that must be reviewed.
+3. Read the Luau release notes for VM and C API changes.
+4. Update the version in this file and `third_party/VERSIONS.md`, commit.
+
 ## Evaluated, planned
 
 | Dependency | Version checked | License | Planned for | Notes |
 |---|---|---|---|---|
-| Luau | 0.743 | MIT | Milestone 2 scripting | CMake, C++17 (VM is C++11). Provides `luaL_sandbox`, an `interrupt` callback for execution limits, and custom allocators for memory limits. Optional native code generation (`Luau.CodeGen`) must stay off where JIT is not allowed (iOS) and in the browser. Has a `LUAU_BUILD_WEB` option. |
 | Box2D | 3.2.0 | MIT | Rigid-body physics, when a game needs it | C, CMake ≥ 3.22. Will sit behind the `physics` module; see [ADR 0004](adr/0004-physics.md). |
 | Dear ImGui | 1.93.0 | MIT | Milestone 3 Studio | Has an SDL3 + SDL_Renderer backend, so Studio can start on the same rendering path. Use the docking branch for a multi-panel editor. |
