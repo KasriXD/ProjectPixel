@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux GCC
+            os: ubuntu-24.04
+            configure: dev
+            build: dev
+            test: dev
+            cc: gcc-13
+            cxx: g++-13
+          - name: Linux Clang
+            os: ubuntu-24.04
+            configure: dev
+            build: dev
+            test: dev
+            cc: clang-18
+            cxx: clang++-18
+          - name: Linux ASan+UBSan
+            os: ubuntu-24.04
+            configure: asan
+            build: asan
+            test: asan
+            cc: clang-18
+            cxx: clang++-18
+          - name: Linux headless (no SDL)
+            os: ubuntu-24.04
+            configure: headless
+            build: headless
+            test: headless
+            cc: gcc-13
+            cxx: g++-13
+          - name: Windows MSVC
+            os: windows-2022
+            configure: vs2022
+            build: vs2022-debug
+            test: vs2022-debug
+          - name: macOS Apple Clang
+            os: macos-14
+            configure: dev
+            build: dev
+            test: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build \
+            libx11-dev libxext-dev libxcursor-dev libxi-dev libxrandr-dev libxfixes-dev \
+            libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+            libegl1-mesa-dev libgl1-mesa-dev libgles2-mesa-dev libdrm-dev libgbm-dev \
+            libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
+
+      - name: Install Ninja (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Cache downloaded dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/${{ matrix.configure }}/_deps/*-subbuild
+          key: deps-${{ matrix.os }}-${{ hashFiles('cmake/PxDependencies.cmake') }}
+
+      - name: Configure
+        env:
+          CC: ${{ matrix.cc }}
+          CXX: ${{ matrix.cxx }}
+        run: cmake --preset ${{ matrix.configure }}
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.build }} --parallel
+
+      - name: Test
+        env:
+          # Leak checks inside system graphics drivers are not our code.
+          ASAN_OPTIONS: detect_leaks=0
+        run: ctest --preset ${{ matrix.test }}
+
+      - name: Upload smoke-test screenshot
+        if: always() && matrix.configure != 'headless'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ matrix.os }}-${{ matrix.configure }}-${{ strategy.job-index }}
+          path: build/${{ matrix.configure }}/tests/player_smoke.png
+          if-no-files-found: ignore
