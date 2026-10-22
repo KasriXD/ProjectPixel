@@ -74,6 +74,13 @@ private:
 
 bool contains(const std::string& haystack, std::string_view needle) { return haystack.find(needle) != std::string::npos; }
 
+// Dereferences a component pointer, failing the test cleanly if it is missing.
+template <class T>
+T& need(T* component) {
+    if (component == nullptr) throw std::runtime_error("expected component is missing");
+    return *component;
+}
+
 project::ProjectManifest testProject() {
     project::ProjectManifest m;
     m.name = "Script Tests";
@@ -431,7 +438,7 @@ TEST_CASE("Lifecycle: trigger enter/exit reach both entities; destroy is deferre
     )lua");
     const auto addZone = [&](const char* name, float x, bool destroy) {
         const Entity z = game.addEntity(name, zone, {{"destroyOnEnter", destroy}});
-        game.scene.tryGet<Transform>(z)->position = {x, 0};
+        need(game.scene.tryGet<Transform>(z)).position = {x, 0};
         game.scene.set(z, BoxCollider{{20, 20}, {}, true});
     };
     addZone("Passing Zone", 60, false);
@@ -777,7 +784,7 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
     CHECK(contains(host.logs[2], "client scripts cannot change entity state"));
     CHECK(contains(host.logs[3], "only available to authority (server) scripts"));
     CHECK(host.destroyRequests == 0);
-    CHECK(scene.tryGet<Transform>(e)->position == Vec2{4, 5});
+    CHECK(need(scene.tryGet<Transform>(e)).position == Vec2{4, 5});
 
     // The reference marks the same functions as authority-only.
     int authorityOnly = 0;
@@ -821,23 +828,23 @@ TEST_CASE("A scripted moving platform carries a body standing on it") {
         return Lift
     )lua");
     const Entity platform = game.addEntity("Lift", platformScript);
-    game.scene.tryGet<Transform>(platform)->position = {100, 100};
+    need(game.scene.tryGet<Transform>(platform)).position = {100, 100};
     game.scene.set(platform, BoxCollider{{48, 16}, {}, false});
     const Entity rider = game.addEntity("Rider");
-    game.scene.tryGet<Transform>(rider)->position = {100, 100 - 8 - 7}; // standing on top
+    need(game.scene.tryGet<Transform>(rider)).position = {100, 100 - 8 - 7}; // standing on top
     game.scene.set(rider, BoxCollider{{10, 14}, {}, false});
     game.scene.set(rider, KinematicBody{});
     game.scene.set(rider, PlatformerController{});
     auto session = game.mustStart();
     run(*session, 5); // settle: the rider lands on the platform
-    const Vec2 before = session->scene().tryGet<Transform>(rider)->position;
+    const Vec2 before = need(session->scene().tryGet<Transform>(rider)).position;
     run(*session, 80);
-    const Vec2 after = session->scene().tryGet<Transform>(rider)->position;
-    const Vec2 platformNow = session->scene().tryGet<Transform>(platform)->position;
+    const Vec2 after = need(session->scene().tryGet<Transform>(rider)).position;
+    const Vec2 platformNow = need(session->scene().tryGet<Transform>(platform)).position;
     CHECK(platformNow == Vec2{130, 120});
     CHECK(after.x - before.x == doctest::Approx(30.0f - (before.x - 100.0f)).epsilon(0.05));
     CHECK(after.y == doctest::Approx(platformNow.y - 8 - 7).epsilon(0.001));
-    CHECK(session->scene().tryGet<KinematicBody>(rider)->onGround);
+    CHECK(need(session->scene().tryGet<KinematicBody>(rider)).onGround);
 }
 
 // --- Formats and documentation ------------------------------------------------------------

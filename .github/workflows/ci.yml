@@ -163,20 +163,27 @@ jobs:
       - name: Play the browser build in headless Chromium
         shell: bash
         run: |
-          (cd tools/browser && npm install --no-save --no-audit --no-fund playwright@1.49.1 >/dev/null \
-            && npx playwright install --with-deps chromium >/dev/null)
-          python3 -m pip install --quiet pillow
-          (cd build/wasm/apps/player && python3 -m http.server 8000 >/dev/null 2>&1 &)
+          set +e
+          report() { # title, file
+            local body
+            body=$(tail -c 6000 "$2" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::$3 title=$1::${body}"
+          }
+          {
+            sudo apt-get install -y --no-install-recommends python3-pil &&
+            (cd tools/browser && npm install --no-save --no-audit --no-fund playwright@1.49.1 &&
+             npx playwright install --with-deps chromium)
+          } > browser-setup.log 2>&1
+          if [ $? -ne 0 ]; then report "Browser test setup failed" browser-setup.log error; exit 1; fi
+
+          (cd build/wasm/apps/player && python3 -m http.server 8000 > /dev/null 2>&1 &)
           sleep 2
           args="arg=--frames&arg=930&arg=--input-script&arg=/examples/platformer/tests/full_run.input"
-          set +e
-          node tools/browser/smoke_test.js "http://localhost:8000/px-player.html?${args}" browser.png \
-            2>&1 | tee browser.log
-          status=${PIPESTATUS[0]}
-          set -e
-          [ -f browser.png ] && python3 tools/browser/ascii_screenshot.py browser.png | tee browser-ascii.log
-          body=$(cat browser.log browser-ascii.log 2>/dev/null | sed -e 's/%/%25/g' | awk '{printf "%s%%0A", $0}')
-          echo "::notice title=Browser run (headless Chromium)::${body}"
+          node tools/browser/smoke_test.js "http://localhost:8000/px-player.html?${args}" browser.png > browser.log 2>&1
+          status=$?
+          cat browser.log
+          if [ -f browser.png ]; then python3 tools/browser/ascii_screenshot.py browser.png >> browser.log 2>&1; fi
+          report "Browser run (headless Chromium)" browser.log notice
           exit $status
 
       - name: Report failure details

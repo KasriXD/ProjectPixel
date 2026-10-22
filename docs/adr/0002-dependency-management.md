@@ -14,6 +14,8 @@ and Emscripten, with few dependencies, each evaluated before adoption.
   present and the pinned source is built otherwise.
 - Small single-header libraries (stb_image, doctest) are **vendored** in
   `third_party/` with versions recorded in `third_party/VERSIONS.md`.
+- Exception: a minimal subset of Luau is vendored with an update script,
+  because its upstream build defines many unused targets (ADR 0009).
 - SDL3 is linked statically.
 - Every dependency is documented in `docs/dependencies.md`.
 

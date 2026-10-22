@@ -5,8 +5,9 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0 and 1 are done. CI builds and tests on Linux, Windows (MSVC) and
-macOS. Next: Milestone 2 (Luau scripting).
+Milestones 0, 1 and 2 are done. CI builds and tests on Linux, Windows (MSVC),
+macOS and (experimentally) WebAssembly. Recommended next: Milestone 3, the
+Native Studio foundation (see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -14,6 +15,7 @@ macOS. Next: Milestone 2 (Luau scripting).
 |---|---|---|
 | Game not yet played interactively on real Windows or macOS hardware (CI passes on both) | Rendering/input on real GPUs unconfirmed | Founder to try the Windows package on a real PC; a Mac check when one is available |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
+| Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
 
 ---
 
@@ -51,19 +53,38 @@ macOS. Next: Milestone 2 (Luau scripting).
 Deliverable met: a playable 2D game loaded from project files with a
 controllable character, solid platforms and collectible objects.
 
-## Milestone 2: Gameplay and scripting (**Planned**, next)
+## Milestone 2: Gameplay and scripting (**Done**)
 
-Plan in [docs/scripting.md](docs/scripting.md). First slice:
+- [x] Luau 0.743 vendored (Common, Ast, Bytecode, Compiler, VM) with license,
+      pinned commit and update script ([ADR 0009](docs/adr/0009-luau-integration.md))
+- [x] `px_scripting` module: one sandboxed VM per session, read-only globals,
+      per-script environments, no OS/file/process/debug access, deterministic `math.random`
+- [x] Limits: memory cap (allocator), deterministic CPU step budget per
+      callback plus wall-clock watchdog, event and log limits; restricted
+      operations tested as blocked
+- [x] `Script` and `Tags` components; script assets; scene format 2 with a
+      migration for the removed `Collectible` component
+- [x] Lifecycle `Start`, `Tick`, `TriggerEnter`, `TriggerExit`, `Destroy`;
+      documented execution order, deferred destroy, per-instance fail-stop
+      ([ADR 0010](docs/adr/0010-script-execution-model.md))
+- [x] Gameplay API v1: `Game`, `World`, `Input`, `Events`, `Entity`, `Vec2`;
+      one binding table generates the reference ([docs/scripting-api.md](docs/scripting-api.md))
+- [x] Realms: authority-only API absent from client VMs, tested ([ADR 0011](docs/adr/0011-script-realms.md))
+- [x] Errors with file, line, entity and event, in the log and on screen
+- [x] Example: coins, win condition and a moving platform are Luau scripts;
+      moving solids carry riders
+- [x] Hot reload (F5) of scripts and scenes in `px-player`
+- [x] Visual-scripting design ([docs/visual-scripting.md](docs/visual-scripting.md))
+- [x] Tests: 24 new test cases (75 total); all CI configurations pass
+- [x] Browser feasibility: WebAssembly build of engine, Luau and SDL3 in CI
+      ([ADR 0012](docs/adr/0012-browser-runtime.md))
 
-- [ ] Fetch Luau 0.743 (MIT) as a pinned dependency; build `Luau.VM` + `Luau.Compiler` only
-- [ ] `px::scripting` module: one sandboxed VM per session, `luaL_sandbox`, allocator-based memory cap, `interrupt`-based instruction budget
-- [ ] `Script` component referencing a script asset; lifecycle `onStart`, `onTick(dt)`, `onTriggerEnter(other)`, `onDestroy`
-- [ ] Gameplay API v1 (`px.entity`, transforms, components, events, input actions, logging)
-- [ ] Error reporting with file/line, shown in the log and on screen
-- [ ] Example: coin behaviour and a moving platform written in Luau
-- [ ] API reference generated from the binding definitions
+Deliverable met: game behaviour is customised by Luau scripts loaded from
+project files, without recompiling the engine.
 
-Deliverable: game behaviour customized by Luau scripts without recompiling.
+Follow-ups (not blocking): multiple scripts per entity, `require` for shared
+modules, spawning entities from scripts, structured parameter metadata for
+visual nodes, per-tick total CPU budget for servers, trigger broadphase.
 
 ## Milestone 3: Native Studio foundation (**Planned**)
 
@@ -106,14 +127,17 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Validate the browser build during Milestone 2, not Milestone 7.**
-   An Emscripten build of `px-player` (SDL3 + `SDL_Renderer` → WebGL) is cheap
-   now and catches desktop-only assumptions (blocking loops, filesystem
-   access, threads, Luau JIT) before more code depends on them. Luau has a
-   web build option, so scripting can be validated in the same step.
-   The engine already avoids the two biggest traps: the main loop uses SDL
-   callbacks, and file access goes through `IFileSystem`.
-2. **Add gamepad support early** (small, and platformers need it to feel right).
-3. **Keep the simulation deterministic** (fixed ticks, input frames, no
+1. **Next: Milestone 3 (Studio foundation), with prefabs and multiple
+   behaviours per entity in scope.** Scripting now works, so the bottleneck
+   for creators is editing scenes by hand in JSON. Studio's inspector should
+   be driven by the same component and script-property descriptors that the
+   file format and scripting use, which also prepares visual scripting.
+2. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
+   (ADR 0012): it already builds and runs, so regressions are caught for
+   free; productising it (loading projects over the network, asset
+   streaming, page integration, size budgets) belongs with the platform
+   work in Milestones 6-7.
+3. **Add gamepad support early** (small, and platformers need it to feel right).
+4. **Keep the simulation deterministic** (fixed ticks, input frames, no
    wall-clock reads in gameplay). It is already tested and makes replays,
    automated playtests and server reconciliation much easier.

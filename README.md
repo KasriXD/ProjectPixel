@@ -10,10 +10,10 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Example platformer running in px-player](docs/images/example-platformer.png)
 
-## Current status (version 0.1.0)
+## Current status (version 0.2.0)
 
-Milestone 0 (engineering foundation) is complete and Milestone 1 (engine
-prototype) is complete on Linux. See [ROADMAP.md](ROADMAP.md) for detail.
+Milestones 0 (engineering foundation), 1 (engine prototype) and 2 (Luau
+scripting) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
 
 | Area | Status |
 |---|---|
@@ -25,11 +25,14 @@ prototype) is complete on Linux. See [ROADMAP.md](ROADMAP.md) for detail.
 | Platformer movement (coyote time, jump buffer, variable jump) | Implemented, unit tested |
 | Versioned project/scene file format with validation | Implemented, unit tested |
 | Headless simulation (no graphics) | Implemented; basis of the future dedicated server |
-| Example platformer, loaded from project files | Playable; scripted run collects all coins in an automated test |
+| Luau scripting: sandbox, CPU/memory limits, Script lifecycle, gameplay API | Implemented; 24 dedicated test cases; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
+| Example platformer, loaded from project files | Playable; coins, win condition and a moving platform are Luau scripts; an automated run completes the level |
+| Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
 | Windows | Builds and passes all tests in CI with Visual Studio 2022; MinGW-w64 build runs the game under Wine 9 (Direct3D renderer). **Not yet played on a real Windows PC** |
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough and player run clean under AddressSanitizer + UBSan with leak detection |
-| Gamepad, touch, audio, text/fonts, Luau scripting, Studio, multiplayer, platform services | Planned (Milestones 2-8) |
+| Browser (WebAssembly) | **Experimental**: engine and tests run under Node.js in CI; the browser build is played in headless Chromium in CI ([details](docs/platform-support.md#browser)) |
+| Gamepad, touch, audio, text/fonts, Studio, visual scripting, multiplayer, platform services | Planned (Milestones 3-8) |
 
 ## Building
 
@@ -84,13 +87,31 @@ and it starts the example with no arguments.
 ./build/dev/apps/headless/px-headless examples/platformer --ticks 600
 ```
 
-Controls: arrows or A/D to move, Space/Z/W/Up to jump, R restart, F1 debug
-overlay (colliders, FPS, player position), F2 screenshot, Esc quit.
+Controls: arrows or A/D to move, Space/Z/W/Up to jump, R restart, F5 reload
+scripts and scenes from disk, F1 debug overlay (colliders, FPS, player
+position, script memory), F2 screenshot, Esc quit.
 
 Useful options: `--frames N --screenshot out.png` runs a fixed number of
 deterministic frames and saves the last one; `--input-script FILE` plays
 recorded input (see [docs/input-scripts.md](docs/input-scripts.md)). Run with
 `--help` for the full list.
+
+### Try scripting
+
+The example's coins, moving platform and win condition are Luau scripts in
+`examples/platformer/scripts/`. With `px-player` running:
+
+1. Open `examples/platformer/scripts/coin.luau` and change
+   `Game.addScore(self.value)` to `Game.addScore(self.value * 10)`, or change
+   `period = 4` in `moving_platform.luau` to `period = 2`.
+2. Press **F5**. The project reloads from disk; no recompiling.
+3. Introduce a mistake (e.g. misspell `self.value`) and press F5 again: the
+   error, with file and line, appears on screen while the game keeps running.
+
+Headless checks: `px-headless examples/platformer --input-script
+examples/platformer/tests/full_run.input --log-events --expect-level-complete`.
+Guide: [docs/scripting.md](docs/scripting.md); every API function:
+[docs/scripting-api.md](docs/scripting-api.md).
 
 ## Repository layout
 
@@ -101,6 +122,7 @@ engine/            engine modules (static libraries), one folder per module
   scene/           entities, components, scenes
   physics/         kinematic AABB collision
   project/         project and scene file formats
+  scripting/       Luau sandbox, resource limits, gameplay API, Script lifecycle
   runtime/         headless fixed-tick game simulation and gameplay systems
   render/          renderer interface, camera, scene-to-draw-call extraction
   platform_sdl/    SDL3 window, input and renderer backend
@@ -110,7 +132,7 @@ examples/          example game projects (content only, no code)
 tests/             automated tests
 tools/             developer tools (example generator)
 docs/              detailed documentation and architecture decision records
-third_party/       vendored single-header libraries
+third_party/       vendored libraries (stb_image, doctest, Luau subset)
 ```
 
 ## Documentation
@@ -121,6 +143,8 @@ third_party/       vendored single-header libraries
 - [docs/project-format.md](docs/project-format.md): `project.json` and scene files
 - [docs/engine.md](docs/engine.md): coordinates, scene model, simulation loop, rendering
 - [docs/platform-support.md](docs/platform-support.md): desktop, mobile and browser: what is verified and what is planned
-- [docs/scripting.md](docs/scripting.md): Luau scripting plan (Milestone 2)
+- [docs/scripting.md](docs/scripting.md): Luau scripting guide: lifecycle, sandbox, limits, realms, versioning
+- [docs/scripting-api.md](docs/scripting-api.md): generated API reference
+- [docs/visual-scripting.md](docs/visual-scripting.md): visual scripting design (planned)
 - [docs/security.md](docs/security.md): threat model and current protections
 - [docs/adr/](docs/adr/): architecture decision records

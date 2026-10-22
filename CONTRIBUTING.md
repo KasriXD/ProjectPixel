@@ -47,6 +47,28 @@ boundary) get an Architecture Decision Record in `docs/adr/` (copy
 5. Changing the meaning of an existing field requires a format version bump
    and a migration (see `docs/project-format.md#versioning`).
 
+## Adding to the scripting API
+
+Scripts are untrusted and the API is versioned, so API changes get extra care:
+
+1. Add one entry to `kBindings` in `engine/scripting/src/Api.cpp`: group,
+   name, kind, availability (`Everywhere` or `AuthorityOnly`), a typed
+   signature, a one-sentence description, and `pure` if it has no side
+   effects. That entry registers the function and documents it.
+2. Validate every argument (`luaL_check*`, finite numbers, string lengths)
+   and raise errors with `luaL_errorL` that tell a creator what went wrong.
+3. Anything that changes game state goes through `IScriptHost`; make it
+   `AuthorityOnly` unless clients may legitimately do it.
+4. Values crossing the API are nil, number, boolean, string, vector or
+   Entity. Do not expose engine pointers, file paths or unbounded containers.
+5. Regenerate the reference and commit it:
+   `px-headless --print-api-reference > docs/scripting-api.md`
+   (the test "API reference document is up to date" enforces this).
+6. Add tests in `tests/test_scripting.cpp`, including misuse (wrong types,
+   destroyed entities, client realm).
+7. Additive changes keep API version 1. Renames, removals and semantic
+   changes need a new API version (docs/scripting.md#api-versioning).
+
 ## Adding a dependency
 
 Evaluate and record in `docs/dependencies.md` (and an ADR if significant):
@@ -58,11 +80,17 @@ single header in `third_party/` and record it in `third_party/VERSIONS.md`.
 ## Tests
 
 - Unit tests live in `tests/test_<module>.cpp` (doctest).
+- `tests/test_scripting.cpp` covers the sandbox, limits, lifecycle, API
+  and realms. Scripts used by tests are embedded as `R"lua( ... )lua"` strings.
 - `example_platformer_playthrough` replays `examples/platformer/tests/full_run.input`
-  and requires every coin to be collected. If you change the level or the
-  movement tuning, re-tune the script (see comments in the file).
+  and requires the level to be completed (by its Luau scripts) with no
+  script errors. If you change the level, scripts or movement tuning,
+  re-tune the route (see comments in the file).
 - `player_smoke_headless_display` runs the real client for 120 frames with
   SDL's dummy video driver and software renderer, no display needed.
+- The experimental WebAssembly CI job builds with Emscripten, runs the unit
+  tests and playthrough under Node.js, and plays the browser build in
+  headless Chromium.
 
 ## Commit messages
 

@@ -35,6 +35,8 @@ sources, and avoid fragile path references.
   format version bump.
 
 ## Consequences
+- The migration path was first used for scene format 2 (Milestone 2), which
+  replaced the built-in `Collectible` component with tags plus scripts.
 - Hand-editing is practical until Studio exists, with good error messages.
 - GUIDs in files are less readable than names; Studio will hide them.
 - Collaboration-friendly asset metadata (sidecars) is a likely future
