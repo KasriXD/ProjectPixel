@@ -245,6 +245,8 @@ These are known and planned, not bugs:
 - **No prefabs** yet: copy/paste and duplicate are the way to reuse entities.
 - **One entity at a time in the Inspector**; with several selected it shows the
   last one clicked (moving, duplicating and deleting work on all).
+- The Scene view moves entities; rotation and scale are typed or dragged in
+  the Inspector (no rotate/scale handles yet).
 - Undo keeps whole-scene snapshots: fine for scenes of thousands of entities,
   but memory-bound for very large ones (the oldest steps are dropped).
 - The script editor is plain text: no syntax highlighting or completion.
