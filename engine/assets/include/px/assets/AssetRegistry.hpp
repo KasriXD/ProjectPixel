@@ -36,6 +36,11 @@ public:
     // Fails on nil or duplicate ids and on invalid paths.
     [[nodiscard]] Status add(AssetEntry entry);
 
+    // Changes the display name. Fails for unknown ids.
+    [[nodiscard]] Status rename(AssetId id, std::string name);
+    // Removes the entry; returns false if it did not exist.
+    bool remove(AssetId id);
+
     [[nodiscard]] const AssetEntry* find(AssetId id) const;
     [[nodiscard]] const AssetEntry* findByName(std::string_view name) const;
     [[nodiscard]] const std::vector<AssetEntry>& entries() const { return m_entries; }

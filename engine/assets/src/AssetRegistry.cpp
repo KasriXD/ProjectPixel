@@ -48,6 +48,22 @@ Status AssetRegistry::add(AssetEntry entry) {
     return {};
 }
 
+Status AssetRegistry::rename(AssetId id, std::string name) {
+    const auto it = m_index.find(id);
+    if (it == m_index.end()) return makeError(ErrorCode::NotFound, "Asset {} does not exist", id.toString());
+    m_entries[it->second].name = std::move(name);
+    return {};
+}
+
+bool AssetRegistry::remove(AssetId id) {
+    const auto it = m_index.find(id);
+    if (it == m_index.end()) return false;
+    m_entries.erase(m_entries.begin() + static_cast<std::ptrdiff_t>(it->second));
+    m_index.clear();
+    for (std::size_t i = 0; i < m_entries.size(); ++i) m_index.emplace(m_entries[i].id, i);
+    return true;
+}
+
 const AssetEntry* AssetRegistry::find(AssetId id) const {
     const auto it = m_index.find(id);
     return it == m_index.end() ? nullptr : &m_entries[it->second];

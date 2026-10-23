@@ -76,6 +76,49 @@ Result<std::unique_ptr<ScriptSystem>> ScriptSystem::create(scene::Scene& scene,
     return system;
 }
 
+namespace {
+
+// Host for describe(): no game, no input; output is discarded.
+struct NullHost final : IScriptHost {
+    int findAction(std::string_view) const override { return -1; }
+    std::vector<std::string> actionNames() const override { return {}; }
+    bool actionHeld(int) const override { return false; }
+    bool actionPressed(int) const override { return false; }
+    void addScore(int) override {}
+    int score() const override { return 0; }
+    void setObjective(std::string) override {}
+    void completeLevel(std::string) override {}
+    double timeSeconds() const override { return 0.0; }
+    std::uint64_t tickCount() const override { return 0; }
+    void requestDestroy(Entity) override {}
+    void scriptLog(log::Level, std::string_view, std::string_view) override {}
+    void scriptError(const ScriptError&) override {}
+};
+
+} // namespace
+
+Result<BehaviourDescription> ScriptSystem::describe(std::shared_ptr<const ScriptLibrary> library,
+                                                     assets::AssetId script, const ScriptLimits& limits) {
+    if (!library) return makeError(ErrorCode::NotFound, "No scripts are loaded");
+    const CompiledScript* compiled = library->find(script);
+    if (compiled == nullptr) return makeError(ErrorCode::NotFound, "Script {} is not loaded", script.toString());
+    scene::Scene empty;
+    NullHost host;
+    ScriptSystemOptions options;
+    options.limits = limits;
+    auto system = create(empty, library, host, options);
+    if (!system) return system.error();
+    auto index = system.value()->loadBehaviour(*compiled);
+    if (!index) return index.error();
+    const Behaviour& behaviour = system.value()->m_behaviours[index.value()];
+    BehaviourDescription description;
+    description.properties = behaviour.defaults;
+    for (std::size_t i = 0; i < kLifecycleEventCount; ++i) {
+        if (behaviour.handlers[i] != 0) description.events.emplace_back(kLifecycleEventNames[i]);
+    }
+    return description;
+}
+
 Result<std::size_t> ScriptSystem::loadBehaviour(const CompiledScript& script) {
     if (const auto it = m_behaviourIndex.find(script.id); it != m_behaviourIndex.end()) return it->second;
 

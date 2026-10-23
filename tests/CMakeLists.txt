@@ -7,11 +7,12 @@ add_executable(px_tests
     test_project.cpp
     test_runtime.cpp
     test_render.cpp
-    test_scripting.cpp)
+    test_scripting.cpp
+    test_editor.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
-    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::render)
+    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::render px::editor)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")

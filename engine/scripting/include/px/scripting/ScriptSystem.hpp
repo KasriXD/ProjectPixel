@@ -29,6 +29,12 @@ struct ScriptSystemOptions {
     std::uint64_t seed = 1; // seeds math.random; same seed, same numbers
 };
 
+// What a behaviour declares, for tools such as Studio's inspector.
+struct BehaviourDescription {
+    std::vector<std::pair<std::string, scene::ScriptValue>> properties; // declared defaults, sorted by name
+    std::vector<std::string> events;                                     // lifecycle events it handles
+};
+
 struct ScriptStats {
     std::size_t behaviours = 0;      // script modules loaded
     std::size_t instances = 0;       // live script instances
@@ -57,6 +63,13 @@ public:
                                                                       const ScriptSystemOptions& options = {});
     ~ScriptSystem();
     ScriptSystem(const ScriptSystem&) = delete;
+
+    // Loads one behaviour in a throwaway sandbox (its top-level code runs,
+    // under the usual limits, against an empty scene) and reports what it
+    // declares. Errors are the same as when a game loads the script.
+    [[nodiscard]] static Result<BehaviourDescription> describe(std::shared_ptr<const ScriptLibrary> library,
+                                                               assets::AssetId script,
+                                                               const ScriptLimits& limits = {});
     ScriptSystem& operator=(const ScriptSystem&) = delete;
 
     void beginTick();             // resets per-tick budgets
