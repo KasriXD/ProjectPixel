@@ -15,9 +15,14 @@ using detail::ObjectReader;
 
 namespace {
 
+// Version 2 added settings.gameType. Every project before it was a platformer.
+void migrateProject1To2(Json& root, std::vector<std::string>&) {
+    if (!root.contains("settings") || !root["settings"].is_object()) root["settings"] = Json::object();
+    root["settings"]["gameType"] = "platformer";
+}
+
 // Project format migrations: kProjectMigrations[i] upgrades version i+1 to i+2.
-// Empty while the format is at version 1.
-constexpr std::array<detail::Migration, 0> kProjectMigrations{};
+constexpr std::array<detail::Migration, 1> kProjectMigrations{&migrateProject1To2};
 
 bool isValidActionName(std::string_view name) {
     if (name.empty() || name.size() > 64) return false;
@@ -30,6 +35,14 @@ bool isValidActionName(std::string_view name) {
 ProjectSettings readSettings(const Json& j, const std::string& path) {
     ProjectSettings settings;
     ObjectReader r(j, path);
+    std::string gameType = "platformer";
+    r.optional("gameType", gameType);
+    if (const auto parsed = parseGameType(gameType)) {
+        settings.gameType = *parsed;
+    } else {
+        fail(detail::childPath(path, "gameType"),
+             std::format("unknown game type '{}'; use \"platformer\" or \"topdown\"", gameType));
+    }
     r.optional("tickRate", settings.tickRate);
     if (settings.tickRate < 1 || settings.tickRate > 240) {
         fail(detail::childPath(path, "tickRate"), "must be between 1 and 240");
@@ -141,7 +154,7 @@ void readAssets(const Json& j, const std::string& path, assets::AssetRegistry& r
 }
 
 ProjectManifest readManifest(Json& root) {
-    std::vector<std::string> warnings; // no project migrations exist yet
+    std::vector<std::string> warnings; // project migrations do not warn
     detail::checkAndMigrate(root, "px.project", kProjectFormatVersion, kProjectMigrations, "project", warnings);
     ProjectManifest m;
     ObjectReader r(root, "");
@@ -167,6 +180,20 @@ ProjectManifest readManifest(Json& root) {
 }
 
 } // namespace
+
+std::string_view gameTypeName(GameType type) noexcept {
+    switch (type) {
+        case GameType::Platformer: return "platformer";
+        case GameType::TopDown: return "topdown";
+    }
+    return "platformer";
+}
+
+std::optional<GameType> parseGameType(std::string_view name) noexcept {
+    if (name == "platformer") return GameType::Platformer;
+    if (name == "topdown") return GameType::TopDown;
+    return std::nullopt;
+}
 
 Result<ProjectManifest> parseProjectManifest(std::string_view json, std::string_view sourceName) {
     try {
@@ -196,7 +223,8 @@ std::string serializeProjectManifest(const ProjectManifest& m) {
     display["virtualResolution"] = detail::toJson(m.settings.display.virtualResolution);
     display["scaling"] = m.settings.display.scaling == ScalingMode::Integer ? "integer" : "letterbox";
     display["windowScale"] = m.settings.display.windowScale;
-    root["settings"] = Json{{"tickRate", m.settings.tickRate},
+    root["settings"] = Json{{"gameType", std::string(gameTypeName(m.settings.gameType))},
+                            {"tickRate", m.settings.tickRate},
                             {"display", display},
                             {"scripting", Json{{"apiVersion", m.settings.scripting.apiVersion}}}};
 

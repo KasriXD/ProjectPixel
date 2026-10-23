@@ -638,6 +638,7 @@ TEST_CASE("Game, World and Input API") {
             Game.addScore(5)
             Game.addScore(-2)
             Game.setObjective("Find the key")
+            assert(Game.getObjective() == "Find the key")
             local names = {}
             for _, e in World.findWithTag("pickup") do table.insert(names, e.name) end
             print(Game.getScore(), table.concat(names, ","))
@@ -791,7 +792,7 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
     for (const auto& m : scripting::apiReference()) {
         if (m.availability == scripting::ApiAvailability::AuthorityOnly) ++authorityOnly;
     }
-    CHECK(authorityOnly == 5); // addScore, setObjective, completeLevel, destroy, setParent
+    CHECK(authorityOnly == 6); // addScore, setObjective, completeLevel, destroy, setParent, respawn
 }
 
 TEST_CASE("math.random is deterministic per session seed") {
@@ -880,6 +881,52 @@ TEST_CASE("Several scripts on one entity run as separate instances, in order") {
     CHECK(capture.printed() == std::vector<std::string>{"A start\t7", "B start\t1", "A enter\tBody", "B enter\tBody",
                                                         "A destroy", "B destroy"});
     CHECK(session->scripts().stats().instances == 0);
+    CHECK(session->state().scriptErrors == 0);
+}
+
+TEST_CASE("Hazards and checkpoints: respawn and spawnPoint") {
+    LogCapture capture;
+    TestGame game;
+    // A checkpoint moves the spawn point; a hazard sends the player back to it.
+    const auto checkpoint = game.addScript("scripts/checkpoint.luau", R"lua(
+        local C = {}
+        function C:TriggerEnter(other)
+            if other:hasComponent("Player") then other.spawnPoint = self.entity.position end
+        end
+        return C
+    )lua");
+    const auto hazard = game.addScript("scripts/hazard.luau", R"lua(
+        local H = {}
+        function H:TriggerEnter(other)
+            if other:hasComponent("Player") then other:respawn() end
+        end
+        function H:Start()
+            print(pcall(function() self.entity:respawn() end))
+        end
+        return H
+    )lua");
+    const Entity cp = game.addEntity("Checkpoint", checkpoint);
+    game.scene.get<Transform>(cp).position = {40, 0};
+    game.scene.set(cp, BoxCollider{{8, 8}, {}, true});
+    const Entity spikes = game.addEntity("Spikes", hazard);
+    game.scene.get<Transform>(spikes).position = {80, 0};
+    game.scene.set(spikes, BoxCollider{{8, 8}, {}, true});
+    const Entity player = game.addEntity("Player");
+    game.scene.set(player, BoxCollider{{8, 8}});
+    game.scene.set(player, KinematicBody{});
+    game.scene.set(player, Player{});
+
+    auto session = game.mustStart();
+    Scene& scene = session->scene();
+    run(*session, 1);
+    CHECK(contains(capture.printed().at(0), "only players respawn"));
+    scene.get<KinematicBody>(player).velocity = {600, 0}; // 10 units per tick, no controller to slow it
+    run(*session, 6);                                       // passes the checkpoint at x = 40
+    CHECK(scene.get<Player>(player).spawnPoint == Vec2{40, 0});
+    run(*session, 4); // reaches the spikes at x = 80
+    CHECK(session->state().respawns == 1);
+    CHECK(scene.worldPosition(player) == Vec2{40, 0});
+    CHECK(scene.get<KinematicBody>(player).velocity == Vec2{});
     CHECK(session->state().scriptErrors == 0);
 }
 

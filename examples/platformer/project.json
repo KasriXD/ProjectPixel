@@ -1,11 +1,12 @@
 {
   "format": "px.project",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "af5d3a02-6054-58d1-a81c-23a97281ae0f",
   "name": "Example Platformer",
   "engineVersion": "0.3.0",
   "startScene": "e0464a98-2756-52ff-8acd-37c81877ff1a",
   "settings": {
+    "gameType": "platformer",
     "tickRate": 60,
     "display": {
       "virtualResolution": [320, 180],

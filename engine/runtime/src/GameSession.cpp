@@ -43,6 +43,8 @@ GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
     m_moveLeft = m_actions.find(actions::kMoveLeft);
     m_moveRight = m_actions.find(actions::kMoveRight);
     m_jump = m_actions.find(actions::kJump);
+    m_moveUp = m_actions.find(actions::kMoveUp);
+    m_moveDown = m_actions.find(actions::kMoveDown);
 }
 
 GameSession::~GameSession() {
@@ -60,6 +62,12 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
          session->m_jump == kInvalidAction)) {
         log::warn("Scene uses PlatformerController but the project does not define all of the "
                   "'move_left', 'move_right' and 'jump' input actions");
+    }
+    if (reg.count<TopDownController>() > 0 &&
+        (session->m_moveLeft == kInvalidAction || session->m_moveRight == kInvalidAction ||
+         session->m_moveUp == kInvalidAction || session->m_moveDown == kInvalidAction)) {
+        log::warn("Scene uses TopDownController but the project does not define all of the "
+                  "'move_left', 'move_right', 'move_up' and 'move_down' input actions");
     }
     Scene& sc = session->m_scene;
     reg.each<Player, Transform>([&sc](Entity e, Player& player, Transform&) { player.spawnPoint = sc.worldPosition(e); });
@@ -120,6 +128,7 @@ void GameSession::tick(const InputFrame& input) {
 
     updateMovingSolids();
     updatePlatformers();
+    updateTopDown();
     moveKinematicBodies();
     updateTriggers();
     updateKillPlane();
@@ -248,6 +257,32 @@ void GameSession::updatePlatformers() {
     });
 }
 
+void GameSession::updateTopDown() {
+    const float dt = m_dt;
+    const InputFrame& input = m_input;
+    auto& reg = m_scene.registry();
+    reg.each<TopDownController, KinematicBody>([&](Entity e, TopDownController& c, KinematicBody& body) {
+        Vec2 dir{(input.isHeld(m_moveRight) ? 1.0f : 0.0f) - (input.isHeld(m_moveLeft) ? 1.0f : 0.0f),
+                 (input.isHeld(m_moveDown) ? 1.0f : 0.0f) - (input.isHeld(m_moveUp) ? 1.0f : 0.0f)};
+        // Diagonals are as fast as straight lines (a constant, not a square
+        // root, keeps the result identical everywhere).
+        if (dir.x != 0.0f && dir.y != 0.0f) dir = dir * 0.70710678f;
+        const bool moving = dir.x != 0.0f || dir.y != 0.0f;
+        const Vec2 target = dir * c.maxSpeed;
+        const float maxDelta = (moving ? c.acceleration : c.deceleration) * dt;
+        // Each axis approaches its target, so starting and stopping feel the
+        // same in every direction.
+        body.velocity.x = approach(body.velocity.x, target.x, maxDelta);
+        body.velocity.y = approach(body.velocity.y, target.y, maxDelta);
+        if (moving) {
+            c.facing = dir;
+            if (dir.x != 0.0f) {
+                if (auto* sprite = reg.tryGet<Sprite>(e)) sprite->flipX = dir.x < 0.0f;
+            }
+        }
+    });
+}
+
 void GameSession::moveKinematicBodies() {
     const float dt = m_dt;
     m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
@@ -333,19 +368,28 @@ void GameSession::updateKillPlane() {
     const auto& killPlane = m_scene.settings().killPlaneY;
     if (!killPlane) return;
     auto& reg = m_scene.registry();
-    reg.each<Player, Transform>([&](Entity e, Player& player, Transform&) {
-        if (m_scene.worldPosition(e).y <= *killPlane) return;
-        m_scene.setWorldPosition(e, player.spawnPoint);
-        if (auto* body = reg.tryGet<KinematicBody>(e)) *body = KinematicBody{};
-        if (auto* c = reg.tryGet<PlatformerController>(e)) {
-            c->coyoteTimer = 0.0f;
-            c->jumpBufferTimer = 0.0f;
-            c->jumping = false;
-        }
-        ++m_state.respawns;
-        const auto* info = reg.tryGet<EntityInfo>(e);
-        m_events.push_back({GameEvent::Type::PlayerRespawned, info ? info->id : Guid{}, {}, 0});
+    std::vector<Entity> fallen;
+    reg.each<Player, Transform>([&](Entity e, Player&, Transform&) {
+        if (m_scene.worldPosition(e).y > *killPlane) fallen.push_back(e);
     });
+    for (const Entity e : fallen) (void)respawnPlayer(e);
+}
+
+bool GameSession::respawnPlayer(Entity e) {
+    auto& reg = m_scene.registry();
+    auto* player = reg.tryGet<Player>(e);
+    if (player == nullptr || reg.tryGet<Transform>(e) == nullptr) return false;
+    m_scene.setWorldPosition(e, player->spawnPoint);
+    if (auto* body = reg.tryGet<KinematicBody>(e)) *body = KinematicBody{};
+    if (auto* c = reg.tryGet<PlatformerController>(e)) {
+        c->coyoteTimer = 0.0f;
+        c->jumpBufferTimer = 0.0f;
+        c->jumping = false;
+    }
+    ++m_state.respawns;
+    const auto* info = reg.tryGet<EntityInfo>(e);
+    m_events.push_back({GameEvent::Type::PlayerRespawned, info ? info->id : Guid{}, {}, 0});
+    return true;
 }
 
 void GameSession::updateAnimations() {

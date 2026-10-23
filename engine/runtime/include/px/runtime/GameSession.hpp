@@ -99,6 +99,7 @@ private:
     void flushDestroyed();
     void updateMovingSolids();
     void updatePlatformers();
+    void updateTopDown();
     void moveKinematicBodies();
     void updateTriggers();
     void updateKillPlane();
@@ -113,7 +114,9 @@ private:
     void addScore(int amount) override;
     int score() const override { return m_state.score; }
     void setObjective(std::string text) override;
+    std::string objective() const override { return m_state.objective; }
     void completeLevel(std::string message) override;
+    bool respawnPlayer(scene::Entity entity) override;
     double timeSeconds() const override { return elapsedSeconds(); }
     void requestDestroy(scene::Entity entity) override;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
@@ -135,6 +138,8 @@ private:
     ActionId m_moveLeft = kInvalidAction;
     ActionId m_moveRight = kInvalidAction;
     ActionId m_jump = kInvalidAction;
+    ActionId m_moveUp = kInvalidAction;
+    ActionId m_moveDown = kInvalidAction;
     Vec2 m_viewSize;
     float m_dt;
     std::uint64_t m_tick = 0;

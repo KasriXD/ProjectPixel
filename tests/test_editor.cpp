@@ -3,6 +3,7 @@
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
 #include "px/editor/EditorProject.hpp"
+#include "px/editor/Library.hpp"
 #include "px/editor/LogBuffer.hpp"
 #include "px/editor/Picking.hpp"
 #include "px/editor/PlayMode.hpp"
@@ -24,6 +25,7 @@ using namespace px::scene;
 namespace {
 
 const std::filesystem::path kExample = std::filesystem::path(PX_EXAMPLES_DIR) / "platformer";
+const std::filesystem::path kLibrary = std::filesystem::path(PX_LIBRARY_DIR);
 
 // A fresh folder for one test, removed afterwards.
 class TempFolder {
@@ -96,7 +98,7 @@ TEST_CASE("Editor: a new empty project is valid, opens again and plays") {
 
 TEST_CASE("Editor: a project from the platformer template gets its own id and name") {
     TempFolder temp;
-    auto project = must(EditorProject::create(temp.path() / "copy", "Copy", kExample));
+    auto project = must(EditorProject::create(temp.path() / "copy", "Copy", {.templateFolder = kExample}));
     auto original = must(EditorProject::open(kExample));
     CHECK(project->manifest().name == "Copy");
     CHECK(project->manifest().id != original->manifest().id);
@@ -533,4 +535,179 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
     CHECK(session->state().score == 15);
     CHECK(session->state().levelComplete);
     CHECK(session->state().scriptErrors == 0);
+}
+
+// --- Starter library ---------------------------------------------------------------------------
+
+namespace {
+
+NewProjectOptions ofType(project::GameType type) {
+    NewProjectOptions options;
+    options.gameType = type;
+    return options;
+}
+
+int objectIndex(const Library& library, std::string_view name) {
+    const auto& objects = library.manifest().objects;
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+        if (objects[i].name == name) return static_cast<int>(i);
+    }
+    throw std::runtime_error("no library object " + std::string(name));
+}
+
+std::size_t countAssets(const EditorProject& project, assets::AssetType type) {
+    std::size_t n = 0;
+    for (const auto& e : project.assets().entries()) n += e.type == type ? 1 : 0;
+    return n;
+}
+
+} // namespace
+
+TEST_CASE("Library: the starter library loads, and every item has what the Toolbox needs") {
+    const Library library = must(Library::load(kLibrary));
+    const auto& m = library.manifest();
+    CHECK(m.assets.size() >= 20);
+    CHECK(m.objects.size() >= 20);
+    for (const auto& object : m.objects) {
+        CAPTURE(object.name);
+        CHECK_FALSE(object.category.empty());
+        CHECK_FALSE(object.description.empty());
+        CHECK_FALSE(object.iconTexture.isNil());
+    }
+    for (const auto& asset : m.assets) {
+        CAPTURE(asset.entry.name);
+        CHECK_FALSE(asset.category.empty());
+        if (asset.entry.type == assets::AssetType::Texture) {
+            const Vec2i size = library.imageSize(asset.entry.id);
+            CHECK(size.x > 0);
+            CHECK(size.y > 0);
+        }
+    }
+    // Each game type has a player and a goal.
+    for (const auto type : {project::GameType::Platformer, project::GameType::TopDown}) {
+        bool player = false;
+        bool goal = false;
+        for (const auto& object : m.objects) {
+            if (!object.fits(type)) continue;
+            player |= object.category == "Characters";
+            goal |= object.category == "Goals";
+        }
+        CHECK(player);
+        CHECK(goal);
+    }
+}
+
+TEST_CASE("Library: every object can be inserted into an empty project of its game type, saved and played") {
+    const Library library = must(Library::load(kLibrary));
+    for (const auto type : {project::GameType::Platformer, project::GameType::TopDown}) {
+        CAPTURE(project::gameTypeName(type));
+        TempFolder temp;
+        auto project = must(EditorProject::create(temp.path() / "game", "Game", ofType(type)));
+        CHECK(project->manifest().settings.gameType == type);
+        SceneDocument doc(project->manifest().startScene, must(project->loadScene(project->manifest().startScene)));
+        float x = 0.0f;
+        for (std::size_t i = 0; i < library.manifest().objects.size(); ++i) {
+            const auto& object = library.manifest().objects[i];
+            if (!object.fits(type)) continue;
+            CAPTURE(object.name);
+            const auto inserted = must(insertLibraryObject(*project, doc, library, i, {x += 24.0f, 40.0f}));
+            REQUIRE_FALSE(inserted.empty());
+            // The object's entities are selected and in the scene; the first one is where it was put.
+            CHECK(doc.selection().size() == inserted.size());
+            if (const Entity first = inserted.front(); doc.scene().tryGet<Transform>(first) &&
+                                                       !doc.scene().tryGet<Tilemap>(first)) {
+                CHECK(doc.scene().worldPosition(first) == Vec2{x, 40.0f});
+            }
+        }
+        CHECK(doc.problems(&project->assets()).empty());
+        must(doc.save(*project));
+        // Played as px-player would: no script errors, the player exists.
+        auto reopened = must(EditorProject::open(temp.path() / "game"));
+        DirectoryFileSystem files(temp.path() / "game");
+        auto game = must(runtime::loadGame(files));
+        auto session = must(runtime::startSession(game));
+        for (int i = 0; i < 60; ++i) session->tick({});
+        CHECK(session->state().scriptErrors == 0);
+        CHECK_FALSE(session->player().isNull());
+    }
+}
+
+TEST_CASE("Library: inserting twice reuses the copied files; template projects already have the shared art") {
+    const Library library = must(Library::load(kLibrary));
+    TempFolder temp;
+    auto project = must(EditorProject::create(temp.path() / "p", "P"));
+    SceneDocument doc(project->manifest().startScene, must(project->loadScene(project->manifest().startScene)));
+    const int coin = objectIndex(library, "Coin");
+    (void)must(insertLibraryObject(*project, doc, library, static_cast<std::size_t>(coin), {10, 10}));
+    const std::size_t textures = countAssets(*project, assets::AssetType::Texture);
+    const std::size_t scripts = countAssets(*project, assets::AssetType::Script);
+    CHECK(textures == 1);
+    CHECK(scripts == 1);
+    (void)must(insertLibraryObject(*project, doc, library, static_cast<std::size_t>(coin), {40, 10}));
+    CHECK(countAssets(*project, assets::AssetType::Texture) == textures);
+    CHECK(countAssets(*project, assets::AssetType::Script) == scripts);
+    CHECK(names(doc.scene(), doc.scene().entities()) == std::vector<std::string>{"Main Camera", "Coin", "Coin 2"});
+    // One undo step per insert.
+    doc.undo();
+    CHECK(doc.scene().findByName("Coin 2").isNull());
+
+    // A project made from the platformer example already has the coin.
+    auto copy = must(EditorProject::create(temp.path() / "copy", "Copy", {.templateFolder = kExample}));
+    const std::size_t before = copy->assets().size();
+    SceneDocument level(copy->manifest().startScene, must(copy->loadScene(copy->manifest().startScene)));
+    (void)must(insertLibraryObject(*copy, level, library, static_cast<std::size_t>(coin), {10, 10}));
+    CHECK(copy->assets().size() == before);
+}
+
+TEST_CASE("Library: images become sprites or tilemaps; behaviours attach") {
+    const Library library = must(Library::load(kLibrary));
+    TempFolder temp;
+    auto project = must(EditorProject::create(temp.path() / "p", "P", ofType(project::GameType::TopDown)));
+    SceneDocument doc(project->manifest().startScene, must(project->loadScene(project->manifest().startScene)));
+    assets::AssetId tiles;
+    assets::AssetId tree;
+    assets::AssetId hazard;
+    for (const auto& a : library.manifest().assets) {
+        if (a.entry.name == "Top-down Tiles") tiles = a.entry.id;
+        if (a.entry.name == "Tree") tree = a.entry.id;
+        if (a.entry.name == "Hazard") hazard = a.entry.id;
+    }
+    const Entity map = must(insertLibraryImage(*project, doc, library, tiles, {160, 90}));
+    const auto& tilemap = doc.scene().get<Tilemap>(map);
+    CHECK(tilemap.tilesetColumns == 8);
+    CHECK(doc.scene().worldPosition(map) == Vec2{0, 16}); // 320 x 160 map centred on (160, 90), on tile lines
+    const Entity treeEntity = must(insertLibraryImage(*project, doc, library, tree, {50, 50}));
+    CHECK(doc.scene().get<Sprite>(treeEntity).size == Vec2{32, 32});
+    must(attachLibraryScript(*project, doc, library, hazard, treeEntity));
+    CHECK(doc.scene().get<Scripts>(treeEntity).items.size() == 1);
+    CHECK(project->asset(hazard) != nullptr);
+}
+
+TEST_CASE("Library: broken library files are reported clearly") {
+    TempFolder temp;
+    std::filesystem::create_directories(temp.path() / "objects");
+    const std::string head = R"({ "format": "px.library", "formatVersion": 1, "assets": [)";
+    writeFile(temp.path() / "library.json", head + R"({"id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "type": "texture", "name": "Missing", "path": "art/missing.png"}]})");
+    auto missing = Library::load(temp.path());
+    REQUIRE_FALSE(missing.ok());
+    CHECK(contains(missing.error().message, "missing.png is missing"));
+
+    writeFile(temp.path() / "library.json", head + R"({"id": "aaaaaaaa-0000-4000-8000-000000000001",
+        "type": "scene", "name": "S", "path": "s.scene.json"}]})");
+    CHECK(contains(Library::load(temp.path()).error().message, "cannot be in a library"));
+
+    writeFile(temp.path() / "library.json", head + R"(], "objects": [{"id": "aaaaaaaa-0000-4000-8000-000000000002",
+        "name": "X", "gameTypes": ["racing"], "path": "objects/x.entities.json"}]})");
+    CHECK(contains(Library::load(temp.path()).error().message, "unknown game type 'racing'"));
+
+    writeFile(temp.path() / "library.json", head + R"(], "objects": [{"id": "aaaaaaaa-0000-4000-8000-000000000002",
+        "name": "X", "path": "objects/x.entities.json"}]})");
+    writeFile(temp.path() / "objects" / "x.entities.json", R"({"format": "px.entities", "formatVersion": 1,
+        "sceneFormatVersion": 3, "entities": [{"id": "aaaaaaaa-0000-4000-8000-000000000003", "name": "X",
+        "components": {"Sprite": {"texture": "aaaaaaaa-0000-4000-8000-000000000009", "size": [16, 16]}}}]})");
+    auto foreign = Library::load(temp.path());
+    REQUIRE_FALSE(foreign.ok());
+    CHECK(contains(foreign.error().message, "Library object 'X'"));
+    CHECK(contains(foreign.error().message, "not in the project"));
 }

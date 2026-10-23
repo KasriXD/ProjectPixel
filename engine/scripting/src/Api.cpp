@@ -195,6 +195,11 @@ struct Bindings {
         lua_pushinteger(L, system(L).m_host.score());
         return 1;
     }
+    static int gameGetObjective(lua_State* L) {
+        const std::string text = system(L).m_host.objective();
+        lua_pushlstring(L, text.data(), text.size());
+        return 1;
+    }
     static int gameSetObjective(lua_State* L) {
         size_t len = 0;
         const char* text = luaL_checklstring(L, 1, &len);
@@ -420,6 +425,13 @@ struct Bindings {
         luaL_checktype(L, idx, LUA_TBOOLEAN);
         need<scene::Sprite>(L, s, e, "Sprite").visible = lua_toboolean(L, idx) != 0;
     }
+    static void getSpawnPoint(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const Vec2 v = need<scene::Player>(L, s, e, "Player").spawnPoint;
+        lua_pushvector(L, v.x, v.y, 0.0f);
+    }
+    static void setSpawnPoint(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        need<scene::Player>(L, s, e, "Player").spawnPoint = checkVec2(L, idx);
+    }
     static void getFlipX(lua_State* L, ScriptSystem& s, scene::Entity e) {
         lua_pushboolean(L, need<scene::Sprite>(L, s, e, "Sprite").flipX);
     }
@@ -438,6 +450,14 @@ struct Bindings {
         requireAuthority(L, "Entity:destroy");
         const scene::Entity e = checkLiveEntity(L, 1);
         system(L).m_host.requestDestroy(e);
+        return 0;
+    }
+    static int entityRespawn(lua_State* L) {
+        requireAuthority(L, "Entity:respawn");
+        const scene::Entity e = checkLiveEntity(L, 1);
+        if (!system(L).m_host.respawnPlayer(e)) {
+            luaL_errorL(L, "respawn: the entity has no Player component (only players respawn)");
+        }
         return 0;
     }
     static int entityHasTag(lua_State* L) {
@@ -589,6 +609,9 @@ const Binding kBindings[] = {
      &Bindings::gameAddScore},
     {{"Game", "getScore", K::Function, A::Everywhere, "Game.getScore(): number", "The current score.", false, true},
      &Bindings::gameGetScore},
+    {{"Game", "getObjective", K::Function, A::Everywhere, "Game.getObjective(): string",
+      "The objective line currently shown on the HUD (empty if none).", false, true},
+     &Bindings::gameGetObjective},
     {{"Game", "setObjective", K::Function, A::AuthorityOnly, "Game.setObjective(text: string)",
       "Sets the objective line shown on the HUD (at most 200 characters)."},
      &Bindings::gameSetObjective},
@@ -669,12 +692,20 @@ const Binding kBindings[] = {
       true, true}, nullptr, &Bindings::getVisible, &Bindings::setVisible},
     {{"Entity", "flipX", K::Property, A::Everywhere, "entity.flipX: boolean", "Mirrors the Sprite horizontally.",
       true, true}, nullptr, &Bindings::getFlipX, &Bindings::setFlipX},
+    {{"Entity", "spawnPoint", K::Property, A::Everywhere, "entity.spawnPoint: vector",
+      "Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player "
+      "come back there.", true, true},
+     nullptr, &Bindings::getSpawnPoint, &Bindings::setSpawnPoint},
     {{"Entity", "isValid", K::Method, A::Everywhere, "entity:isValid(): boolean",
       "False once the entity has been destroyed. Other members raise an error on destroyed entities.", false,
       true}, &Bindings::entityIsValid},
     {{"Entity", "destroy", K::Method, A::AuthorityOnly, "entity:destroy()",
       "Removes the entity and its children at the end of the current phase (after the running handlers)."},
      &Bindings::entityDestroy},
+    {{"Entity", "respawn", K::Method, A::AuthorityOnly, "entity:respawn()",
+      "Sends a Player back to its spawn point and stops it, as when it falls off the level (counts as a "
+      "respawn). Use it for hazards and enemies. Errors for entities without a Player component."},
+     &Bindings::entityRespawn},
     {{"Entity", "hasTag", K::Method, A::Everywhere, "entity:hasTag(tag: string): boolean",
       "True if the entity's Tags component contains the tag.", false, true},
      &Bindings::entityHasTag},

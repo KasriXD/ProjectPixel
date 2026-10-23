@@ -1,0 +1,26 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "40b01a46-4b08-53cf-8598-e79e604aa37e",
+      "name": "Rock",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda",
+          "size": [16, 16],
+          "layer": 4
+        },
+        "BoxCollider": {
+          "size": [12, 10],
+          "offset": [0, 2],
+          "isTrigger": false
+        }
+      }
+    }
+  ]
+}

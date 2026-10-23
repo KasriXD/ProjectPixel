@@ -4,6 +4,7 @@
 px_add_module(editor
     SOURCES
         src/EditorProject.cpp
+        src/Library.cpp
         src/LogBuffer.cpp
         src/Picking.cpp
         src/PlayMode.cpp

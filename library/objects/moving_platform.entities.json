@@ -1,0 +1,35 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "c85226a8-df59-52e8-8567-30a474469150",
+      "name": "Moving Platform",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "bda48900-1124-5368-a40a-cd76590e706f",
+          "size": [48, 16],
+          "layer": 1
+        },
+        "BoxCollider": {
+          "size": [48, 16],
+          "offset": [0, 0],
+          "isTrigger": false
+        },
+        "Scripts": [
+          {
+            "script": "fa1818e7-78c0-531f-8f97-c19bfcd1d9e1",
+            "properties": {
+              "offset": [80, 0],
+              "period": 4
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

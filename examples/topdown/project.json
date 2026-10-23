@@ -1,0 +1,180 @@
+{
+  "format": "px.project",
+  "formatVersion": 2,
+  "id": "8d84fb05-499b-53f3-84b6-f87e60b72457",
+  "name": "Example Top-down",
+  "engineVersion": "0.3.0",
+  "startScene": "b9f8e06c-3d0c-5b71-ba7e-438fe1ef1ccc",
+  "settings": {
+    "gameType": "topdown",
+    "tickRate": 60,
+    "display": {
+      "virtualResolution": [320, 180],
+      "scaling": "integer",
+      "windowScale": 3
+    },
+    "scripting": {
+      "apiVersion": 1
+    }
+  },
+  "input": {
+    "actions": {
+      "move_left": [
+        "Left",
+        "A"
+      ],
+      "move_right": [
+        "Right",
+        "D"
+      ],
+      "move_up": [
+        "Up",
+        "W"
+      ],
+      "move_down": [
+        "Down",
+        "S"
+      ]
+    }
+  },
+  "assets": [
+    {
+      "id": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+      "type": "texture",
+      "name": "Top-down Tiles",
+      "path": "assets/topdown_tiles.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "1e89468c-678a-500e-8351-8411a6b2d379",
+      "type": "texture",
+      "name": "Top-down Hero",
+      "path": "assets/hero.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+      "type": "texture",
+      "name": "Gem",
+      "path": "assets/gem.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "9a6d6a99-e513-5d0e-8f3e-cec1f1180449",
+      "type": "texture",
+      "name": "Key",
+      "path": "assets/key.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "802f78e9-6a28-519f-953c-b86a4b0eb0a2",
+      "type": "texture",
+      "name": "Lock Block",
+      "path": "assets/lock_block.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+      "type": "texture",
+      "name": "Spike Trap",
+      "path": "assets/spike_trap.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "db6689ce-cf24-50a0-a015-d70b0f2f12f3",
+      "type": "texture",
+      "name": "Beetle",
+      "path": "assets/beetle.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "167a4f3d-104a-5731-8930-5b7e023d05d4",
+      "type": "texture",
+      "name": "Stairs",
+      "path": "assets/stairs.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+      "type": "texture",
+      "name": "Tree",
+      "path": "assets/tree.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda",
+      "type": "texture",
+      "name": "Rock",
+      "path": "assets/rock.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+      "type": "texture",
+      "name": "Shrub",
+      "path": "assets/shrub.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+      "type": "texture",
+      "name": "Scenery",
+      "path": "assets/scenery.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+      "type": "script",
+      "name": "Coin",
+      "path": "scripts/coin.luau"
+    },
+    {
+      "id": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+      "type": "script",
+      "name": "Level Rules",
+      "path": "scripts/level_rules.luau"
+    },
+    {
+      "id": "edb40871-ac38-570a-96f5-ffb6058e25e6",
+      "type": "script",
+      "name": "Key",
+      "path": "scripts/key.luau"
+    },
+    {
+      "id": "52f5b8e2-24f3-5141-b6ea-0695e3359de0",
+      "type": "script",
+      "name": "Lock Block",
+      "path": "scripts/lock_block.luau"
+    },
+    {
+      "id": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+      "type": "script",
+      "name": "Hazard",
+      "path": "scripts/hazard.luau"
+    },
+    {
+      "id": "6df776c8-9e36-550a-8c9c-3733a2d0a00d",
+      "type": "script",
+      "name": "Patrol",
+      "path": "scripts/patrol.luau"
+    },
+    {
+      "id": "e3216f74-ee57-567c-9422-85cc1ca92042",
+      "type": "script",
+      "name": "Goal",
+      "path": "scripts/goal.luau"
+    },
+    {
+      "id": "bf99ab7c-7b62-522e-b623-0103d8e4db43",
+      "type": "script",
+      "name": "Sign",
+      "path": "scripts/sign.luau"
+    },
+    {
+      "id": "b9f8e06c-3d0c-5b71-ba7e-438fe1ef1ccc",
+      "type": "scene",
+      "name": "Garden",
+      "path": "scenes/garden.scene.json"
+    }
+  ]
+}

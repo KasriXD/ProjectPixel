@@ -1,0 +1,32 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "31b47086-f63c-5d63-838f-e0ea37ece5bc",
+      "name": "Spike Trap",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+          "size": [16, 16],
+          "layer": 1
+        },
+        "BoxCollider": {
+          "size": [12, 12],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 #include "px/assets/AssetRegistry.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
+#include "px/project/Library.hpp"
 #include "px/project/Project.hpp"
 #include "px/scene/Scene.hpp"
 #include "px/scripting/ScriptLibrary.hpp"
@@ -36,6 +37,14 @@ struct ScriptInfo {
     scripting::BehaviourDescription behaviour;
 };
 
+struct NewProjectOptions {
+    project::GameType gameType = project::GameType::Platformer;
+    std::optional<std::filesystem::path> templateFolder; // an example project to copy
+};
+
+// Input actions a new project of this game type starts with.
+[[nodiscard]] project::InputConfig defaultInput(project::GameType type);
+
 // An open project folder.
 //
 // Asset operations (import, create, rename, delete) change files on disk
@@ -47,12 +56,13 @@ public:
     [[nodiscard]] static Result<std::unique_ptr<EditorProject>> open(const std::filesystem::path& folder);
 
     // Creates a new project in `folder`, which must not exist or be empty.
-    // With a template folder (a project), its files are copied and the
-    // project gets a new id and the given name; otherwise an empty project
-    // with one scene containing a camera is created.
-    [[nodiscard]] static Result<std::unique_ptr<EditorProject>> create(
-        const std::filesystem::path& folder, std::string name,
-        const std::optional<std::filesystem::path>& templateFolder = std::nullopt);
+    // With a template folder (an example project), its files are copied and
+    // the project gets a new id and the given name (the game type is the
+    // template's); otherwise an empty project of `options.gameType` with one
+    // scene containing a camera is created.
+    [[nodiscard]] static Result<std::unique_ptr<EditorProject>> create(const std::filesystem::path& folder,
+                                                                      std::string name,
+                                                                      const NewProjectOptions& options = {});
 
     [[nodiscard]] const std::filesystem::path& root() const { return m_root; }
     [[nodiscard]] const IFileSystem& files() const { return m_files; }
@@ -78,6 +88,10 @@ public:
     // .luau (script), .scene.json (scene). Images are decoded first, so a
     // broken image is refused.
     [[nodiscard]] Result<assets::AssetId> importFile(const std::filesystem::path& source);
+    // Copies an asset from the starter library (see Library.hpp) into the
+    // project, keeping its id, unless the project already has that id.
+    [[nodiscard]] Result<assets::AssetId> addLibraryAsset(const project::LibraryAsset& asset,
+                                                          const std::filesystem::path& file);
     // Creates scripts/<name>.luau from a template behaviour.
     [[nodiscard]] Result<assets::AssetId> createScript(std::string_view name);
     // Creates scenes/<name>.scene.json containing a camera.

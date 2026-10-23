@@ -72,6 +72,8 @@ StudioSettings StudioSettings::load(const std::filesystem::path& file) {
             s.showColliders = value == "1";
         } else if (key == "clearConsoleOnPlay") {
             s.clearConsoleOnPlay = value == "1";
+        } else if (key == "newProjectFolder") {
+            s.newProjectFolder = fromUtf8(value);
         } else if (key == "layout") {
             if (value == "standard" || value == "classic") s.layout = value;
         } else if (key == "layoutVersion") {
@@ -94,6 +96,7 @@ bool StudioSettings::save(const std::filesystem::path& file) const {
     out << "showGrid=" << (showGrid ? 1 : 0) << '\n';
     out << "showColliders=" << (showColliders ? 1 : 0) << '\n';
     out << "clearConsoleOnPlay=" << (clearConsoleOnPlay ? 1 : 0) << '\n';
+    if (!newProjectFolder.empty()) out << "newProjectFolder=" << toUtf8(newProjectFolder) << '\n';
     out << "layout=" << layout << '\n';
     out << "layoutVersion=" << layoutVersion << '\n';
     return static_cast<bool>(out);

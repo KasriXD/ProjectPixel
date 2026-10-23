@@ -1,0 +1,47 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "f4a0deb4-0e76-5678-b09d-11b1e0a6634b",
+      "name": "Coin",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+          "size": [16, 16],
+          "layer": 5,
+          "source": [0, 0, 16, 16]
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 8
+        },
+        "BoxCollider": {
+          "size": [10, 12],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 1
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

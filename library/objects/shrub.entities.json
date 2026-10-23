@@ -1,0 +1,21 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "ffb7855e-1f2f-5ec7-a79b-b0a44104cc98",
+      "name": "Shrub",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+          "size": [16, 16],
+          "layer": 4
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+# Scripted route through the garden (examples/topdown). Used by the
+# example_topdown_playthrough test; must complete the level with no script errors.
+#
+# Up the path to the key (the top wall stops the hero, so the hold time is
+# not critical; gem 1 is on the way), back down to the gate row, right
+# through the opened gate to the east wall (gems 2 and 3), then down to the stairs.
+200 move_up
+76 move_down
+10 -
+300 move_right
+120 move_down

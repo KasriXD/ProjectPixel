@@ -1,0 +1,34 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "f0f34933-eab3-5228-8e57-fd14d92c4aad",
+      "name": "Spring",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "a05bcbf4-2db0-5c67-b015-4ec10a808a3c",
+          "size": [16, 16],
+          "layer": 2
+        },
+        "BoxCollider": {
+          "size": [12, 6],
+          "offset": [0, 3],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "c28d7def-3491-5cd5-b470-ed40e9d44a62",
+            "properties": {
+              "strength": 420
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

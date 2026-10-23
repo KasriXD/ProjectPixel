@@ -1,0 +1,35 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "39657eee-02e1-5d0d-8b8c-08f89637ec21",
+      "name": "Sign",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "size": [16, 16],
+          "layer": -1,
+          "source": [16, 16, 16, 16]
+        },
+        "BoxCollider": {
+          "size": [16, 16],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "bf99ab7c-7b62-522e-b623-0103d8e4db43",
+            "properties": {
+              "message": "Hello! Collect everything you can."
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

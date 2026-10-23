@@ -1,0 +1,26 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "de9b813c-3cb6-5e2e-a9b1-8df224678bea",
+      "name": "Tree",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+          "size": [32, 32],
+          "layer": 8
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 10],
+          "isTrigger": false
+        }
+      }
+    }
+  ]
+}

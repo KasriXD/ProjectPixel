@@ -126,6 +126,17 @@ struct PlatformerController {
     bool jumping = false;           // runtime
 };
 
+// Reusable top-down character movement: seen from above, no gravity, moving
+// in all eight directions at the same speed. Requires Transform, BoxCollider
+// and KinematicBody. Reads the "move_left", "move_right", "move_up" and
+// "move_down" actions.
+struct TopDownController {
+    float maxSpeed = 80.0f;       // units/s
+    float acceleration = 900.0f;  // units/s^2 while moving
+    float deceleration = 1200.0f; // units/s^2 with no input
+    Vec2 facing{0.0f, 1.0f};      // runtime: last direction moved in (length 1), for scripts
+};
+
 // Labels for finding and classifying entities from scripts ("coin", "enemy").
 struct Tags {
     std::vector<std::string> values;

@@ -156,6 +156,28 @@ TEST_CASE("Manifest validation errors are specific") {
     CHECK(contains(parseProjectManifest(escape, "p.json").error().message, "may not contain '..'"));
 }
 
+TEST_CASE("Project format 1 becomes 2: every old project is a platformer") {
+    // minimalProject() is a format 1 file without a game type.
+    auto old = parseProjectManifest(minimalProject(), "p.json");
+    REQUIRE(old.ok());
+    CHECK(old->settings.gameType == GameType::Platformer);
+    const std::string saved = serializeProjectManifest(old.value());
+    CHECK(contains(saved, "\"formatVersion\": 2"));
+    CHECK(contains(saved, "\"gameType\": \"platformer\""));
+
+    std::string topDown = minimalProject(R"(, "settings": { "gameType": "topdown" })");
+    topDown.replace(topDown.find("\"formatVersion\": 1"), 18, "\"formatVersion\": 2");
+    auto parsed = parseProjectManifest(topDown, "p.json");
+    REQUIRE_MESSAGE(parsed.ok(), (parsed.ok() ? "" : parsed.error().message));
+    CHECK(parsed->settings.gameType == GameType::TopDown);
+
+    std::string unknown = topDown;
+    unknown.replace(unknown.find("topdown"), 7, "racing!");
+    auto bad = parseProjectManifest(unknown, "p.json");
+    REQUIRE_FALSE(bad.ok());
+    CHECK(contains(bad.error().message, "settings.gameType: unknown game type 'racing!'"));
+}
+
 TEST_CASE("Scene validation errors point at the problem") {
     const std::string goodEntity = R"({"id": "cccccccc-0000-4000-8000-000000000001", "name": "Box",
         "components": {"Transform": {"position": [1, 2]}}})";
@@ -415,26 +437,30 @@ TEST_CASE("Component reference document is up to date") {
     CHECK_MESSAGE(upToDate, "docs/components.md is out of date; regenerate it with px-headless --print-component-reference");
 }
 
-TEST_CASE("The example project is stored exactly as Studio saves it") {
-    // So opening and saving it in Studio produces no changes. Regenerate with
-    // tools/generate_example_project.py (which runs px-headless --resave).
-    DirectoryFileSystem fs(kExampleDir);
-    auto manifestText = fs.readText("project.json");
-    REQUIRE(manifestText.ok());
-    std::string manifestOnDisk = manifestText.value();
-    std::erase(manifestOnDisk, '\r');
-    auto manifest = parseProjectManifest(manifestOnDisk, "project.json");
-    REQUIRE(manifest.ok());
-    CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
-    for (const auto& entry : manifest->assets.entries()) {
-        if (entry.type != assets::AssetType::Scene) continue;
-        auto text = fs.readText(entry.path);
-        REQUIRE(text.ok());
-        std::string onDisk = text.value();
-        std::erase(onDisk, '\r');
-        auto scene = parseScene(onDisk, entry.path, &manifest->assets);
-        REQUIRE(scene.ok());
-        CHECK_MESSAGE(serializeScene(scene.value()) == onDisk, entry.path, " is not in canonical form; run "
-                                                                           "px-headless examples/platformer --resave");
+TEST_CASE("The example projects are stored exactly as Studio saves them") {
+    // So opening and saving them in Studio produces no changes. Regenerate with
+    // tools/generate_example_project.py and tools/generate_topdown_example.py
+    // (which run px-headless --resave).
+    for (const char* example : {"platformer", "topdown"}) {
+        CAPTURE(example);
+        DirectoryFileSystem fs(std::string(PX_EXAMPLES_DIR) + "/" + example);
+        auto manifestText = fs.readText("project.json");
+        REQUIRE(manifestText.ok());
+        std::string manifestOnDisk = manifestText.value();
+        std::erase(manifestOnDisk, '\r');
+        auto manifest = parseProjectManifest(manifestOnDisk, "project.json");
+        REQUIRE(manifest.ok());
+        CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
+        for (const auto& entry : manifest->assets.entries()) {
+            if (entry.type != assets::AssetType::Scene) continue;
+            auto text = fs.readText(entry.path);
+            REQUIRE(text.ok());
+            std::string onDisk = text.value();
+            std::erase(onDisk, '\r');
+            auto scene = parseScene(onDisk, entry.path, &manifest->assets);
+            REQUIRE(scene.ok());
+            CHECK_MESSAGE(serializeScene(scene.value()) == onDisk, entry.path, " is not in canonical form; run "
+                                                                               "px-headless examples/<name> --resave");
+        }
     }
 }

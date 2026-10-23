@@ -1,0 +1,29 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "166b783e-0c1b-5adc-a0d8-3ae61153cf26",
+      "name": "Player",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "1e89468c-678a-500e-8351-8411a6b2d379",
+          "size": [16, 16],
+          "layer": 10
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 4],
+          "isTrigger": false
+        },
+        "KinematicBody": {},
+        "TopDownController": {},
+        "Player": {}
+      }
+    }
+  ]
+}

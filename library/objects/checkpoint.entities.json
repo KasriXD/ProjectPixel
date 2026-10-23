@@ -1,0 +1,40 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "8e65f6ba-9e2f-56d7-b765-1e4d5257cb6e",
+      "name": "Checkpoint",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "bb0ce17b-858a-53eb-ab2d-1a8887d64080",
+          "size": [16, 16],
+          "layer": 2,
+          "source": [0, 0, 16, 16]
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16]
+          ],
+          "framesPerSecond": 3
+        },
+        "BoxCollider": {
+          "size": [10, 16],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "8b367ace-6551-549b-ab28-cefd119b1c8b",
+            "properties": {}
+          }
+        ]
+      }
+    }
+  ]
+}

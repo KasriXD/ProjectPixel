@@ -1,0 +1,32 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "9220a82e-2cbd-5430-8fd7-f1b0f029a2dd",
+      "name": "Spikes",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "4d478bb9-e4ba-508c-8da4-d3f4570f08f2",
+          "size": [16, 16],
+          "layer": 2
+        },
+        "BoxCollider": {
+          "size": [14, 8],
+          "offset": [0, 4],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    }
+  ]
+}

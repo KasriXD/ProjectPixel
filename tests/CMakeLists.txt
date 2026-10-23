@@ -15,7 +15,8 @@ target_link_libraries(px_tests PRIVATE
     px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::render px::editor)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
-    PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
+    PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
+    PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library")
 px_target_defaults(px_tests)
 if(EMSCRIPTEN)
     target_link_options(px_tests PRIVATE -sNODERAWFS=1 -sEXIT_RUNTIME=1)
@@ -30,6 +31,12 @@ add_test(NAME unit_tests COMMAND px_tests)
 add_test(NAME example_platformer_playthrough
     COMMAND px_headless "${PX_EXAMPLES_DIR}/platformer"
             --input-script "${PX_EXAMPLES_DIR}/platformer/tests/full_run.input"
+            --expect-level-complete --expect-no-script-errors)
+
+# The same for the top-down example: key, gate, gems, stairs.
+add_test(NAME example_topdown_playthrough
+    COMMAND px_headless "${PX_EXAMPLES_DIR}/topdown"
+            --input-script "${PX_EXAMPLES_DIR}/topdown/tests/full_run.input"
             --expect-level-complete --expect-no-script-errors)
 
 # Smoke test for the real client with no display: SDL's "dummy" video driver

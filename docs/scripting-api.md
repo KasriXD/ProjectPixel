@@ -36,6 +36,7 @@ Game state. Changes are authoritative and, in multiplayer, will be replicated to
 |---|---|---|---|
 | `Game.addScore(amount: number)` | function | authority | Adds a whole number (may be negative) to the score. |
 | `Game.getScore(): number` | function, pure | all | The current score. |
+| `Game.getObjective(): string` | function, pure | all | The objective line currently shown on the HUD (empty if none). |
 | `Game.setObjective(text: string)` | function | authority | Sets the objective line shown on the HUD (at most 200 characters). |
 | `Game.completeLevel(message: string?)` | function | authority | Ends the level successfully and shows the message. |
 | `Game.time(): number` | function, pure | all | Simulated seconds since the session started (deterministic; not the wall clock). |
@@ -88,8 +89,10 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity.onGround: boolean` | property (read-only), pure | all | True if the body is standing on something (KinematicBody). |
 | `entity.visible: boolean` | property (read/write), pure | all | Whether the Sprite is drawn. |
 | `entity.flipX: boolean` | property (read/write), pure | all | Mirrors the Sprite horizontally. |
+| `entity.spawnPoint: vector` | property (read/write), pure | all | Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player come back there. |
 | `entity:isValid(): boolean` | method, pure | all | False once the entity has been destroyed. Other members raise an error on destroyed entities. |
 | `entity:destroy()` | method | authority | Removes the entity and its children at the end of the current phase (after the running handlers). |
+| `entity:respawn()` | method | authority | Sends a Player back to its spawn point and stops it, as when it falls off the level (counts as a respawn). Use it for hazards and enemies. Errors for entities without a Player component. |
 | `entity:hasTag(tag: string): boolean` | method, pure | all | True if the entity's Tags component contains the tag. |
 | `entity:hasComponent(name: string): boolean` | method, pure | all | True if the entity has the named component, e.g. "Player" (see docs/components.md). |
 | `entity:getChildren(): {Entity}` | method, pure | all | The entity's direct children, in hierarchy order. |

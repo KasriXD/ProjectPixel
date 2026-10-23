@@ -1,0 +1,28 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "15c322e7-45e5-5acc-b847-c010da6a9cac",
+      "name": "Ground",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Tilemap": {
+          "tileset": "782c3432-d57a-558a-a29f-2eb189772494",
+          "tileSize": [16, 16],
+          "tilesetColumns": 4,
+          "solid": true,
+          "layer": 0,
+          "rows": [
+            "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
+            "1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1",
+            "6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6"
+          ]
+        }
+      }
+    }
+  ]
+}

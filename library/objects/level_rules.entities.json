@@ -1,0 +1,24 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "9d99ec25-42df-5a1f-b67a-b2f4feb91025",
+      "name": "Level Rules",
+      "components": {
+        "Scripts": [
+          {
+            "script": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+            "properties": {
+              "tag": "coin",
+              "label": "COINS",
+              "message": "ALL COINS COLLECTED!",
+              "complete": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

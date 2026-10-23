@@ -295,7 +295,9 @@ void PlayerApp::drawHud() {
     if (!state.objective.empty()) text({6, 6}, state.objective, kHudText);
     const std::string& error = !m_loadError.empty() ? m_loadError : state.lastScriptError;
     if (m_session->elapsedSeconds() < 6.0 && !m_scriptPlayer && error.empty()) {
-        const std::string hint = "ARROWS MOVE  SPACE JUMP  R RESTART";
+        const std::string hint = m_game.manifest.settings.gameType == project::GameType::TopDown
+                                     ? "ARROWS MOVE  R RESTART"
+                                     : "ARROWS MOVE  SPACE JUMP  R RESTART";
         text({(width - g * static_cast<float>(hint.size())) * 0.5f, height - 14}, hint, colors::white);
     }
     if (state.levelComplete) {

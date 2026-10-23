@@ -30,7 +30,11 @@ public:
     virtual void addScore(int amount) = 0;
     [[nodiscard]] virtual int score() const = 0;
     virtual void setObjective(std::string text) = 0;
+    [[nodiscard]] virtual std::string objective() const { return {}; }
     virtual void completeLevel(std::string message) = 0;
+    // Puts a Player entity back at its spawn point, as after falling off the
+    // level. Returns false if the entity is not a player.
+    virtual bool respawnPlayer(scene::Entity /*entity*/) { return false; }
 
     // --- Simulation time -------------------------------------------------------
     // Seconds of simulated time at the start of the current tick.

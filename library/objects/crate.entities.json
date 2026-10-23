@@ -1,0 +1,27 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "cff71617-405d-5815-ab7e-ea18332188c9",
+      "name": "Crate",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "782c3432-d57a-558a-a29f-2eb189772494",
+          "size": [16, 16],
+          "layer": 2,
+          "source": [48, 0, 16, 16]
+        },
+        "BoxCollider": {
+          "size": [16, 16],
+          "offset": [0, 0],
+          "isTrigger": false
+        }
+      }
+    }
+  ]
+}

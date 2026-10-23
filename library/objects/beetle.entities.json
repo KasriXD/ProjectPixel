@@ -1,0 +1,47 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "6a333f62-9981-53ae-86cf-f7d900757102",
+      "name": "Beetle",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "db6689ce-cf24-50a0-a015-d70b0f2f12f3",
+          "size": [16, 16],
+          "layer": 6,
+          "source": [0, 0, 16, 16]
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16]
+          ],
+          "framesPerSecond": 6
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "6df776c8-9e36-550a-8c9c-3733a2d0a00d",
+            "properties": {
+              "offset": [0, 48],
+              "period": 3
+            }
+          },
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    }
+  ]
+}

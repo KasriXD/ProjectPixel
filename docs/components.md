@@ -101,6 +101,20 @@ Requires Transform, BoxCollider and KinematicBody on the same entity.
 
 Runtime: `coyoteTimer` (Coyote time left.), `jumpBufferTimer` (Buffered jump time left.), `jumping` (Rising from a jump.)
 
+## TopDownController
+
+*Gameplay.* Top-down walking in all directions, driven by the move_left, move_right, move_up and move_down input actions.
+
+Requires Transform, BoxCollider and KinematicBody on the same entity.
+
+| Field | Type | Default | Allowed values | Description |
+|---|---|---|---|---|
+| `maxSpeed` | number | 80 | may not be negative | Top walking speed, units per second (also diagonally). |
+| `acceleration` | number | 900 | may not be negative | Speed gained per second while a direction is held. |
+| `deceleration` | number | 1200 | may not be negative | Speed lost per second with no input. |
+
+Runtime: `facing` (Last direction moved in.)
+
 ## Player
 
 *Gameplay.* Marks the player character; it respawns at its start position after falling below the kill plane.

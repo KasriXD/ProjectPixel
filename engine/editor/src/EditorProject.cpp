@@ -94,11 +94,15 @@ return {1}
                        displayName, identifier);
 }
 
-scene::Scene newSceneContent(std::string_view name, Vec2i resolution) {
+scene::Scene newSceneContent(std::string_view name, Vec2i resolution, project::GameType type) {
     scene::Scene scene;
     scene.setName(std::string(name));
-    // Players who fall off the level respawn instead of falling forever.
-    scene.settings().killPlaneY = static_cast<float>(resolution.y) * 2.0f;
+    if (type == project::GameType::Platformer) {
+        // Players who fall off the level respawn instead of falling forever.
+        scene.settings().killPlaneY = static_cast<float>(resolution.y) * 2.0f;
+    } else {
+        scene.settings().backgroundColor = Color{62, 142, 65, 255}; // grass beyond the map's edge
+    }
     const scene::Entity camera = scene.createEntity("Main Camera");
     const Vec2 center{static_cast<float>(resolution.x) * 0.5f, static_cast<float>(resolution.y) * 0.5f};
     scene.set(camera, scene::Transform{center});
@@ -162,8 +166,21 @@ Result<std::unique_ptr<EditorProject>> EditorProject::open(const std::filesystem
     return std::unique_ptr<EditorProject>(new EditorProject(root, std::move(manifest.value())));
 }
 
+project::InputConfig defaultInput(project::GameType type) {
+    project::InputConfig input;
+    input.actions = {{"move_left", {Key::Left, Key::A}}, {"move_right", {Key::Right, Key::D}}};
+    if (type == project::GameType::TopDown) {
+        input.actions.push_back({"move_up", {Key::Up, Key::W}});
+        input.actions.push_back({"move_down", {Key::Down, Key::S}});
+    } else {
+        input.actions.push_back({"jump", {Key::Space, Key::Z, Key::Up, Key::W}});
+    }
+    return input;
+}
+
 Result<std::unique_ptr<EditorProject>> EditorProject::create(const std::filesystem::path& folder, std::string name,
-                                                             const std::optional<std::filesystem::path>& templateFolder) {
+                                                             const NewProjectOptions& options) {
+    const auto& templateFolder = options.templateFolder;
     if (auto ok = checkName(name, "project"); !ok) return ok.error();
     std::error_code ec;
     const auto root = std::filesystem::absolute(folder, ec).lexically_normal();
@@ -200,9 +217,8 @@ Result<std::unique_ptr<EditorProject>> EditorProject::create(const std::filesyst
     project::ProjectManifest manifest;
     manifest.id = Guid::generate();
     manifest.name = std::move(name);
-    manifest.input.actions = {{"move_left", {Key::Left, Key::A}},
-                              {"move_right", {Key::Right, Key::D}},
-                              {"jump", {Key::Space, Key::Z, Key::Up, Key::W}}};
+    manifest.settings.gameType = options.gameType;
+    manifest.input = defaultInput(options.gameType);
     std::unique_ptr<EditorProject> project(new EditorProject(root, std::move(manifest)));
     auto scene = project->createScene("Main");
     if (!scene) return scene.error();
@@ -339,6 +355,51 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
     return entry.id;
 }
 
+Result<assets::AssetId> EditorProject::addLibraryAsset(const project::LibraryAsset& asset,
+                                                       const std::filesystem::path& file) {
+    const assets::AssetEntry& source = asset.entry;
+    if (const auto* existing = m_manifest.assets.find(source.id)) {
+        if (existing->type != source.type) {
+            return makeError(ErrorCode::InvalidData, "The project already has a different asset with the id of '{}'",
+                             source.name);
+        }
+        return existing->id;
+    }
+    auto bytes = readExternalFile(file);
+    if (!bytes) return bytes.error();
+    std::string folder;
+    std::string extension = lower(file.extension().string());
+    if (source.type == assets::AssetType::Texture) {
+        auto image = assets::decodeImage(bytes.value(), source.name);
+        if (!image) return makeError(image.error().code, "Library image '{}': {}", source.name, image.error().message);
+        folder = "assets";
+    } else if (source.type == assets::AssetType::Script) {
+        folder = "scripts";
+        extension = ".luau";
+    } else {
+        return makeError(ErrorCode::Unsupported, "Library asset '{}' has an unsupported type", source.name);
+    }
+    const std::string stem = toFileStem(file.stem().string());
+    auto path = uniquePath(folder, stem.empty() ? std::string("asset") : stem, extension);
+    if (!path) return path.error();
+    const std::string_view content(reinterpret_cast<const char*>(bytes->data()), bytes->size());
+    if (auto written = m_files.writeText(path.value(), content); !written) return written.error();
+
+    assets::AssetEntry entry = source;
+    entry.path = path.value();
+    entry.name = uniqueAssetName(source.name, source.type);
+    if (auto added = m_manifest.assets.add(entry); !added) return added.error();
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(entry.id);
+        std::error_code ec;
+        std::filesystem::remove(m_root / std::filesystem::path(entry.path), ec);
+        return saved.error();
+    }
+    m_scriptsStale = true;
+    log::info("Added {} '{}' from the library", assets::assetTypeName(entry.type), entry.name);
+    return entry.id;
+}
+
 Result<assets::AssetId> EditorProject::createScript(std::string_view name) {
     if (auto ok = checkName(name, "script"); !ok) return ok.error();
     auto path = uniquePath("scripts", toFileStem(name).empty() ? std::string("script") : toFileStem(name), ".luau");
@@ -362,7 +423,8 @@ Result<assets::AssetId> EditorProject::createScene(std::string_view name) {
     if (auto ok = checkName(name, "scene"); !ok) return ok.error();
     auto path = uniquePath("scenes", toFileStem(name).empty() ? std::string("scene") : toFileStem(name), ".scene.json");
     if (!path) return path.error();
-    const scene::Scene content = newSceneContent(name, m_manifest.settings.display.virtualResolution);
+    const scene::Scene content =
+        newSceneContent(name, m_manifest.settings.display.virtualResolution, m_manifest.settings.gameType);
     if (auto written = m_files.writeText(path.value(), project::serializeScene(content)); !written) {
         return written.error();
     }

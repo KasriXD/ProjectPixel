@@ -199,6 +199,19 @@ struct Tables {
             .withFlags(kFieldRuntime),
         field<&PlatformerController::jumping>("jumping", "Rising from a jump.").withFlags(kFieldRuntime),
     };
+    std::vector<FieldInfo> topDown{
+        field<&TopDownController::maxSpeed>("maxSpeed", "Top walking speed, units per second (also diagonally).")
+            .withRange(0.0, kInf)
+            .withStep(1.0f),
+        field<&TopDownController::acceleration>("acceleration", "Speed gained per second while a direction is "
+                                                                "held.")
+            .withRange(0.0, kInf)
+            .withStep(10.0f),
+        field<&TopDownController::deceleration>("deceleration", "Speed lost per second with no input.")
+            .withRange(0.0, kInf)
+            .withStep(10.0f),
+        field<&TopDownController::facing>("facing", "Last direction moved in.").withFlags(kFieldRuntime),
+    };
     std::vector<FieldInfo> player{
         field<&Player::spawnPoint>("spawnPoint", "Where the player respawns (its position when the game started).")
             .withFlags(kFieldRuntime),
@@ -226,7 +239,7 @@ struct Tables {
 
     // Only requirements whose absence makes a scene invalid are listed;
     // adding one rejects files that loaded before.
-    std::vector<std::string_view> platformerRequires{"Transform", "BoxCollider", "KinematicBody"};
+    std::vector<std::string_view> characterRequires{"Transform", "BoxCollider", "KinematicBody"};
 
     std::vector<ComponentInfo> components;
 
@@ -250,7 +263,11 @@ struct Tables {
             component<PlatformerController>("PlatformerController", "Gameplay",
                                             "Side-view running and jumping driven by the move_left, move_right "
                                             "and jump input actions.",
-                                            platformer, platformerRequires),
+                                            platformer, characterRequires),
+            component<TopDownController>("TopDownController", "Gameplay",
+                                         "Top-down walking in all directions, driven by the move_left, "
+                                         "move_right, move_up and move_down input actions.",
+                                         topDown, characterRequires),
             component<Player>("Player", "Gameplay", "Marks the player character; it respawns at its start "
                                                     "position after falling below the kill plane.",
                               player),

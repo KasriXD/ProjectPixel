@@ -1,0 +1,968 @@
+{
+  "format": "px.scene",
+  "formatVersion": 3,
+  "name": "Garden",
+  "settings": {
+    "backgroundColor": "#3e8e41"
+  },
+  "entities": [
+    {
+      "id": "a98a902c-a66c-5aa5-a183-c6bd07217cab",
+      "name": "Main Camera",
+      "components": {
+        "Transform": {
+          "position": [160, 90],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Camera": {
+          "follow": "2403c569-01bc-50b4-bae1-b8c92f77a6f7",
+          "zoom": 1,
+          "clampToBounds": true
+        }
+      }
+    },
+    {
+      "id": "8782feac-32e7-5d80-b6f3-8f938f331cf2",
+      "name": "Ground",
+      "components": {
+        "Transform": {
+          "position": [0, 0],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Tilemap": {
+          "tileset": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+          "tileSize": [16, 16],
+          "tilesetColumns": 8,
+          "solid": false,
+          "layer": -10,
+          "tint": "#ffffff",
+          "rows": [
+            "1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0",
+            "0 0 2 1 0 3 3 3 3 3 3 0 0 0 0 0 1 0 0 0 0 0 0 0",
+            "0 0 2 0 0 3 3 3 3 3 3 0 0 0 0 0 0 0 0 1 0 0 0 0",
+            "0 0 2 0 0 3 3 3 3 3 3 0 0 0 0 0 0 0 0 0 0 0 1 0",
+            "0 0 2 0 0 3 3 3 3 3 3 0 1 0 0 0 0 0 0 0 0 0 0 0",
+            "0 0 2 0 0 3 3 3 3 3 3 0 0 0 0 1 0 0 0 0 0 0 0 0",
+            "0 0 2 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0",
+            "0 0 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 2 0",
+            "0 0 2 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 2 0",
+            "0 1 2 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 2 0",
+            "0 0 2 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 2 0",
+            "0 0 2 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 2 0",
+            "0 0 2 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 2 1",
+            "1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0",
+            "0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 0 0",
+            "0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0"
+          ]
+        }
+      }
+    },
+    {
+      "id": "631cce4d-9de0-552a-a9ad-fe921972a4cf",
+      "name": "Walls",
+      "components": {
+        "Transform": {
+          "position": [0, 0],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Tilemap": {
+          "tileset": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+          "tileSize": [16, 16],
+          "tilesetColumns": 8,
+          "solid": true,
+          "layer": 0,
+          "tint": "#ffffff",
+          "rows": [
+            "8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . 11 11 11 11 . . 10 . . . . . . . . . . 8",
+            "8 . . . . . 4 4 4 4 . . 10 . . . . . . . . . . 8",
+            "8 . . . . . 4 4 4 4 . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . . . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 . . . . . . . . . . . 10 . . . . . . . . . . 8",
+            "8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8 8"
+          ]
+        }
+      }
+    },
+    {
+      "id": "1959c75d-0526-5984-89bb-719d550d5e53",
+      "name": "Level Rules",
+      "components": {
+        "Scripts": [
+          {
+            "script": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+            "properties": {
+              "tag": "coin",
+              "label": "GEMS",
+              "message": "ALL GEMS FOUND!",
+              "complete": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "00a87913-926e-5b94-a075-dd3400dedd54",
+      "name": "Sign",
+      "components": {
+        "Transform": {
+          "position": [72, 200],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "source": [16, 16, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [16, 16],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "bf99ab7c-7b62-522e-b623-0103d8e4db43",
+            "properties": {
+              "message": "Find the key, open the gate, take the stairs!"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "92c09bdf-57d1-595a-8c88-c69d65ca413b",
+      "name": "Gold Key",
+      "components": {
+        "Transform": {
+          "position": [40, 24],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "9a6d6a99-e513-5d0e-8f3e-cec1f1180449",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 8],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "edb40871-ac38-570a-96f5-ffb6058e25e6",
+            "properties": {
+              "keyName": "gold"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "ea6b73dc-4f5b-5450-a803-204034e9d648",
+      "name": "Gate",
+      "components": {
+        "Transform": {
+          "position": [200, 120],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "802f78e9-6a28-519f-953c-b86a4b0eb0a2",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 2,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [16, 16],
+          "offset": [0, 0],
+          "isTrigger": false
+        },
+        "Scripts": [
+          {
+            "script": "52f5b8e2-24f3-5141-b6ea-0695e3359de0",
+            "properties": {
+              "keyName": "gold"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "7aea3ab4-25e0-5ea8-8dd6-7a1101581b06",
+      "name": "Exit Stairs",
+      "components": {
+        "Transform": {
+          "position": [360, 200],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "167a4f3d-104a-5731-8930-5b7e023d05d4",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "e3216f74-ee57-567c-9422-85cc1ca92042",
+            "properties": {
+              "message": "YOU ESCAPED THE GARDEN!"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "name": "Gems",
+      "components": {}
+    },
+    {
+      "id": "b190ceda-d0d8-579e-b456-9d80e85e900b",
+      "name": "Gem 1",
+      "parent": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "components": {
+        "Transform": {
+          "position": [40, 120],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "e867594e-16b9-5ba7-b797-df861794ce94",
+      "name": "Gem 2",
+      "parent": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "components": {
+        "Transform": {
+          "position": [120, 120],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "c67ac943-9ab7-5aec-a864-c43dc4423068",
+      "name": "Gem 3",
+      "parent": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "components": {
+        "Transform": {
+          "position": [280, 120],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "e9914d5b-d4cb-5446-9884-a697093b105f",
+      "name": "Gem 4",
+      "parent": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "components": {
+        "Transform": {
+          "position": [360, 40],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "783b8190-4504-5af1-a380-e14219720d60",
+      "name": "Gem 5",
+      "parent": "81e5aed6-7928-5679-bcbc-b40006682745",
+      "components": {
+        "Transform": {
+          "position": [152, 216],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "54611e46-e822-5852-8a1d-1d53d5bf3765",
+      "name": "Hazards",
+      "components": {}
+    },
+    {
+      "id": "64d56ba6-5147-5f0b-8df7-22dae5c72f87",
+      "name": "Spike Trap",
+      "parent": "54611e46-e822-5852-8a1d-1d53d5bf3765",
+      "components": {
+        "Transform": {
+          "position": [344, 40],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 12],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "86ecf74b-a910-5589-aca1-d3e209347389",
+      "name": "Spike Trap",
+      "parent": "54611e46-e822-5852-8a1d-1d53d5bf3765",
+      "components": {
+        "Transform": {
+          "position": [360, 56],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 12],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "c1474be3-4bce-53ce-b1c0-33d6c7e2ac19",
+      "name": "Spike Trap",
+      "parent": "54611e46-e822-5852-8a1d-1d53d5bf3765",
+      "components": {
+        "Transform": {
+          "position": [344, 56],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 12],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "0e66b9ee-0249-5c6e-bcb8-c2aee770426f",
+      "name": "Beetle",
+      "parent": "54611e46-e822-5852-8a1d-1d53d5bf3765",
+      "components": {
+        "Transform": {
+          "position": [136, 168],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "db6689ce-cf24-50a0-a015-d70b0f2f12f3",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 6,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Scripts": [
+          {
+            "script": "6df776c8-9e36-550a-8c9c-3733a2d0a00d",
+            "properties": {
+              "offset": [0, 48],
+              "period": 3
+            }
+          },
+          {
+            "script": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+            "properties": {}
+          }
+        ]
+      }
+    },
+    {
+      "id": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "name": "Nature",
+      "components": {}
+    },
+    {
+      "id": "2ce219aa-4783-5646-a377-200e9900c475",
+      "name": "Tree",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [104, 56],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+          "source": [0, 0, 0, 0],
+          "size": [32, 32],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 8,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 10],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "341f855a-2e98-54df-a67c-1897baf25004",
+      "name": "Tree",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [248, 40],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+          "source": [0, 0, 0, 0],
+          "size": [32, 32],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 8,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 10],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "b7ba2389-aa16-5c3f-b88c-761b7f624924",
+      "name": "Tree",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [232, 208],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+          "source": [0, 0, 0, 0],
+          "size": [32, 32],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 8,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 10],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "dff2b38a-91ea-555b-8be9-f02b47f4a066",
+      "name": "Tree",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [312, 216],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+          "source": [0, 0, 0, 0],
+          "size": [32, 32],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 8,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 10],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "5184b3ec-287e-50ef-b4d1-8bf43edbc8d7",
+      "name": "Rock",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [88, 168],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 10],
+          "offset": [0, 2],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "a4710a06-8ef5-524e-b8d4-1b15bff57ed1",
+      "name": "Rock",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [328, 152],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [12, 10],
+          "offset": [0, 2],
+          "isTrigger": false
+        }
+      }
+    },
+    {
+      "id": "b3a5f936-0f52-58de-a179-3dd3bd1f92dc",
+      "name": "Shrub",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [184, 216],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        }
+      }
+    },
+    {
+      "id": "6a984996-02a1-564a-9c27-ab36a8a69ebd",
+      "name": "Shrub",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [152, 40],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        }
+      }
+    },
+    {
+      "id": "bee4d245-7ed8-52f1-ad73-93d1c1d48764",
+      "name": "Shrub",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [248, 184],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        }
+      }
+    },
+    {
+      "id": "c5a28264-c203-5d2e-8047-73805d939fed",
+      "name": "Shrub",
+      "parent": "9b05d06a-6f8a-5d73-8527-06a8843c4d38",
+      "components": {
+        "Transform": {
+          "position": [312, 216],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 4,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        }
+      }
+    },
+    {
+      "id": "2403c569-01bc-50b4-bae1-b8c92f77a6f7",
+      "name": "Hero",
+      "components": {
+        "Transform": {
+          "position": [40, 200],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "1e89468c-678a-500e-8351-8411a6b2d379",
+          "source": [0, 0, 0, 0],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 10,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "BoxCollider": {
+          "size": [10, 8],
+          "offset": [0, 4],
+          "isTrigger": false
+        },
+        "KinematicBody": {},
+        "TopDownController": {
+          "maxSpeed": 80,
+          "acceleration": 900,
+          "deceleration": 1200
+        },
+        "Player": {}
+      }
+    }
+  ]
+}

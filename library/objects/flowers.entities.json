@@ -1,0 +1,22 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "d376118c-b1a7-56c0-aebf-e1167db658dd",
+      "name": "Flowers",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "size": [16, 16],
+          "layer": -1,
+          "source": [0, 16, 16, 16]
+        }
+      }
+    }
+  ]
+}

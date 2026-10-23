@@ -23,6 +23,8 @@ struct StudioSettings {
     // Version of the default layouts the saved panel layout was made with;
     // Studio rebuilds the layout when its defaults change.
     int layoutVersion = 0;
+    // Where the last new project was created; the welcome screen starts there.
+    std::filesystem::path newProjectFolder;
 
     static constexpr std::size_t kMaxRecent = 10;
 

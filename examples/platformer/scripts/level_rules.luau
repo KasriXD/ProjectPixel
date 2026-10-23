@@ -7,7 +7,9 @@
 local LevelRules = {
     properties = {
         tag = "coin", -- which entities count as coins
+        label = "COINS", -- shown before the count on the HUD
         message = "ALL COINS COLLECTED!", -- shown when the level is complete
+        complete = true, -- end the level when all are collected (off: an exit ends it)
     },
 }
 
@@ -19,14 +21,14 @@ function LevelRules:Start()
     Events.on("coin_collected", function()
         self.collected += 1
         self:showProgress()
-        if self.collected >= self.total then
+        if self.complete and self.collected >= self.total then
             Game.completeLevel(self.message)
         end
     end)
 end
 
 function LevelRules:showProgress()
-    Game.setObjective(string.format("COINS %d/%d", self.collected, self.total))
+    Game.setObjective(string.format("%s %d/%d", self.label, self.collected, self.total))
 end
 
 return LevelRules

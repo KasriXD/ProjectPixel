@@ -1,0 +1,22 @@
+{
+  "format": "px.entities",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "0261b2a8-76dc-5321-bc5c-405810c75e4c",
+      "name": "Cloud",
+      "components": {
+        "Transform": {
+          "position": [0, 0]
+        },
+        "Sprite": {
+          "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+          "size": [32, 16],
+          "layer": -20,
+          "source": [0, 0, 32, 16]
+        }
+      }
+    }
+  ]
+}

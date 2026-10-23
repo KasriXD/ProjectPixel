@@ -218,6 +218,59 @@ TEST_CASE("Falling below the kill plane respawns the player at the spawn point")
     CHECK(bodyOf(s, p).velocity == Vec2{});
 }
 
+TEST_CASE("Top-down movement: eight directions at the same speed, walls block, no gravity") {
+    project::ProjectManifest project = testProject();
+    project.settings.gameType = project::GameType::TopDown;
+    project.input.actions = {{"move_left", {Key::Left}},
+                             {"move_right", {Key::Right}},
+                             {"move_up", {Key::Up}},
+                             {"move_down", {Key::Down}}};
+    Scene scene;
+    const Entity wall = scene.createEntity("Wall");
+    scene.set(wall, Transform{{300, 100}});
+    scene.set(wall, BoxCollider{{16, 400}, {}, false});
+    const Entity p = scene.createEntity("Hero");
+    scene.set(p, Transform{{100, 100}});
+    scene.set(p, BoxCollider{{10, 10}, {}, false});
+    scene.set(p, KinematicBody{});
+    scene.set(p, TopDownController{});
+    scene.set(p, Player{});
+    auto sOwner = makeSession(project, std::move(scene));
+    GameSession& s = *sOwner;
+    const float maxSpeed = TopDownController{}.maxSpeed;
+
+    // No input: nothing falls.
+    run(s, 30);
+    CHECK(transformOf(s, p).position == Vec2{100, 100});
+
+    // Straight down reaches full speed.
+    run(s, 30, hold(s, {"move_down"}));
+    CHECK(bodyOf(s, p).velocity.y == doctest::Approx(maxSpeed));
+    CHECK(bodyOf(s, p).velocity.x == 0.0f);
+    CHECK(need(s.scene().tryGet<TopDownController>(p)).facing == Vec2{0, 1});
+
+    // Releasing stops it.
+    run(s, 30);
+    CHECK(bodyOf(s, p).velocity == Vec2{});
+
+    // Diagonal speed equals straight speed.
+    run(s, 30, hold(s, {"move_right", "move_up"}));
+    const Vec2 v = bodyOf(s, p).velocity;
+    CHECK(std::sqrt(v.x * v.x + v.y * v.y) == doctest::Approx(maxSpeed).epsilon(0.001));
+    CHECK(v.x > 0.0f);
+    CHECK(v.y < 0.0f);
+
+    // The wall at x = 292..308 stops it moving right.
+    run(s, 240, hold(s, {"move_right"}));
+    CHECK(transformOf(s, p).position.x == doctest::Approx(292.0f - 5.0f));
+    CHECK(bodyOf(s, p).hitWall);
+
+    // Left is mirrored on the sprite like the platformer.
+    s.scene().set(p, Sprite{});
+    run(s, 2, hold(s, {"move_left"}));
+    CHECK(need(s.scene().tryGet<Sprite>(p)).flipX);
+}
+
 TEST_CASE("Camera follows its target and stays inside the level") {
     Scene scene = floorScene(); // 640 x 192 world
     const Entity p = addPlayer(scene, {20, 153});

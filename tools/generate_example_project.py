@@ -468,12 +468,12 @@ def main():
 
     project = {
         "format": "px.project",
-        "formatVersion": 1,
+        "formatVersion": 2,
         "id": gid("project/example-platformer"),
         "name": "Example Platformer",
         "engineVersion": "0.3.0",
         "startScene": scene_id,
-        "settings": {"tickRate": 60,
+        "settings": {"gameType": "platformer", "tickRate": 60,
                      "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3},
                      "scripting": {"apiVersion": 1}},
         "input": {"actions": {

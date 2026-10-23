@@ -85,6 +85,16 @@ std::filesystem::path findTemplateFolder() {
     return std::filesystem::path(PX_DEFAULT_TEMPLATE_DIR);
 }
 
+// Where new projects go: the folder used last time, else
+// "Documents/<product> Games" (created when the first project is made).
+std::filesystem::path defaultNewProjectFolder(const StudioSettings& settings) {
+    if (!settings.newProjectFolder.empty()) return settings.newProjectFolder;
+    if (const char* documents = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS)) {
+        return fromUtf8(documents) / fromUtf8(std::string(version::productName) + " Games");
+    }
+    return {};
+}
+
 // The guides opened from the Help menu: next to the executable in a
 // package, otherwise the source tree's docs folder.
 std::filesystem::path findDocsFolder() {
@@ -182,6 +192,7 @@ StudioApp::Status StudioApp::initWindowAndUi() {
         }
     }
     m_templateFolder = findTemplateFolder();
+    m_newParent = toUtf8(defaultNewProjectFolder(m_settings));
 
     float displayScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
     if (displayScale <= 0.0f) displayScale = 1.0f;
@@ -311,13 +322,16 @@ void StudioApp::requestNewProject(const std::filesystem::path& folder, const std
     runAfterSaveCheck("create a project", [this, folder, name, fromTemplate] {
         std::optional<std::filesystem::path> tpl;
         if (fromTemplate) tpl = m_templateFolder;
-        auto project = editor::EditorProject::create(folder, name, tpl);
+        editor::NewProjectOptions options;
+        options.templateFolder = tpl;
+        auto project = editor::EditorProject::create(folder, name, options);
         if (!project) {
             m_errorModal = project.error().message;
             log::error("{}", project.error().message);
             return;
         }
         log::info("Created project '{}' in {}", name, toUtf8(folder));
+        m_settings.newProjectFolder = folder.parent_path();
         project.value().reset();
         openProjectNow(folder);
     });

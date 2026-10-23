@@ -1,0 +1,769 @@
+{
+  "format": "px.library",
+  "formatVersion": 1,
+  "name": "Starter Library",
+  "assets": [
+    {
+      "id": "782c3432-d57a-558a-a29f-2eb189772494",
+      "type": "texture",
+      "name": "Platformer Tiles",
+      "path": "art/tiles.png",
+      "filter": "nearest",
+      "category": "Tiles",
+      "gameTypes": [
+        "platformer"
+      ],
+      "tileSize": [16, 16],
+      "tilesetColumns": 4
+    },
+    {
+      "id": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd",
+      "type": "texture",
+      "name": "Platformer Hero",
+      "path": "art/player.png",
+      "filter": "nearest",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "557af178-14ef-5774-a06e-707ebfa25910",
+      "type": "texture",
+      "name": "Coin",
+      "path": "art/coin.png",
+      "filter": "nearest",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ]
+    },
+    {
+      "id": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+      "type": "texture",
+      "name": "Scenery",
+      "path": "art/scenery.png",
+      "filter": "nearest",
+      "category": "Decoration",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "bda48900-1124-5368-a40a-cd76590e706f",
+      "type": "texture",
+      "name": "Platform",
+      "path": "art/platform.png",
+      "filter": "nearest",
+      "category": "Platforms",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+      "type": "texture",
+      "name": "Top-down Tiles",
+      "path": "art/topdown_tiles.png",
+      "filter": "nearest",
+      "category": "Tiles",
+      "gameTypes": [
+        "topdown"
+      ],
+      "tileSize": [16, 16],
+      "tilesetColumns": 8
+    },
+    {
+      "id": "1e89468c-678a-500e-8351-8411a6b2d379",
+      "type": "texture",
+      "name": "Top-down Hero",
+      "path": "art/hero.png",
+      "filter": "nearest",
+      "category": "Characters",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "e496ceaf-ab24-514e-b2de-5fe3d6ea1bab",
+      "type": "texture",
+      "name": "Slime",
+      "path": "art/slime.png",
+      "filter": "nearest",
+      "category": "Enemies",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "db6689ce-cf24-50a0-a015-d70b0f2f12f3",
+      "type": "texture",
+      "name": "Beetle",
+      "path": "art/beetle.png",
+      "filter": "nearest",
+      "category": "Enemies",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+      "type": "texture",
+      "name": "Gem",
+      "path": "art/gem.png",
+      "filter": "nearest",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ]
+    },
+    {
+      "id": "9a6d6a99-e513-5d0e-8f3e-cec1f1180449",
+      "type": "texture",
+      "name": "Key",
+      "path": "art/key.png",
+      "filter": "nearest",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ]
+    },
+    {
+      "id": "802f78e9-6a28-519f-953c-b86a4b0eb0a2",
+      "type": "texture",
+      "name": "Lock Block",
+      "path": "art/lock_block.png",
+      "filter": "nearest",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ]
+    },
+    {
+      "id": "4d478bb9-e4ba-508c-8da4-d3f4570f08f2",
+      "type": "texture",
+      "name": "Spikes",
+      "path": "art/spikes.png",
+      "filter": "nearest",
+      "category": "Hazards",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f",
+      "type": "texture",
+      "name": "Spike Trap",
+      "path": "art/spike_trap.png",
+      "filter": "nearest",
+      "category": "Hazards",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "a05bcbf4-2db0-5c67-b015-4ec10a808a3c",
+      "type": "texture",
+      "name": "Spring",
+      "path": "art/spring.png",
+      "filter": "nearest",
+      "category": "Platforms",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "bb0ce17b-858a-53eb-ab2d-1a8887d64080",
+      "type": "texture",
+      "name": "Checkpoint",
+      "path": "art/checkpoint.png",
+      "filter": "nearest",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ]
+    },
+    {
+      "id": "202b2dd8-5703-5bc7-8eaf-153276354b15",
+      "type": "texture",
+      "name": "Goal Flag",
+      "path": "art/goal_flag.png",
+      "filter": "nearest",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "167a4f3d-104a-5731-8930-5b7e023d05d4",
+      "type": "texture",
+      "name": "Stairs",
+      "path": "art/stairs.png",
+      "filter": "nearest",
+      "category": "Goals",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "8229fe65-8d8b-5237-a287-fe181e0cb2e5",
+      "type": "texture",
+      "name": "Tree",
+      "path": "art/tree.png",
+      "filter": "nearest",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda",
+      "type": "texture",
+      "name": "Rock",
+      "path": "art/rock.png",
+      "filter": "nearest",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "d3875d4c-db6e-5144-b5e4-467573d3ad23",
+      "type": "texture",
+      "name": "Shrub",
+      "path": "art/shrub.png",
+      "filter": "nearest",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+      "type": "script",
+      "name": "Coin",
+      "path": "scripts/coin.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Collect a coin: adds points, then disappears"
+    },
+    {
+      "id": "266a7d98-31f7-5d51-aeac-56482d711e1c",
+      "type": "script",
+      "name": "Level Rules",
+      "path": "scripts/level_rules.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Counts collected coins and can end the level"
+    },
+    {
+      "id": "fa1818e7-78c0-531f-8f97-c19bfcd1d9e1",
+      "type": "script",
+      "name": "Moving Platform",
+      "path": "scripts/moving_platform.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Glides back and forth, carrying riders"
+    },
+    {
+      "id": "a02805ff-0282-52d8-925b-aae6f7902c4d",
+      "type": "script",
+      "name": "Hazard",
+      "path": "scripts/hazard.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Sends the player back to its spawn point on touch"
+    },
+    {
+      "id": "6df776c8-9e36-550a-8c9c-3733a2d0a00d",
+      "type": "script",
+      "name": "Patrol",
+      "path": "scripts/patrol.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Walks back and forth"
+    },
+    {
+      "id": "c28d7def-3491-5cd5-b470-ed40e9d44a62",
+      "type": "script",
+      "name": "Spring",
+      "path": "scripts/spring.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Launches what lands on it"
+    },
+    {
+      "id": "e3216f74-ee57-567c-9422-85cc1ca92042",
+      "type": "script",
+      "name": "Goal",
+      "path": "scripts/goal.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Completes the level when the player arrives"
+    },
+    {
+      "id": "8b367ace-6551-549b-ab28-cefd119b1c8b",
+      "type": "script",
+      "name": "Checkpoint",
+      "path": "scripts/checkpoint.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "The player respawns here from now on"
+    },
+    {
+      "id": "edb40871-ac38-570a-96f5-ffb6058e25e6",
+      "type": "script",
+      "name": "Key",
+      "path": "scripts/key.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Picked up; opens lock blocks with the same name"
+    },
+    {
+      "id": "52f5b8e2-24f3-5141-b6ea-0695e3359de0",
+      "type": "script",
+      "name": "Lock Block",
+      "path": "scripts/lock_block.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Disappears when its key is collected"
+    },
+    {
+      "id": "bf99ab7c-7b62-522e-b623-0103d8e4db43",
+      "type": "script",
+      "name": "Sign",
+      "path": "scripts/sign.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Shows a message while the player stands at it"
+    }
+  ],
+  "objects": [
+    {
+      "id": "fb02102e-6f8b-5471-aa06-8567536e3588",
+      "name": "Platformer Hero",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "The player: runs and jumps with the arrow keys and Space.",
+      "path": "objects/platformer_player.entities.json",
+      "icon": {
+        "texture": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd"
+      }
+    },
+    {
+      "id": "82d81a38-e6ad-5f74-96be-5479fda83979",
+      "name": "Top-down Hero",
+      "category": "Characters",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "The player: walks in every direction with the arrow keys or WASD.",
+      "path": "objects/topdown_player.entities.json",
+      "icon": {
+        "texture": "1e89468c-678a-500e-8351-8411a6b2d379"
+      }
+    },
+    {
+      "id": "d6e74d3a-10ed-56e3-8bdd-fa184e906bd4",
+      "name": "Coin",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Collect for 1 point. Counted by Level Rules.",
+      "path": "objects/coin.entities.json",
+      "icon": {
+        "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "e63f7db8-6208-59aa-998b-d14c744e7170",
+      "name": "Gem",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Collect for 5 points. Counted by Level Rules like coins.",
+      "path": "objects/gem.entities.json",
+      "icon": {
+        "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "76786597-5c15-55e7-b82a-5dc888fa0fc5",
+      "name": "Key",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Picked up by the player; opens Lock Blocks with the same key name.",
+      "path": "objects/key.entities.json",
+      "icon": {
+        "texture": "9a6d6a99-e513-5d0e-8f3e-cec1f1180449"
+      }
+    },
+    {
+      "id": "4f227811-67d7-56cb-9160-6ae9618c9006",
+      "name": "Lock Block",
+      "category": "Items",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "A solid block that disappears when its Key is collected.",
+      "path": "objects/lock_block.entities.json",
+      "icon": {
+        "texture": "802f78e9-6a28-519f-953c-b86a4b0eb0a2"
+      }
+    },
+    {
+      "id": "5a1ae7c1-bd39-5acf-aa17-2e4cc379c358",
+      "name": "Spikes",
+      "category": "Hazards",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "Touching them sends the player back to its spawn point.",
+      "path": "objects/spikes.entities.json",
+      "icon": {
+        "texture": "4d478bb9-e4ba-508c-8da4-d3f4570f08f2"
+      }
+    },
+    {
+      "id": "1f0c9f8e-72d2-58f6-9219-86abf3882b88",
+      "name": "Spike Trap",
+      "category": "Hazards",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "Stepping on it sends the player back to its spawn point.",
+      "path": "objects/spike_trap.entities.json",
+      "icon": {
+        "texture": "9f0bd0fa-7073-5e77-bcd6-da885c16aa5f"
+      }
+    },
+    {
+      "id": "5134aa16-1c87-571e-a5c9-223ec530d11a",
+      "name": "Slime",
+      "category": "Enemies",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "Patrols left and right; touching it sends the player back.",
+      "path": "objects/slime.entities.json",
+      "icon": {
+        "texture": "e496ceaf-ab24-514e-b2de-5fe3d6ea1bab",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "200a469a-e923-54fb-afbe-cf8ad18215bc",
+      "name": "Beetle",
+      "category": "Enemies",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "Patrols up and down; touching it sends the player back.",
+      "path": "objects/beetle.entities.json",
+      "icon": {
+        "texture": "db6689ce-cf24-50a0-a015-d70b0f2f12f3",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "5f8f482c-26f4-5270-89f0-2edf62da8bdd",
+      "name": "Spring",
+      "category": "Platforms",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "Launches the player high into the air.",
+      "path": "objects/spring.entities.json",
+      "icon": {
+        "texture": "a05bcbf4-2db0-5c67-b015-4ec10a808a3c"
+      }
+    },
+    {
+      "id": "e7d0ad60-fe4e-52b9-bc44-6c15825dbacb",
+      "name": "Moving Platform",
+      "category": "Platforms",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "Glides back and forth, carrying the player.",
+      "path": "objects/moving_platform.entities.json",
+      "icon": {
+        "texture": "bda48900-1124-5368-a40a-cd76590e706f"
+      }
+    },
+    {
+      "id": "b37f67a9-26df-50e5-bae2-d31e3dcfa985",
+      "name": "Crate",
+      "category": "Platforms",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "A solid block to stand on or walk around.",
+      "path": "objects/crate.entities.json",
+      "icon": {
+        "texture": "782c3432-d57a-558a-a29f-2eb189772494",
+        "source": [48, 0, 16, 16]
+      }
+    },
+    {
+      "id": "a2ac6b99-2b56-57a9-ba04-f7f6ce95b614",
+      "name": "Checkpoint",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "After touching it, the player respawns here.",
+      "path": "objects/checkpoint.entities.json",
+      "icon": {
+        "texture": "bb0ce17b-858a-53eb-ab2d-1a8887d64080",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "1c58478d-7d0f-57a5-83c6-76838775a53f",
+      "name": "Goal Flag",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "Reaching it completes the level.",
+      "path": "objects/goal_flag.entities.json",
+      "icon": {
+        "texture": "202b2dd8-5703-5bc7-8eaf-153276354b15"
+      }
+    },
+    {
+      "id": "00f8ba0e-0706-5c80-9f09-b087ac006461",
+      "name": "Exit Stairs",
+      "category": "Goals",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "Reaching them completes the level.",
+      "path": "objects/stairs.entities.json",
+      "icon": {
+        "texture": "167a4f3d-104a-5731-8930-5b7e023d05d4"
+      }
+    },
+    {
+      "id": "1df16113-b2bd-594e-87a6-9a656162335b",
+      "name": "Collect-All Rules",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Shows how many coins and gems are left on the HUD and completes the level when all are collected.",
+      "path": "objects/level_rules.entities.json",
+      "icon": {
+        "texture": "557af178-14ef-5774-a06e-707ebfa25910",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "59475c15-439f-5a15-a1ae-fc2f0682e099",
+      "name": "Sign",
+      "category": "Goals",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Shows a message while the player stands at it.",
+      "path": "objects/sign.entities.json",
+      "icon": {
+        "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+        "source": [16, 16, 16, 16]
+      }
+    },
+    {
+      "id": "b87af4b4-e225-5ac5-ade5-12a14500157e",
+      "name": "Ground",
+      "category": "Ground",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "A solid strip of grass and dirt, 16 tiles wide. Paint more in it.",
+      "path": "objects/ground_strip.entities.json",
+      "icon": {
+        "texture": "782c3432-d57a-558a-a29f-2eb189772494",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "159868ea-29b0-535c-b1c4-39eb794e5a01",
+      "name": "Meadow",
+      "category": "Ground",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "A 20 x 12 field of grass to walk on (not solid).",
+      "path": "objects/meadow.entities.json",
+      "icon": {
+        "texture": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+        "source": [0, 0, 16, 16]
+      }
+    },
+    {
+      "id": "420668f9-7800-5ebe-81e7-aaeea2859e58",
+      "name": "Wall Ring",
+      "category": "Ground",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "Solid stone walls around a 20 x 12 area. Paint more in it.",
+      "path": "objects/wall_ring.entities.json",
+      "icon": {
+        "texture": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+        "source": [0, 16, 16, 16]
+      }
+    },
+    {
+      "id": "880300f4-6350-5687-8a5b-6850827236e8",
+      "name": "Pond",
+      "category": "Ground",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "A small pond; the water is solid.",
+      "path": "objects/pond.entities.json",
+      "icon": {
+        "texture": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+        "source": [64, 0, 16, 16]
+      }
+    },
+    {
+      "id": "9306eaea-4b9b-5957-ac75-935564eceb2e",
+      "name": "Cloud",
+      "category": "Decoration",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "A cloud in the background.",
+      "path": "objects/cloud.entities.json",
+      "icon": {
+        "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+        "source": [0, 0, 32, 16]
+      }
+    },
+    {
+      "id": "abb6d34e-b1a9-53c0-86ed-212216caa24a",
+      "name": "Bush",
+      "category": "Decoration",
+      "gameTypes": [
+        "platformer"
+      ],
+      "description": "A bush to stand in front of.",
+      "path": "objects/bush.entities.json",
+      "icon": {
+        "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+        "source": [32, 0, 32, 16]
+      }
+    },
+    {
+      "id": "4c5bb6a4-879d-5e4b-a92f-1f26caa08676",
+      "name": "Flowers",
+      "category": "Decoration",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "A few flowers.",
+      "path": "objects/flowers.entities.json",
+      "icon": {
+        "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
+        "source": [0, 16, 16, 16]
+      }
+    },
+    {
+      "id": "11ad094f-14be-5454-a91e-1f927191f73c",
+      "name": "Tree",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "A tree; its trunk is solid.",
+      "path": "objects/tree.entities.json",
+      "icon": {
+        "texture": "8229fe65-8d8b-5237-a287-fe181e0cb2e5"
+      }
+    },
+    {
+      "id": "0fa84722-1f1d-5824-a51e-81cb36816e56",
+      "name": "Rock",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "A solid rock.",
+      "path": "objects/rock.entities.json",
+      "icon": {
+        "texture": "c75e3e6e-ff0a-54f1-84a5-bf643e7ccfda"
+      }
+    },
+    {
+      "id": "149289bd-653d-5d7f-a751-0ea0359797fc",
+      "name": "Shrub",
+      "category": "Decoration",
+      "gameTypes": [
+        "topdown"
+      ],
+      "description": "A small berry bush (not solid).",
+      "path": "objects/shrub.entities.json",
+      "icon": {
+        "texture": "d3875d4c-db6e-5144-b5e4-467573d3ad23"
+      }
+    }
+  ]
+}

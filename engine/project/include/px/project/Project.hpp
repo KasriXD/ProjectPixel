@@ -7,6 +7,7 @@
 #include "px/core/Math.hpp"
 #include "px/core/Result.hpp"
 
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -15,7 +16,7 @@
 // Format reference: docs/project-format.md.
 namespace px::project {
 
-inline constexpr int kProjectFormatVersion = 1;
+inline constexpr int kProjectFormatVersion = 2;
 inline constexpr std::string_view kProjectFileName = "project.json";
 
 // Hard limits that keep untrusted projects from exhausting resources.
@@ -41,7 +42,18 @@ struct ScriptingSettings {
     int apiVersion = kScriptApiVersion;
 };
 
+// The kind of game, chosen when the project is created. It decides what
+// Studio offers (the player preset, input actions, starter objects), not
+// what the engine can run: any component works in any project.
+enum class GameType {
+    Platformer, // side view with gravity and jumping
+    TopDown,    // seen from above, moving in all directions
+};
+[[nodiscard]] std::string_view gameTypeName(GameType type) noexcept; // "platformer", "topdown"
+[[nodiscard]] std::optional<GameType> parseGameType(std::string_view name) noexcept;
+
 struct ProjectSettings {
+    GameType gameType = GameType::Platformer;
     int tickRate = 60; // fixed simulation steps per second
     DisplaySettings display;
     ScriptingSettings scripting;
