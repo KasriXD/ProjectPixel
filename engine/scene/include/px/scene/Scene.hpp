@@ -119,6 +119,13 @@ public:
     [[nodiscard]] T* tryGet(Entity e) { return m_registry.tryGet<T>(e); }
     template <class T>
     [[nodiscard]] const T* tryGet(Entity e) const { return m_registry.tryGet<T>(e); }
+    // The entity's component, which must exist: a missing one is a
+    // programming error and terminates with a message. Use tryGet when the
+    // component may be missing.
+    template <class T>
+    [[nodiscard]] T& get(Entity e) { return m_registry.get<T>(e); }
+    template <class T>
+    [[nodiscard]] const T& get(Entity e) const { return m_registry.get<T>(e); }
 
 private:
     [[nodiscard]] std::size_t subtreeEnd(std::size_t index) const; // one past the last descendant

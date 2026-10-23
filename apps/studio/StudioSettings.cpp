@@ -3,18 +3,26 @@
 #include "Utf8.hpp"
 
 #include <algorithm>
-#include <charconv>
+#include <cmath>
 #include <fstream>
+#include <locale>
+#include <sstream>
 #include <string_view>
 
 namespace px::studio {
 
 namespace {
 
+// Locale-independent. (std::from_chars for floats is unavailable in Apple's
+// libc++ for the macOS versions we support.)
 bool parseFloat(std::string_view text, float& out) {
+    std::istringstream in{std::string(text)};
+    in.imbue(std::locale::classic());
     float v = 0.0f;
-    const auto [ptr, ec] = std::from_chars(text.data(), text.data() + text.size(), v);
-    if (ec != std::errc() || ptr != text.data() + text.size()) return false;
+    in >> v;
+    if (in.fail() || !std::isfinite(v)) return false;
+    in >> std::ws;
+    if (!in.eof()) return false;
     out = v;
     return true;
 }
@@ -23,8 +31,12 @@ bool parseFloat(std::string_view text, float& out) {
 
 void StudioSettings::addRecent(const std::filesystem::path& folder) {
     removeRecent(folder);
-    recentProjects.insert(recentProjects.begin(), folder);
-    if (recentProjects.size() > kMaxRecent) recentProjects.resize(kMaxRecent);
+    std::vector<std::filesystem::path> updated{folder};
+    for (auto& p : recentProjects) {
+        if (updated.size() >= kMaxRecent) break;
+        updated.push_back(std::move(p));
+    }
+    recentProjects = std::move(updated);
 }
 
 void StudioSettings::removeRecent(const std::filesystem::path& folder) {
@@ -66,6 +78,7 @@ StudioSettings StudioSettings::load(const std::filesystem::path& file) {
 
 bool StudioSettings::save(const std::filesystem::path& file) const {
     std::ofstream out(file, std::ios::trunc);
+    out.imbue(std::locale::classic());
     if (!out) return false;
     for (const auto& p : recentProjects) out << "recent=" << toUtf8(p) << '\n';
     out << "gridSize=" << gridSize << '\n';

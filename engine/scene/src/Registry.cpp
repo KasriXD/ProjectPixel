@@ -1,6 +1,21 @@
 #include "px/scene/Registry.hpp"
 
+#include "px/core/Log.hpp"
+
+#include <cstdlib>
+#include <format>
+
 namespace px::scene {
+
+namespace detail {
+
+void missingComponent(Entity entity) noexcept {
+    log::write(log::Level::Error, std::format("Fatal: entity {}:{} does not have the requested component",
+                                              entity.index, entity.generation));
+    std::abort();
+}
+
+} // namespace detail
 
 Registry::Registry(const Registry& other)
     : m_generations(other.m_generations),

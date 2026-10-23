@@ -113,12 +113,24 @@ jobs:
             annotate "Test summary" test-summary.log
           fi
 
-      - name: Upload smoke-test screenshot
+      # Which tests ran and passed, readable through the GitHub API.
+      - name: Report test results
+        if: success()
+        shell: bash
+        run: |
+          if [ -f test.log ]; then
+            body=$(grep -E "Test +#|tests passed" test.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::notice title=Tests::${body}"
+          fi
+
+      - name: Upload smoke-test screenshots
         if: always() && matrix.configure != 'headless'
         uses: actions/upload-artifact@v4
         with:
           name: screenshot-${{ matrix.os }}-${{ matrix.configure }}-${{ strategy.job-index }}
-          path: build/${{ matrix.configure }}/tests/player_smoke.png
+          path: |
+            build/${{ matrix.configure }}/tests/player_smoke.png
+            build/${{ matrix.configure }}/tests/studio_smoke.png
           if-no-files-found: ignore
 
   # Experimental: proves the engine, Luau and SDL3 build for the browser.

@@ -317,7 +317,7 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
             m_scene.set(e, PlatformerController{});
             m_scene.set(e, Player{});
             // Cameras that follow nothing yet follow the new player.
-            const Guid id = m_scene.tryGet<EntityInfo>(e)->id;
+            const Guid id = m_scene.get<EntityInfo>(e).id;
             for (const Entity other : m_scene.entities()) {
                 if (auto* cam = m_scene.tryGet<Camera>(other); cam != nullptr && cam->follow.isNil()) cam->follow = id;
             }
@@ -327,7 +327,7 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
             Camera cam;
             for (const Entity other : m_scene.entities()) {
                 if (m_scene.tryGet<Player>(other) != nullptr) {
-                    cam.follow = m_scene.tryGet<EntityInfo>(other)->id;
+                    cam.follow = m_scene.get<EntityInfo>(other).id;
                     break;
                 }
             }
@@ -354,7 +354,7 @@ void SceneDocument::deleteSelection() {
     AutoEdit edit(*this, roots.size() == 1 ? "Delete Entity" : "Delete Entities");
     std::vector<Guid> removed;
     for (const Entity root : roots) {
-        for (const Entity e : m_scene.subtree(root)) removed.push_back(m_scene.tryGet<EntityInfo>(e)->id);
+        for (const Entity e : m_scene.subtree(root)) removed.push_back(m_scene.get<EntityInfo>(e).id);
         m_scene.destroyEntity(root);
     }
     for (const Guid& id : removed) (void)clearEntityReferences(m_scene, id);
@@ -379,11 +379,11 @@ std::vector<Entity> SceneDocument::duplicateSelection() {
         }
         const Entity copy = m_scene.copySubtree(m_scene, root, parent, before);
         if (copy.isNull()) continue;
-        m_scene.tryGet<EntityInfo>(copy)->name = uniqueName(m_scene.tryGet<EntityInfo>(root)->name);
+        m_scene.get<EntityInfo>(copy).name = uniqueName(m_scene.get<EntityInfo>(root).name);
         const auto originals = m_scene.subtree(root);
         const auto copied = m_scene.subtree(copy);
         for (std::size_t i = 0; i < originals.size() && i < copied.size(); ++i) {
-            remap.emplace_back(m_scene.tryGet<EntityInfo>(originals[i])->id, m_scene.tryGet<EntityInfo>(copied[i])->id);
+            remap.emplace_back(m_scene.get<EntityInfo>(originals[i]).id, m_scene.get<EntityInfo>(copied[i]).id);
         }
         copiedEntities.insert(copiedEntities.end(), copied.begin(), copied.end());
         copies.push_back(copy);
@@ -407,11 +407,11 @@ Result<std::vector<Entity>> SceneDocument::paste(std::string_view text, const as
     auto pasted = project::pasteEntities(m_scene, text, assets, parent);
     if (!pasted) return pasted.error();
     for (const Entity e : pasted.value()) {
-        auto* info = m_scene.tryGet<EntityInfo>(e);
+        auto& info = m_scene.get<EntityInfo>(e);
         // Only rename when the name is taken by another entity.
-        std::string name = info->name;
-        info->name.clear();
-        info->name = m_scene.findByName(name).isNull() ? name : uniqueName(name);
+        std::string name = std::move(info.name);
+        info.name.clear();
+        info.name = m_scene.findByName(name).isNull() ? name : uniqueName(name);
     }
     setSelection(pasted.value());
     if (!pasted->empty()) markChanged();

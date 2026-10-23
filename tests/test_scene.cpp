@@ -42,9 +42,9 @@ TEST_CASE("Registry components: set, get, remove, destroy") {
     CHECK_FALSE(reg.has<Health>(e));
     reg.set(e, Health{50});
     REQUIRE(reg.has<Health>(e));
-    CHECK(reg.tryGet<Health>(e)->value == 50);
+    CHECK(reg.get<Health>(e).value == 50);
     reg.set(e, Health{75}); // replace
-    CHECK(reg.tryGet<Health>(e)->value == 75);
+    CHECK(reg.get<Health>(e).value == 75);
     CHECK(reg.count<Health>() == 1);
 
     reg.remove<Health>(e);
@@ -93,9 +93,9 @@ TEST_CASE("Registry copies are deep and independent") {
     const Entity e = a.create();
     a.set(e, Health{1});
     Registry b = a;
-    b.tryGet<Health>(e)->value = 2;
-    CHECK(a.tryGet<Health>(e)->value == 1);
-    CHECK(b.tryGet<Health>(e)->value == 2);
+    b.get<Health>(e).value = 2;
+    CHECK(a.get<Health>(e).value == 1);
+    CHECK(b.get<Health>(e).value == 2);
 }
 
 TEST_CASE("Scene entity identity, lookup and ordering") {
@@ -139,7 +139,7 @@ TEST_CASE("Tilemap helpers") {
 namespace {
 std::vector<std::string> names(const Scene& scene, const std::vector<Entity>& entities) {
     std::vector<std::string> out;
-    for (const Entity e : entities) out.push_back(scene.tryGet<EntityInfo>(e)->name);
+    for (const Entity e : entities) out.push_back(scene.get<EntityInfo>(e).name);
     return out;
 }
 using Names = std::vector<std::string>;
@@ -227,14 +227,14 @@ TEST_CASE("World transforms compose through parents") {
 
     // Setting the world position changes the local one.
     scene.setWorldPosition(child, {200, 100});
-    CHECK(scene.tryGet<Transform>(child)->position == Vec2{50, 25});
+    CHECK(scene.get<Transform>(child).position == Vec2{50, 25});
     CHECK(scene.worldPosition(child) == Vec2{200, 100});
 
     // Rotation: a child 10 units right of a parent rotated 90 degrees
     // clockwise (Y-down) ends up 10 units below it.
-    scene.tryGet<Transform>(parent)->rotation = 90.0f;
-    scene.tryGet<Transform>(parent)->scale = {1, 1};
-    scene.tryGet<Transform>(child)->position = {10, 0};
+    scene.get<Transform>(parent).rotation = 90.0f;
+    scene.get<Transform>(parent).scale = {1, 1};
+    scene.get<Transform>(child).position = {10, 0};
     const Vec2 rotated = scene.worldPosition(child);
     CHECK(rotated.x == doctest::Approx(100.0f));
     CHECK(rotated.y == doctest::Approx(60.0f));
@@ -242,13 +242,13 @@ TEST_CASE("World transforms compose through parents") {
 
     // Re-parenting can keep the world transform.
     REQUIRE(scene.setParent(child, kNullEntity, kNullEntity, true).ok());
-    CHECK(scene.tryGet<Transform>(child)->position.x == doctest::Approx(100.0f));
-    CHECK(scene.tryGet<Transform>(child)->position.y == doctest::Approx(60.0f));
-    CHECK(scene.tryGet<Transform>(child)->rotation == doctest::Approx(90.0f));
+    CHECK(scene.get<Transform>(child).position.x == doctest::Approx(100.0f));
+    CHECK(scene.get<Transform>(child).position.y == doctest::Approx(60.0f));
+    CHECK(scene.get<Transform>(child).rotation == doctest::Approx(90.0f));
     REQUIRE(scene.setParent(child, parent, kNullEntity, true).ok());
     CHECK(scene.worldPosition(child).x == doctest::Approx(100.0f));
     CHECK(scene.worldPosition(child).y == doctest::Approx(60.0f));
-    CHECK(scene.tryGet<Transform>(child)->rotation == doctest::Approx(0.0f));
+    CHECK(scene.get<Transform>(child).rotation == doctest::Approx(0.0f));
 }
 
 TEST_CASE("Entities and subtrees can be copied within and between scenes") {
@@ -263,10 +263,10 @@ TEST_CASE("Entities and subtrees can be copied within and between scenes") {
     const Entity copy = target.copySubtree(source, root);
     REQUIRE_FALSE(copy.isNull());
     CHECK(target.entityCount() == 2);
-    CHECK(target.tryGet<Health>(copy)->value == 7);
-    CHECK(target.tryGet<Transform>(copy)->position == Vec2{1, 2});
-    CHECK(target.tryGet<EntityInfo>(copy)->name == "Root");
-    CHECK(target.tryGet<EntityInfo>(copy)->id != source.tryGet<EntityInfo>(root)->id);
+    CHECK(target.get<Health>(copy).value == 7);
+    CHECK(target.get<Transform>(copy).position == Vec2{1, 2});
+    CHECK(target.get<EntityInfo>(copy).name == "Root");
+    CHECK(target.get<EntityInfo>(copy).id != source.get<EntityInfo>(root).id);
     REQUIRE(target.children(copy).size() == 1);
     CHECK(target.tryGet<Tag>(target.children(copy)[0]) != nullptr);
 
@@ -275,8 +275,8 @@ TEST_CASE("Entities and subtrees can be copied within and between scenes") {
     REQUIRE_FALSE(dup.isNull());
     CHECK(source.entityCount() == 4);
     CHECK(source.entities()[0] == dup);
-    CHECK(source.findById(source.tryGet<EntityInfo>(dup)->id) == dup);
-    CHECK(source.findById(source.tryGet<EntityInfo>(root)->id) == root);
-    source.tryGet<Health>(dup)->value = 1;
-    CHECK(source.tryGet<Health>(root)->value == 7);
+    CHECK(source.findById(source.get<EntityInfo>(dup).id) == dup);
+    CHECK(source.findById(source.get<EntityInfo>(root).id) == root);
+    source.get<Health>(dup).value = 1;
+    CHECK(source.get<Health>(root).value == 7);
 }

@@ -5,9 +5,10 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0, 1 and 2 are done. CI builds and tests on Linux, Windows (MSVC),
-macOS and (experimentally) WebAssembly. Recommended next: Milestone 3, the
-Native Studio foundation (see "Recommended adjustments" below).
+Milestones 0-3 are done. CI builds and tests on Linux, Windows (MSVC),
+macOS and (experimentally) WebAssembly. Recommended next: Milestone 4, the
+multiplayer prototype, after a short Studio hardening pass driven by first
+creator feedback (see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -16,6 +17,7 @@ Native Studio foundation (see "Recommended adjustments" below).
 | Game not yet played interactively on real Windows or macOS hardware (CI passes on both) | Rendering/input on real GPUs unconfirmed | Founder to try the Windows package on a real PC; a Mac check when one is available |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 | Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
+| Studio not yet used by a creator other than its developers, nor on a real Windows or macOS desktop | Usability problems and platform issues (DPI, file dialogs, fonts) unknown | Founder to build a small level with Studio and report friction; the walkthrough in docs/studio.md is the script |
 
 ---
 
@@ -86,13 +88,50 @@ Follow-ups (not blocking): multiple scripts per entity, `require` for shared
 modules, spawning entities from scripts, structured parameter metadata for
 visual nodes, per-tick total CPU budget for servers, trigger broadphase.
 
-## Milestone 3: Native Studio foundation (**Planned**)
+## Milestone 3: Native Studio foundation (**Done**)
 
-Dear ImGui (docking) on SDL3: project open/create, hierarchy (adds parent/
-child to the scene model), viewport with selection and move tools, component
-inspector driven by the same component descriptors as the file format, asset
-browser, save/load, play/stop (the `Scene` copy already supports this),
-console (a `px::log` sink).
+- [x] Scene hierarchy: parent links, depth-first order, local transforms with
+      computed world transforms, subtree copy/destroy, cycle and depth checks;
+      physics, rendering, cameras and scripts work in world space
+      ([ADR 0016](docs/adr/0016-scene-hierarchy.md))
+- [x] Component descriptors drive the file format, validation, the inspector
+      and the generated [component reference](docs/components.md)
+      ([ADR 0014](docs/adr/0014-component-descriptors.md))
+- [x] Multiple behaviours per entity (`Scripts` list); scene format 3 with
+      migration from 2; scripts can read and change the hierarchy
+- [x] `px_editor`: UI-free editor model with projects, assets, scene
+      documents, snapshot undo/redo, selection by id, picking, clipboard and
+      play mode ([ADR 0015](docs/adr/0015-studio-architecture.md))
+- [x] Studio (`px-studio`, Dear ImGui docking, [ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md)):
+      project creation (empty or template) and opening, recent projects
+- [x] Hierarchy panel: tree, drag-and-drop parenting and reordering, rename,
+      create presets, duplicate, copy/paste as text (also between projects that share assets), delete, search
+- [x] Scene viewport: real renderer, pan/zoom, grid and snapping, click and
+      box selection, move with undo, tile paint/erase/pick, collider and
+      camera overlays, drag-and-drop of images, scripts and scenes
+- [x] Inspector generated from descriptors; add/remove components with
+      requirements; scripts with typed properties and reset; live values while playing
+- [x] Asset browser: import (dialog, typed path or drop), new script/scene,
+      rename, find uses, delete with usage check
+- [x] Script editor with live compile feedback; external changes detected
+- [x] Save/load with validation and canonical files; unsaved-changes prompts
+- [x] Play/pause/step/stop on a copy of the scene with the real `GameSession`
+- [x] Console (log sink) with filters, repeat folding, open-at-line for script errors
+- [x] Tests: 28 new test cases (103 total), a Studio smoke test in CTest;
+      the editor model builds and plays a game from an empty project in a test
+- [x] Verified: a game built in Studio from an empty project (import, paint,
+      player, coins with a new script, save, play) runs unchanged in
+      `px-player` and `px-headless`; Studio runs under Wine (Direct3D) and in
+      CI on Windows (MSVC) and macOS
+- [ ] Prefabs: deferred to Milestone 5 together with spawning entities from
+      scripts (they need the same "instantiate an entity template" mechanism)
+
+Deliverable met: a creator can build and save a simple game using the editor
+rather than manually editing project files ([walkthrough](docs/studio.md#tutorial-a-game-from-an-empty-project)).
+
+Known limitations: one entity at a time in the inspector, whole-scene undo
+snapshots, plain-text script editor, rotation/scale ignored by colliders and
+tilemaps ([details](docs/studio.md#limitations)).
 
 ## Milestone 4: Multiplayer prototype (**Planned**)
 
@@ -105,8 +144,9 @@ handling; local multi-client test tool.
 ## Milestone 5: Visual scripting and expanded engine (**Planned**)
 
 Typed node graphs compiled to the same gameplay API as Luau; graph editor;
-tilemap and animation editors; animation clip assets; tileset assets with
-per-tile properties (one-way platforms, slopes).
+prefabs and spawning entities from scripts; tilemap and animation editors;
+animation clip assets; tileset assets with per-tile properties (one-way
+platforms, slopes).
 
 ## Milestone 6: Platform backend and publishing (**Planned**)
 
@@ -127,17 +167,22 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: Milestone 3 (Studio foundation), with prefabs and multiple
-   behaviours per entity in scope.** Scripting now works, so the bottleneck
-   for creators is editing scenes by hand in JSON. Studio's inspector should
-   be driven by the same component and script-property descriptors that the
-   file format and scripting use, which also prepares visual scripting.
-2. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
+1. **Next: a one-to-two-week Studio hardening pass, then Milestone 4
+   (multiplayer prototype).** Have the founder (and ideally two or three
+   creators) build a level with Studio on real Windows/macOS machines; fix
+   the friction they hit (multi-entity inspector editing and an animation
+   frame picker are likely first). Then start multiplayer: the deterministic
+   `GameSession`, input frames and the headless runner are ready for a
+   server, and its transport choice must keep the browser path open.
+2. **Prefabs with spawning in Milestone 5**, not earlier: both need the same
+   "instantiate a saved entity template" mechanism, and spawning must be
+   designed with server authority and replication in mind (Milestone 4).
+3. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
    (ADR 0012): it already builds and runs, so regressions are caught for
    free; productising it (loading projects over the network, asset
    streaming, page integration, size budgets) belongs with the platform
    work in Milestones 6-7.
-3. **Add gamepad support early** (small, and platformers need it to feel right).
-4. **Keep the simulation deterministic** (fixed ticks, input frames, no
+4. **Add gamepad support early** (small, and platformers need it to feel right).
+5. **Keep the simulation deterministic** (fixed ticks, input frames, no
    wall-clock reads in gameplay). It is already tested and makes replays,
    automated playtests and server reconciliation much easier.

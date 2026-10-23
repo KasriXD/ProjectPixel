@@ -19,6 +19,21 @@ testing. This page states what is verified and what work remains.
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
 | Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
 
+Studio (`px-studio`) is desktop-only:
+
+| Platform | Builds | Runs | Verified how |
+|---|---|---|---|
+| Linux x64 (X11) | Yes: GCC 13, Clang 18, ASan+UBSan | Yes: SDL `opengl` renderer | Used interactively on Xvfb (a game built from an empty project), smoke test in CTest |
+| No display | Yes | Yes: `dummy` driver + `software` renderer | CTest `studio_smoke_headless_display` (also under ASan) |
+| Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: smoke test passes in a real window with the `direct3d` renderer | Not yet run on real Windows |
+| Windows x64 (MSVC 2022) | Yes | Smoke test passes (dummy driver) | GitHub Actions |
+| macOS arm64 | Yes | Smoke test passes (dummy driver) | GitHub Actions; not yet used in a real window |
+| Browser, mobile | Not built | | Studio needs a desktop; a browser-based editor would be a separate decision |
+
+Desktop risks not covered by these checks: high-DPI scaling on real
+monitors, native file dialogs (they need the XDG desktop portal or zenity on
+Linux; Studio falls back to typed paths), keyboard layouts and IME text input.
+
 ## Desktop
 
 Expected to work on Windows and macOS with the same code: SDL3 picks

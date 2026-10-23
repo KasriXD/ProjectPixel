@@ -31,8 +31,10 @@ for scripting and networking, copy cheaply for play-mode, and stay fast.
 - Simple, tested storage. Component type ids rely on static linking
   (`detail::componentTypeId`); engine plugins as shared libraries would need
   a registration-based id scheme.
-- Parent/child hierarchy is not implemented yet; it will be added as a
-  component plus world-transform propagation for the Studio milestone.
-- Component reflection (for the inspector and scripting) is currently the
-  per-component codec table in the project format; it should evolve into a
-  shared descriptor used by serialization, Studio and scripting.
+- Parent/child hierarchy: implemented in Milestone 3 as parent links in the
+  `Scene` with computed world transforms ([ADR 0016](0016-scene-hierarchy.md)).
+- Component reflection: implemented in Milestone 3 as component descriptors
+  shared by the file format, validation, Studio and the reference docs
+  ([ADR 0014](0014-component-descriptors.md)).
+- Deep copies are what Studio's undo and play mode are built on
+  ([ADR 0015](0015-studio-architecture.md)).

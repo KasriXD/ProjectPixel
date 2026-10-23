@@ -82,6 +82,17 @@ std::filesystem::path findTemplateFolder() {
     return std::filesystem::path(PX_DEFAULT_TEMPLATE_DIR);
 }
 
+// The guides opened from the Help menu: next to the executable in a
+// package, otherwise the source tree's docs folder.
+std::filesystem::path findDocsFolder() {
+    if (const char* base = SDL_GetBasePath()) {
+        const auto packaged = std::filesystem::path(base) / "docs";
+        std::error_code ec;
+        if (std::filesystem::is_regular_file(packaged / "studio.md", ec)) return packaged;
+    }
+    return std::filesystem::path(PX_DOCS_DIR);
+}
+
 } // namespace
 
 const char* studioUsage() {
@@ -242,7 +253,7 @@ std::vector<scene::Entity> StudioApp::selection() {
     std::vector<scene::Entity> out;
     const scene::Scene& running = m_play->session().scene();
     for (const scene::Entity e : m_document->selection()) {
-        const Guid id = m_document->scene().tryGet<scene::EntityInfo>(e)->id;
+        const Guid id = m_document->scene().get<scene::EntityInfo>(e).id;
         const scene::Entity live = running.findById(id);
         if (!live.isNull()) out.push_back(live);
     }
@@ -253,7 +264,8 @@ scene::Entity StudioApp::primarySelection() {
     if (!m_document) return scene::kNullEntity;
     const scene::Entity e = m_document->primarySelection();
     if (!m_play || e.isNull()) return e;
-    return m_play->session().scene().findById(m_document->scene().tryGet<scene::EntityInfo>(e)->id);
+    const auto* info = m_document->scene().tryGet<scene::EntityInfo>(e);
+    return info != nullptr ? m_play->session().scene().findById(info->id) : scene::kNullEntity;
 }
 
 void StudioApp::select(scene::Entity entity, editor::SelectMode mode) {
@@ -865,7 +877,7 @@ void StudioApp::drawMenuBar() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
-        const std::filesystem::path docs = std::filesystem::path(PX_DOCS_DIR);
+        static const std::filesystem::path docs = findDocsFolder();
         if (ImGui::MenuItem("Studio Guide")) openPath(docs / "studio.md");
         if (ImGui::MenuItem("Scripting Guide")) openPath(docs / "scripting.md");
         if (ImGui::MenuItem("Scripting API Reference")) openPath(docs / "scripting-api.md");

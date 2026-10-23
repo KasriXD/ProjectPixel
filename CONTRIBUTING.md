@@ -34,18 +34,42 @@ boundary) get an Architecture Decision Record in `docs/adr/` (copy
   creator what is wrong and where.
 - No global mutable state except logging. No singletons for engine systems.
 - Components are plain data structs. Behaviour belongs in systems.
+- `scene.get<T>(e)` when the component must exist (a missing one terminates
+  with a message), `scene.tryGet<T>(e)` with a null check when it may be
+  missing. Never dereference `tryGet` unchecked.
 - Prefer clear code over clever code; comment *why*, not *what*.
 
 ## Adding a built-in component
 
-1. Define the struct in `engine/scene/include/px/scene/Components.hpp`; mark
-   runtime-only fields with `// runtime`.
-2. Add a read/write codec in `engine/project/src/SceneFormat.cpp` (validate
-   ranges, reject unknown fields via `ObjectReader::finish`).
-3. Document the JSON in `docs/project-format.md`.
-4. Add tests for parsing, validation errors and round-tripping.
-5. Changing the meaning of an existing field requires a format version bump
-   and a migration (see `docs/project-format.md#versioning`).
+Components are described once, in a descriptor table
+([ADR 0014](docs/adr/0014-component-descriptors.md)); the file format,
+validation, Studio's inspector and the reference docs follow from it.
+
+1. Define the struct in `engine/scene/include/px/scene/Components.hpp`.
+2. Add its descriptor in `engine/scene/src/ComponentInfo.cpp`: name,
+   category (Studio's Add Component menu), description, and one `field<>`
+   per saved field with a description, range, step, and flags
+   (`kFieldRuntime` for simulation state that is not saved). Declare
+   required components only if the scene is invalid without them.
+3. If a field needs a new `FieldKind`, add reading/writing in
+   `engine/project/src/SceneFormat.cpp`, validation in `ComponentInfo.cpp`
+   and a widget in `apps/studio/InspectorPanel.cpp`.
+4. Regenerate the reference: `px-headless --print-component-reference >
+   docs/components.md` (a test fails when it is out of date).
+5. Add tests for parsing, validation errors and round-tripping; add the
+   component to the editor's presets if creators will use it often.
+6. Changing the meaning of an existing field, or adding a requirement,
+   needs a scene format version bump and a migration
+   (see `docs/project-format.md#versioning`).
+
+## Changing Studio
+
+Editing logic goes into `engine/editor` (no UI, unit tested in
+`tests/test_editor.cpp`); `apps/studio` only draws and calls it. Every
+change to a scene goes through a `SceneDocument` transaction
+(`beginEdit`/`markChanged`/`endEdit`, or one of its operations), which is
+what makes it undoable ([ADR 0015](docs/adr/0015-studio-architecture.md)).
+Try changes in Studio itself; `px-studio --smoke-test` must keep passing.
 
 ## Adding to the scripting API
 
@@ -88,6 +112,11 @@ single header in `third_party/` and record it in `third_party/VERSIONS.md`.
   re-tune the route (see comments in the file).
 - `player_smoke_headless_display` runs the real client for 120 frames with
   SDL's dummy video driver and software renderer, no display needed.
+- `studio_smoke_headless_display` runs Studio the same way through a scripted
+  session (create, duplicate, paste, undo everything, play, stop) on the
+  example project, without writing to it.
+- `tests/test_editor.cpp` covers the editor model, including building and
+  playing a game from an empty project without any UI.
 - The experimental WebAssembly CI job builds with Emscripten, runs the unit
   tests and playthrough under Node.js, and plays the browser build in
   headless Chromium.

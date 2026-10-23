@@ -58,7 +58,7 @@ bool contains(const std::string& text, std::string_view needle) { return text.fi
 
 std::vector<std::string> names(const Scene& scene, const std::vector<Entity>& entities) {
     std::vector<std::string> out;
-    for (const Entity e : entities) out.push_back(scene.tryGet<EntityInfo>(e)->name);
+    for (const Entity e : entities) out.push_back(scene.get<EntityInfo>(e).name);
     return out;
 }
 
@@ -111,13 +111,13 @@ TEST_CASE("Editor: undo and redo restore the scene, selection and dirty state") 
     const Entity a = doc.createEntity(EntityPreset::Empty, "A", kNullEntity, {10, 20});
     CHECK(doc.isDirty());
     CHECK(doc.isSelected(a));
-    CHECK(doc.scene().tryGet<Transform>(a)->position == Vec2{10, 20});
+    CHECK(doc.scene().get<Transform>(a).position == Vec2{10, 20});
     doc.rename(a, "Renamed");
     CHECK(doc.undoSteps() == 2);
     CHECK(doc.undoLabel() == "Rename");
 
     doc.undo();
-    CHECK(doc.scene().tryGet<EntityInfo>(doc.scene().entities()[0])->name == "A");
+    CHECK(doc.scene().get<EntityInfo>(doc.scene().entities()[0]).name == "A");
     doc.undo();
     CHECK(doc.scene().entityCount() == 0);
     CHECK(doc.selection().empty());
@@ -126,7 +126,7 @@ TEST_CASE("Editor: undo and redo restore the scene, selection and dirty state") 
     doc.redo();
     doc.redo();
     REQUIRE(doc.scene().entityCount() == 1);
-    CHECK(doc.scene().tryGet<EntityInfo>(doc.scene().entities()[0])->name == "Renamed");
+    CHECK(doc.scene().get<EntityInfo>(doc.scene().entities()[0]).name == "Renamed");
     CHECK(doc.selection().size() == 1); // selection came back with the entity
 
     // A new edit clears redo.
@@ -146,7 +146,7 @@ TEST_CASE("Editor: a drag is one undo step and can be cancelled") {
     SceneDocument doc(assets::AssetId{Guid(1, 1)}, Scene{});
     const Entity parent = doc.createEntity(EntityPreset::Empty, "Parent", kNullEntity, {100, 0});
     const Entity child = doc.createEntity(EntityPreset::Empty, "Child", parent, {110, 0});
-    CHECK(doc.scene().tryGet<Transform>(child)->position == Vec2{10, 0}); // created at a world position
+    CHECK(doc.scene().get<Transform>(child).position == Vec2{10, 0}); // created at a world position
     doc.setSelection({parent, child});
     const std::size_t steps = doc.undoSteps();
 
@@ -171,14 +171,14 @@ TEST_CASE("Editor: delete, duplicate, copy and paste keep references sensible") 
     SceneDocument doc(assets::AssetId{Guid(1, 1)}, Scene{});
     const Entity player = doc.createEntity(EntityPreset::Player);
     const Entity camera = doc.createEntity(EntityPreset::Camera);
-    CHECK(doc.scene().tryGet<Camera>(camera)->follow == doc.scene().tryGet<EntityInfo>(player)->id);
+    CHECK(doc.scene().get<Camera>(camera).follow == doc.scene().get<EntityInfo>(player).id);
 
     const Entity group = doc.createEntity(EntityPreset::Group, "Coins");
     const Entity coin = doc.createEntity(EntityPreset::Trigger, "Coin 14", group);
     doc.select(coin);
     const auto copies = doc.duplicateSelection();
     REQUIRE(copies.size() == 1);
-    CHECK(doc.scene().tryGet<EntityInfo>(copies[0])->name == "Coin 15");
+    CHECK(doc.scene().get<EntityInfo>(copies[0]).name == "Coin 15");
     CHECK(doc.scene().parent(copies[0]) == group);
     CHECK(names(doc.scene(), doc.scene().children(group)) == std::vector<std::string>{"Coin 14", "Coin 15"});
 
@@ -186,8 +186,8 @@ TEST_CASE("Editor: delete, duplicate, copy and paste keep references sensible") 
     doc.setSelection({player, camera});
     const auto pair = doc.duplicateSelection();
     REQUIRE(pair.size() == 2);
-    CHECK(doc.scene().tryGet<Camera>(pair[1])->follow == doc.scene().tryGet<EntityInfo>(pair[0])->id);
-    CHECK(doc.scene().tryGet<EntityInfo>(pair[0])->name == "Player 2");
+    CHECK(doc.scene().get<Camera>(pair[1]).follow == doc.scene().get<EntityInfo>(pair[0]).id);
+    CHECK(doc.scene().get<EntityInfo>(pair[0]).name == "Player 2");
 
     // Copy and paste.
     doc.select(group);
@@ -195,14 +195,14 @@ TEST_CASE("Editor: delete, duplicate, copy and paste keep references sensible") 
     auto pasted = doc.paste(clip, nullptr);
     REQUIRE(pasted.ok());
     REQUIRE(pasted->size() == 1);
-    CHECK(doc.scene().tryGet<EntityInfo>((*pasted)[0])->name == "Coins 2");
+    CHECK(doc.scene().get<EntityInfo>((*pasted)[0]).name == "Coins 2");
     CHECK(doc.scene().children((*pasted)[0]).size() == 2);
     CHECK_FALSE(doc.paste("not json", nullptr).ok());
 
     // Deleting the player clears the camera's reference, so the scene still saves.
     doc.select(player);
     doc.deleteSelection();
-    CHECK(doc.scene().tryGet<Camera>(camera)->follow.isNil());
+    CHECK(doc.scene().get<Camera>(camera).follow.isNil());
     CHECK(doc.problems(nullptr).empty());
 }
 
@@ -230,7 +230,7 @@ TEST_CASE("Editor: components bring their requirements; removing a needed one is
 TEST_CASE("Editor: tilemap painting and resizing") {
     SceneDocument doc(assets::AssetId{Guid(1, 1)}, Scene{});
     const Entity map = doc.createEntity(EntityPreset::Tilemap, "Ground", kNullEntity, {32, 16});
-    CHECK(doc.scene().tryGet<Tilemap>(map)->width == 20);
+    CHECK(doc.scene().get<Tilemap>(map).width == 20);
     doc.beginEdit("Paint");
     CHECK(doc.setTile(map, 0, 0, 3));
     CHECK(doc.setTile(map, 1, 0, 3));
@@ -238,7 +238,7 @@ TEST_CASE("Editor: tilemap painting and resizing") {
     CHECK_FALSE(doc.setTile(map, 99, 0, 3)); // outside
     doc.endEdit();
     CHECK(doc.undoLabel() == "Paint");
-    CHECK(doc.scene().tryGet<Tilemap>(map)->tileAt(1, 0) == 3);
+    CHECK(doc.scene().get<Tilemap>(map).tileAt(1, 0) == 3);
 
     const TileCoord cell = tileAt(doc.scene(), map, {32 + 16 * 1 + 3, 16 + 2});
     CHECK(cell.inside);
@@ -247,7 +247,7 @@ TEST_CASE("Editor: tilemap painting and resizing") {
     CHECK_FALSE(tileAt(doc.scene(), map, {0, 0}).inside);
 
     doc.resizeTilemap(map, 2, 3);
-    const auto& resized = *doc.scene().tryGet<Tilemap>(map);
+    const auto& resized = doc.scene().get<Tilemap>(map);
     CHECK(resized.width == 2);
     CHECK(resized.height == 3);
     CHECK(resized.tiles == std::vector<int>{3, 3, -1, -1, -1, -1});
@@ -431,9 +431,8 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
     project->setScriptBuffer(rulesScript, must(project->files().readText("scripts/rules.luau")));
     {
         // Write the rules in the script editor (an unsaved buffer at first).
-        std::ifstream in(kExample / "scripts" / "level_rules.luau");
-        const std::string source((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        project->setScriptBuffer(rulesScript, source);
+        DirectoryFileSystem example(kExample);
+        project->setScriptBuffer(rulesScript, must(example.readText("scripts/level_rules.luau")));
     }
 
     // The scene.
@@ -442,7 +441,7 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
     const Entity ground = doc.createEntity(EntityPreset::Tilemap, "Ground", kNullEntity, {0, 0}, tiles);
     {
         doc.beginEdit("Tileset columns");
-        doc.sceneForEdit().tryGet<Tilemap>(ground)->tilesetColumns = 4;
+        doc.sceneForEdit().get<Tilemap>(ground).tilesetColumns = 4;
         doc.markChanged();
         doc.endEdit();
         doc.beginEdit("Paint");
@@ -455,20 +454,20 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
     doc.createEntity(EntityPreset::Player, "Hero", kNullEntity, {24, 120}, hero);
     // The empty template's camera followed nothing; now it follows the hero.
     const Entity camera = doc.scene().findByName("Main Camera");
-    CHECK(doc.scene().tryGet<Camera>(camera)->follow ==
-          doc.scene().tryGet<EntityInfo>(doc.scene().findByName("Hero"))->id);
+    CHECK(doc.scene().get<Camera>(camera).follow ==
+          doc.scene().get<EntityInfo>(doc.scene().findByName("Hero")).id);
     const Entity coins = doc.createEntity(EntityPreset::Group, "Coins");
     const Entity coin = doc.createEntity(EntityPreset::Sprite, "Coin 1", coins, {80, 116}, coinImage);
     {
         doc.beginEdit("Coin setup");
-        doc.sceneForEdit().tryGet<Sprite>(coin)->source = {0, 0, 16, 16};
+        doc.sceneForEdit().get<Sprite>(coin).source = {0, 0, 16, 16};
         doc.markChanged();
         doc.endEdit();
     }
     must(doc.addComponent(coin, *findComponentType("BoxCollider")));
     {
         doc.beginEdit("Trigger");
-        auto& collider = *doc.sceneForEdit().tryGet<BoxCollider>(coin);
+        auto& collider = doc.sceneForEdit().get<BoxCollider>(coin);
         collider.isTrigger = true;
         collider.size = {10, 12};
         doc.markChanged();
@@ -477,7 +476,7 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
     must(doc.addComponent(coin, *findComponentType("Tags")));
     {
         doc.beginEdit("Tag");
-        doc.sceneForEdit().tryGet<Tags>(coin)->values = {"coin"};
+        doc.sceneForEdit().get<Tags>(coin).values = {"coin"};
         doc.markChanged();
         doc.endEdit();
     }

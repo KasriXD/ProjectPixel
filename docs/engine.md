@@ -27,11 +27,22 @@ How the engine works today. For module boundaries see
 - **Components**: plain structs stored per type in dense arrays (sparse sets).
   `Registry::each<A, B>(fn)` visits entities that have all listed components.
   A callback may destroy the entity it is visiting.
-- **Scene**: registry + settings + id index + creation order. Scenes are
-  copyable; copies are fully independent (used for restart and, later, Studio
-  play mode).
+- **Hierarchy**: an entity may have a parent. The scene keeps its entities
+  in depth-first order (each parent before its children). A `Transform` is
+  relative to the parent's; world transforms are computed by composing the
+  ancestors' transforms, and entities without a `Transform` (groups) do not
+  move their children. Destroying an entity destroys its children. Physics,
+  triggers, cameras and rendering work in world space
+  ([ADR 0016](adr/0016-scene-hierarchy.md)).
+- **Scene**: registry + settings + id index + hierarchy order. Scenes are
+  copyable; copies are fully independent (used for restart, Studio's undo
+  history and play mode).
+- **Component descriptors** describe every component and field (type, range,
+  description). The file format, validation, Studio's inspector and
+  [components.md](components.md) are generated from them
+  ([ADR 0014](adr/0014-component-descriptors.md)).
 
-Component reference: [project-format.md](project-format.md#components).
+Component reference: [components.md](components.md).
 
 ## Simulation
 

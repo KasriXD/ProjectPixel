@@ -427,7 +427,7 @@ Json writeEntity(const Scene& scene, Entity e, bool writeParent) {
     entity["name"] = info->name;
     if (writeParent) {
         const Entity parent = scene.parent(e);
-        if (!parent.isNull()) entity["parent"] = toJson(scene.tryGet<EntityInfo>(parent)->id);
+        if (!parent.isNull()) entity["parent"] = toJson(scene.get<EntityInfo>(parent).id);
     }
     Json components = Json::object();
     forEachComponent(scene, e, [&](const ComponentInfo& c, const void* data) {
@@ -614,7 +614,7 @@ Result<std::vector<Entity>> pasteEntities(Scene& scene, std::string_view json, c
         const auto source = clipboard.subtree(original);
         const auto target = scene.subtree(copy);
         for (std::size_t i = 0; i < source.size() && i < target.size(); ++i) {
-            remap.emplace_back(clipboard.tryGet<EntityInfo>(source[i])->id, scene.tryGet<EntityInfo>(target[i])->id);
+            remap.emplace_back(clipboard.get<EntityInfo>(source[i]).id, scene.get<EntityInfo>(target[i]).id);
         }
         pasted.push_back(copy);
     }

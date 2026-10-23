@@ -104,10 +104,10 @@ TEST_CASE("Scene serialization round-trips") {
     CHECK(reparsed->entityCount() == original->entityCount());
     const Entity p1 = original->findByName("Player");
     const Entity p2 = reparsed->findByName("Player");
-    CHECK(original->tryGet<EntityInfo>(p1)->id == reparsed->tryGet<EntityInfo>(p2)->id);
-    CHECK(original->tryGet<Transform>(p1)->position == reparsed->tryGet<Transform>(p2)->position);
-    CHECK(original->tryGet<PlatformerController>(p1)->jumpCutMultiplier ==
-          reparsed->tryGet<PlatformerController>(p2)->jumpCutMultiplier);
+    CHECK(original->get<EntityInfo>(p1).id == reparsed->get<EntityInfo>(p2).id);
+    CHECK(original->get<Transform>(p1).position == reparsed->get<Transform>(p2).position);
+    CHECK(original->get<PlatformerController>(p1).jumpCutMultiplier ==
+          reparsed->get<PlatformerController>(p2).jumpCutMultiplier);
     // Floats are written in their shortest form.
     CHECK(contains(first, "\"jumpCutMultiplier\": 0.45"));
     CHECK(contains(first, "\"position\": ["));
@@ -258,8 +258,11 @@ TEST_CASE("Scene format 2 Script components become Scripts lists") {
     REQUIRE(scripts != nullptr);
     REQUIRE(scripts->items.size() == 1);
     CHECK(scripts->items[0].script.toString() == "dddddddd-0000-4000-8000-000000000001");
-    REQUIRE(scripts->items[0].findProperty("speed") != nullptr);
-    CHECK(std::get<double>(scripts->items[0].findProperty("speed")->value) == 2.0);
+    const auto* speed = scripts->items[0].findProperty("speed");
+    REQUIRE(speed != nullptr);
+    const double* speedValue = std::get_if<double>(&speed->value);
+    REQUIRE(speedValue != nullptr);
+    CHECK(*speedValue == 2.0);
     const std::string saved = serializeScene(scene.value());
     CHECK(contains(saved, "\"Scripts\": ["));
     CHECK_FALSE(contains(saved, "\"Script\":"));
@@ -300,16 +303,16 @@ TEST_CASE("Every component survives a save and load with its descriptor") {
     Scene scene;
     const Entity e = scene.createEntity("Everything");
     for (const ComponentInfo& c : componentTypes()) c.add(scene, e);
-    scene.tryGet<Sprite>(e)->texture = texture;
-    scene.tryGet<SpriteAnimation>(e)->frames = {Rect{0, 0, 8, 8}, Rect{8, 0, 8, 8}};
-    auto& map = *scene.tryGet<Tilemap>(e);
+    scene.get<Sprite>(e).texture = texture;
+    scene.get<SpriteAnimation>(e).frames = {Rect{0, 0, 8, 8}, Rect{8, 0, 8, 8}};
+    auto& map = scene.get<Tilemap>(e);
     map.tileset = texture;
     map.width = 2;
     map.height = 1;
     map.tiles = {3, -1};
-    scene.tryGet<Tags>(e)->values = {"a", "b"};
-    scene.tryGet<Scripts>(e)->items = {AttachedScript{script, {{"n", 1.5}, {"v", Vec2{1, 2}}}}, AttachedScript{script, {}}};
-    scene.tryGet<Camera>(e)->follow = scene.tryGet<EntityInfo>(e)->id;
+    scene.get<Tags>(e).values = {"a", "b"};
+    scene.get<Scripts>(e).items = {AttachedScript{script, {{"n", 1.5}, {"v", Vec2{1, 2}}}}, AttachedScript{script, {}}};
+    scene.get<Camera>(e).follow = scene.get<EntityInfo>(e).id;
     CHECK(validateEntity(scene, e, &registry).empty());
 
     const std::string first = serializeScene(scene);
@@ -319,10 +322,10 @@ TEST_CASE("Every component survives a save and load with its descriptor") {
     for (const ComponentInfo& c : componentTypes()) {
         CHECK_MESSAGE(c.has(loaded.value(), loaded->entities().front()), c.name);
     }
-    CHECK(loaded->tryGet<Scripts>(loaded->entities().front())->items.size() == 2);
+    CHECK(loaded->get<Scripts>(loaded->entities().front()).items.size() == 2);
 
     // Validation catches what the loader would reject.
-    scene.tryGet<Sprite>(e)->texture = assets::AssetId{*Guid::parse(kSceneId)};
+    scene.get<Sprite>(e).texture = assets::AssetId{*Guid::parse(kSceneId)};
     REQUIRE(registry.add({assets::AssetId{*Guid::parse(kSceneId)}, assets::AssetType::Scene, "sc", "s.scene.json",
                           assets::TextureFilter::Nearest}).ok());
     const auto problems = validateEntity(scene, e, &registry);
@@ -371,10 +374,10 @@ TEST_CASE("Copy and paste of entities keeps internal references") {
     const Entity hero = scene.createEntity("Hero", group);
     scene.set(hero, Transform{{3, 4}});
     const Entity cam = scene.createEntity("Cam", group);
-    scene.set(cam, Camera{scene.tryGet<EntityInfo>(hero)->id});
+    scene.set(cam, Camera{scene.get<EntityInfo>(hero).id});
     const Entity outside = scene.createEntity("Outside");
     const Entity follower = scene.createEntity("Follower");
-    scene.set(follower, Camera{scene.tryGet<EntityInfo>(outside)->id});
+    scene.set(follower, Camera{scene.get<EntityInfo>(outside).id});
 
     const Entity roots[] = {group, follower, hero}; // hero is inside group: copied once
     const std::string clip = serializeEntities(scene, roots);
@@ -384,19 +387,19 @@ TEST_CASE("Copy and paste of entities keeps internal references") {
     REQUIRE_MESSAGE(pasted.ok(), (pasted.ok() ? "" : pasted.error().message));
     REQUIRE(pasted->size() == 2);
     const Entity groupCopy = (*pasted)[0];
-    CHECK(scene.tryGet<EntityInfo>(groupCopy)->name == "Group");
+    CHECK(scene.get<EntityInfo>(groupCopy).name == "Group");
     const auto kids = scene.children(groupCopy);
     REQUIRE(kids.size() == 2);
     // The copied camera follows the copied hero, not the original.
-    CHECK(scene.tryGet<Camera>(kids[1])->follow == scene.tryGet<EntityInfo>(kids[0])->id);
+    CHECK(scene.get<Camera>(kids[1]).follow == scene.get<EntityInfo>(kids[0]).id);
     // A reference to an entity outside the copied set is kept (it exists in this scene).
-    CHECK(scene.tryGet<Camera>((*pasted)[1])->follow == scene.tryGet<EntityInfo>(outside)->id);
+    CHECK(scene.get<Camera>((*pasted)[1]).follow == scene.get<EntityInfo>(outside).id);
 
     // Pasting into another scene drops references that do not exist there.
     Scene other;
     auto intoOther = pasteEntities(other, clip, nullptr);
     REQUIRE(intoOther.ok());
-    CHECK(other.tryGet<Camera>((*intoOther)[1])->follow.isNil());
+    CHECK(other.get<Camera>((*intoOther)[1]).follow.isNil());
 
     CHECK_FALSE(pasteEntities(scene, "{\"format\": \"px.scene\"}", nullptr).ok());
 }

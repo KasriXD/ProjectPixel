@@ -105,7 +105,7 @@ TEST_CASE("Scene renderer orders by layer, culls, and snaps to pixels") {
     addSprite("back", {20, 20}, -5);
     addSprite("offscreen", {5000, 5000}, 0);
     const Entity hidden = addSprite("hidden", {30, 30}, 0);
-    scene.tryGet<Sprite>(hidden)->visible = false;
+    scene.get<Sprite>(hidden).visible = false;
 
     const Entity map = scene.createEntity("map");
     scene.set(map, Transform{});

@@ -324,7 +324,7 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                     const Entity e = doc->createEntity(editor::EntityPreset::Sprite, entry->name, kNullEntity, world, id);
                     const Vec2i texSize = app.renderer().textureSize(app.textures()->get(id));
                     if (texSize.x > 0 && texSize.y > 0) {
-                        doc->sceneForEdit().tryGet<Sprite>(e)->size = {static_cast<float>(texSize.x),
+                        doc->sceneForEdit().get<Sprite>(e).size = {static_cast<float>(texSize.x),
                                                                        static_cast<float>(texSize.y)};
                         doc->markChanged();
                     }
@@ -340,7 +340,7 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                     } else {
                         doc->select(target);
                         app.notify(std::format("Attached {} to {}", entry->name,
-                                               doc->scene().tryGet<EntityInfo>(target)->name));
+                                               doc->scene().get<EntityInfo>(target).name));
                     }
                     break;
                 }

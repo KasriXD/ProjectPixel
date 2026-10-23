@@ -202,7 +202,7 @@ Status Scene::setParent(Entity entity, Entity newParent, Entity before, bool kee
 
     if (keep) {
         const Transform parentWorld = parentWorldTransform(entity);
-        Transform& local = *tryGet<Transform>(entity);
+        Transform& local = get<Transform>(entity);
         local.position = inverseTransformPoint(parentWorld, world.position);
         local.rotation = world.rotation - parentWorld.rotation;
         local.scale = {safeDivide(world.scale.x, parentWorld.scale.x), safeDivide(world.scale.y, parentWorld.scale.y)};
@@ -320,7 +320,9 @@ Entity Scene::copySubtree(const Scene& source, Entity root, Entity parentEntity,
         const Entity copyParent = original == root ? parentEntity : copies.at(source.parent(original).index);
         const auto* info = source.tryGet<EntityInfo>(original);
         const Entity copy = createEntity(info != nullptr ? info->name : std::string(), copyParent);
-        const EntityInfo identity = *tryGet<EntityInfo>(copy);
+        const auto* created = tryGet<EntityInfo>(copy);
+        if (created == nullptr) return kNullEntity; // cannot happen: every entity has an EntityInfo
+        const EntityInfo identity = *created;
         m_registry.copyComponents(source.m_registry, original, copy);
         set<EntityInfo>(copy, identity); // keep the new id
         copies.emplace(original.index, copy);

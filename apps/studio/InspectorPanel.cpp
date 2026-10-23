@@ -131,7 +131,7 @@ void InspectorPanel::draw(StudioApp& app) {
         if (ImGui::Button("Delete")) app.document()->deleteSelection();
         ImGui::EndDisabled();
         ImGui::Separator();
-        for (const Entity e : selected) ImGui::BulletText("%s", scene->tryGet<EntityInfo>(e)->name.c_str());
+        for (const Entity e : selected) ImGui::BulletText("%s", scene->get<EntityInfo>(e).name.c_str());
     } else {
         drawEntity(app, *scene, selected.front());
     }
@@ -229,7 +229,7 @@ void InspectorPanel::drawEntity(StudioApp& app, Scene& scene, Entity entity) {
     if (!parent.isNull()) {
         ImGui::TextDisabled("Child of");
         ImGui::SameLine();
-        if (ImGui::SmallButton(scene.tryGet<EntityInfo>(parent)->name.c_str())) app.select(parent);
+        if (ImGui::SmallButton(scene.get<EntityInfo>(parent).name.c_str())) app.select(parent);
     }
     ImGui::TextDisabled("id %s", info->id.toString().c_str());
     ImGui::SameLine();
@@ -468,7 +468,7 @@ bool InspectorPanel::drawField(StudioApp& app, Scene& scene, const ComponentInfo
             Guid v = f.ref<Guid>(data);
             const Entity target = scene.findById(v);
             const std::string preview =
-                v.isNil() ? std::string("(none)") : (target.isNull() ? "(missing)" : scene.tryGet<EntityInfo>(target)->name);
+                v.isNil() ? std::string("(none)") : (target.isNull() ? "(missing)" : scene.get<EntityInfo>(target).name);
             bool picked = false;
             if (ImGui::BeginCombo("##v", preview.c_str(), ImGuiComboFlags_HeightLarge)) {
                 if (ImGui::Selectable("(none)", v.isNil())) {
@@ -562,9 +562,9 @@ void InspectorPanel::drawTilemapTools(StudioApp& app, Scene& scene, Entity entit
     auto* map = scene.tryGet<Tilemap>(entity);
     if (map == nullptr) return;
     const bool playing = app.playing();
-    const auto* info = scene.tryGet<EntityInfo>(entity);
-    if (m_resizeFor != info->id) {
-        m_resizeFor = info->id;
+    const Guid id = scene.get<EntityInfo>(entity).id;
+    if (m_resizeFor != id) {
+        m_resizeFor = id;
         m_resizeWidth = map->width;
         m_resizeHeight = map->height;
     }

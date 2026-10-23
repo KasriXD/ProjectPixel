@@ -14,5 +14,9 @@
 | [0010](0010-script-execution-model.md) | Script execution model: behaviours, order, failure policy, limits | Accepted |
 | [0011](0011-script-realms.md) | Script realms and server authority | Accepted |
 | [0012](0012-browser-runtime.md) | Browser runtime: feasibility and timing | Accepted |
+| [0013](0013-studio-ui-dear-imgui.md) | Dear ImGui for Studio's UI, behind an editor model | Accepted |
+| [0014](0014-component-descriptors.md) | Component descriptors as the single source of truth | Accepted |
+| [0015](0015-studio-architecture.md) | Studio architecture: a UI-free editor model with snapshot undo | Accepted |
+| [0016](0016-scene-hierarchy.md) | Scene hierarchy: parent links in the scene, computed world transforms | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

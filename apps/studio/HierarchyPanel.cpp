@@ -54,8 +54,8 @@ void HierarchyPanel::drawEntityMenu(StudioApp& app, Entity entity) {
         ImGui::EndMenu();
     }
     if (ImGui::MenuItem("Rename", "F2", false, editable)) {
-        m_renaming = scene.tryGet<EntityInfo>(entity)->id;
-        m_renameText = scene.tryGet<EntityInfo>(entity)->name;
+        m_renaming = scene.get<EntityInfo>(entity).id;
+        m_renameText = scene.get<EntityInfo>(entity).name;
         m_focusRename = true;
     }
     if (ImGui::MenuItem("Duplicate", "Ctrl+D", false, editable)) doc->duplicateSelection();
@@ -122,10 +122,10 @@ void HierarchyPanel::draw(StudioApp& app) {
     ImGui::BeginChild("tree", {0, 0}, ImGuiChildFlags_None);
     if (!m_filter.empty()) {
         for (const Entity e : scene->entities()) {
-            const auto* info = scene->tryGet<EntityInfo>(e);
-            if (!containsNoCase(info->name, m_filter)) continue;
+            const auto& info = scene->get<EntityInfo>(e);
+            if (!containsNoCase(info.name, m_filter)) continue;
             ImGui::PushID(static_cast<int>(e.index));
-            if (ImGui::Selectable(info->name.empty() ? "(unnamed)" : info->name.c_str(), isSelected(e))) clickSelect(e);
+            if (ImGui::Selectable(info.name.empty() ? "(unnamed)" : info.name.c_str(), isSelected(e))) clickSelect(e);
             ImGui::PopID();
         }
     } else {
@@ -258,8 +258,8 @@ void HierarchyPanel::draw(StudioApp& app) {
     if (editable && app.entityShortcuts && !ImGui::GetIO().WantTextInput && ImGui::IsKeyPressed(ImGuiKey_F2, false)) {
         const Entity e = doc->primarySelection();
         if (!e.isNull()) {
-            m_renaming = doc->scene().tryGet<EntityInfo>(e)->id;
-            m_renameText = doc->scene().tryGet<EntityInfo>(e)->name;
+            m_renaming = doc->scene().get<EntityInfo>(e).id;
+            m_renameText = doc->scene().get<EntityInfo>(e).name;
             m_focusRename = true;
         }
     }

@@ -27,6 +27,9 @@ inline constexpr Entity kNullEntity{};
 
 namespace detail {
 
+// Logs and terminates: get<T>() on an entity without T (a programming error).
+[[noreturn]] void missingComponent(Entity entity) noexcept;
+
 inline std::uint32_t nextComponentTypeId() noexcept {
     static std::atomic<std::uint32_t> counter{0};
     return counter.fetch_add(1);
@@ -157,6 +160,20 @@ public:
         if (!isAlive(entity)) return nullptr;
         const auto* p = pool<T>();
         return p ? p->get(entity.index) : nullptr;
+    }
+    // The component, which must exist (terminates otherwise). Use tryGet
+    // when it may be missing.
+    template <class T>
+    [[nodiscard]] T& get(Entity entity) {
+        T* component = tryGet<T>(entity);
+        if (component == nullptr) detail::missingComponent(entity);
+        return *component;
+    }
+    template <class T>
+    [[nodiscard]] const T& get(Entity entity) const {
+        const T* component = tryGet<T>(entity);
+        if (component == nullptr) detail::missingComponent(entity);
+        return *component;
     }
 
     template <class T>
