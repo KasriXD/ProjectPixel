@@ -116,8 +116,10 @@ public:
     [[nodiscard]] bool hasUnsavedChanges() const;
     [[nodiscard]] std::string unsavedSummary() const;
 
-    void startPlay();
-    void stopPlay();
+    // Play and Stop as UI commands: applied between frames, so nothing drawn
+    // later in the same frame uses a game that no longer exists.
+    void requestStartPlay();
+    void requestStopPlay();
     void togglePause();
     void stepOnce();
 
@@ -150,7 +152,13 @@ private:
     void runSmokeTest();
     void saveScreenshot(const std::filesystem::path& path);
 
-    // Runs `action` now, or after asking to save unsaved changes.
+    void startPlay();
+    void stopPlay();
+    // Runs `action` between frames: changes that replace the project, scene
+    // or game must not happen while panels are drawing them.
+    void defer(std::function<void()> action) { m_deferred.push_back(std::move(action)); }
+    void runDeferred();
+    // Runs `action` (between frames), after asking to save unsaved changes if any.
     void runAfterSaveCheck(std::string actionLabel, std::function<void()> action);
     void openProjectNow(const std::filesystem::path& folder);
     void closeProjectNow();
@@ -204,6 +212,7 @@ private:
         std::function<void()> action;
     };
     std::optional<PendingAction> m_pending;
+    std::vector<std::function<void()>> m_deferred;
     bool m_openSaveModal = false;
     std::string m_errorModal;
 

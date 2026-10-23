@@ -410,9 +410,16 @@ bool StudioApp::saveAll() {
     return ok;
 }
 
+void StudioApp::runDeferred() {
+    // Actions may defer more actions; those run next frame.
+    std::vector<std::function<void()>> actions = std::move(m_deferred);
+    m_deferred.clear();
+    for (auto& action : actions) action();
+}
+
 void StudioApp::runAfterSaveCheck(std::string actionLabel, std::function<void()> action) {
     if (!hasUnsavedChanges()) {
-        action();
+        defer(std::move(action));
         return;
     }
     m_pending = PendingAction{std::move(actionLabel), std::move(action)};
@@ -449,6 +456,14 @@ void StudioApp::stopPlay() {
               m_play->session().elapsedSeconds(), state.score, state.levelComplete, state.scriptErrors);
     m_play.reset();
     updateTitle();
+}
+
+void StudioApp::requestStartPlay() {
+    defer([this] { startPlay(); });
+}
+
+void StudioApp::requestStopPlay() {
+    defer([this] { stopPlay(); });
 }
 
 void StudioApp::togglePause() {
@@ -672,6 +687,7 @@ StudioApp::Status StudioApp::iterate() {
     if (m_options.smokeTest) elapsed = 1.0 / 60.0; // deterministic: one tick per frame
 
     handleDialogResults();
+    runDeferred();
     m_scriptPollTimer += elapsed;
     if (m_project && m_scriptPollTimer > 1.0) {
         m_scriptPollTimer = 0.0;
@@ -846,7 +862,7 @@ void StudioApp::drawMenuBar() {
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Play", haveDoc)) {
-        if (ImGui::MenuItem(m_play ? "Stop" : "Play", "F5")) m_play ? stopPlay() : startPlay();
+        if (ImGui::MenuItem(m_play ? "Stop" : "Play", "F5")) m_play ? requestStopPlay() : requestStartPlay();
         if (ImGui::MenuItem("Pause", "F6", m_play && m_play->paused(), m_play != nullptr)) togglePause();
         if (ImGui::MenuItem("Step One Tick", "F7", false, m_play != nullptr)) stepOnce();
         ImGui::Separator();
@@ -897,7 +913,7 @@ void StudioApp::drawToolbar() {
     ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX() + 20.0f, (ImGui::GetWindowWidth() - width) * 0.5f));
     if (m_play) {
         ImGui::PushStyleColor(ImGuiCol_Button, ui::kPlayColor);
-        if (ImGui::Button(" Stop ")) stopPlay();
+        if (ImGui::Button(" Stop ")) requestStopPlay();
         ImGui::PopStyleColor();
         ui::tooltip("Stop the game and return to editing (F5). Changes made while playing are discarded.");
         if (ImGui::Button(m_play->paused() ? "Resume" : "Pause")) togglePause();
@@ -906,7 +922,7 @@ void StudioApp::drawToolbar() {
         ui::tooltip("Advance one tick while paused (F7)");
         ImGui::TextColored(ui::kPlayColor, "PLAYING  %.1f s", m_play->session().elapsedSeconds());
     } else {
-        if (ImGui::Button(" Play ")) startPlay();
+        if (ImGui::Button(" Play ")) requestStartPlay();
         ui::tooltip("Play the scene as it is now, unsaved changes included (F5)");
     }
 }
@@ -919,9 +935,9 @@ void StudioApp::handleShortcuts() {
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F5, false)) {
         if (m_play) {
-            stopPlay();
+            requestStopPlay();
         } else {
-            startPlay();
+            requestStartPlay();
         }
     }
     if (ImGui::IsKeyPressed(ImGuiKey_F6, false)) togglePause();
@@ -964,24 +980,27 @@ void StudioApp::drawModals() {
         if (ImGui::Button("Save")) {
             ImGui::CloseCurrentPopup();
             if (saveAll() && m_pending) {
-                auto action = std::move(m_pending->action);
+                defer(std::move(m_pending->action));
                 m_pending.reset();
-                action();
             }
         }
         ImGui::SameLine();
         if (ImGui::Button("Don't Save")) {
             ImGui::CloseCurrentPopup();
-            if (m_project) {
-                // Discard: forget unsaved script edits and settings.
-                for (const auto& entry : m_project->assets().entries()) m_project->discardScriptBuffer(entry.id);
-                if (m_project->manifestDirty()) (void)m_project->reloadManifest();
-            }
-            if (m_document) m_document.reset();
             if (m_pending) {
-                auto action = std::move(m_pending->action);
+                defer([this, action = std::move(m_pending->action)] {
+                    if (m_project) {
+                        // Discard: forget unsaved script edits and settings.
+                        for (const auto& entry : m_project->assets().entries()) {
+                            m_project->discardScriptBuffer(entry.id);
+                        }
+                        if (m_project->manifestDirty()) (void)m_project->reloadManifest();
+                    }
+                    m_play.reset();
+                    m_document.reset();
+                    action();
+                });
                 m_pending.reset();
-                action();
             }
         }
         ImGui::SameLine();
@@ -1175,7 +1194,9 @@ void StudioApp::runSmokeTest() {
             m_document->select(m_document->scene().findByName("Player"));
             break;
         case 12:
-            startPlay();
+            requestStartPlay(); // the same path as the Play button and F5
+            break;
+        case 13:
             if (!m_play) return fail("play mode did not start");
             break;
         default:
@@ -1192,8 +1213,9 @@ void StudioApp::runSmokeTest() {
         if (state.score < 1) return fail("the player did not collect a coin while walking right");
         if (state.scriptErrors > 0) return fail("script errors while playing");
         log::info("Smoke test: played {} ticks, score {}", m_play->session().tickCount(), state.score);
-        stopPlay();
+        requestStopPlay(); // the same path as the Stop button and F5
     }
+    if (m_frame == 137 && m_play) return fail("play mode did not stop");
     if (m_frame == 140) {
         if (m_document->isDirty()) return fail("playing changed the edited scene");
         m_smokeStep = -1; // done: screenshot (if any) this frame, then exit
