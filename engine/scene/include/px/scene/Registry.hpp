@@ -45,6 +45,10 @@ public:
     virtual void remove(std::uint32_t entityIndex) = 0;
     [[nodiscard]] virtual bool contains(std::uint32_t entityIndex) const = 0;
     [[nodiscard]] virtual std::unique_ptr<IComponentPool> clone() const = 0;
+    [[nodiscard]] virtual std::unique_ptr<IComponentPool> createEmpty() const = 0;
+    // Copies the component of `sourceIndex` in `source` (a pool of the same
+    // type) to `targetIndex` in this pool. No-op if the source has none.
+    virtual void copyFrom(const IComponentPool& source, std::uint32_t sourceIndex, std::uint32_t targetIndex) = 0;
 };
 
 template <class T>
@@ -97,6 +101,15 @@ public:
 
     [[nodiscard]] std::unique_ptr<IComponentPool> clone() const override {
         return std::make_unique<ComponentPool<T>>(*this);
+    }
+
+    [[nodiscard]] std::unique_ptr<IComponentPool> createEmpty() const override {
+        return std::make_unique<ComponentPool<T>>();
+    }
+
+    void copyFrom(const IComponentPool& source, std::uint32_t sourceIndex, std::uint32_t targetIndex) override {
+        const T* value = static_cast<const ComponentPool<T>&>(source).get(sourceIndex);
+        if (value != nullptr) set(targetIndex, *value);
     }
 
     [[nodiscard]] std::size_t size() const { return m_dense.size(); }
@@ -162,6 +175,13 @@ public:
         const auto* p = pool<T>();
         return p ? p->size() : 0;
     }
+
+    // Copies every component of `from` (an entity of `source`, which may be
+    // this registry) onto `to`, replacing components of the same types. Used
+    // for duplicating entities and instantiating content from other scenes.
+    void copyComponents(const Registry& source, Entity from, Entity to);
+    // Removes every component of a live entity but keeps the entity.
+    void clearComponents(Entity entity);
 
     // Calls fn(Entity, T&, Rest&...) for every entity that has all listed
     // components. Iterates backwards over T's pool, so fn may destroy the

@@ -3,3 +3,4 @@
 
 # Generated reference compared byte-for-byte by a test; keep LF everywhere.
 docs/scripting-api.md text eol=lf
+docs/components.md text eol=lf

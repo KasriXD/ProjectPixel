@@ -5,11 +5,13 @@
 //               [--expect-level-complete] [--expect-no-script-errors]
 //               [--log-events] [--trace-every N] [--verbose]
 //   px-headless --print-api-reference
+//   px-headless --print-component-reference
 //
 // Exit codes: 0 success, 1 load/runtime error, 2 bad arguments,
 //             3 an --expect-* condition was not met.
 
 #include "px/core/FileSystem.hpp"
+#include "px/scene/ComponentInfo.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
 #include "px/runtime/GameLoader.hpp"
@@ -36,6 +38,7 @@ struct Options {
     bool logEvents = false;
     bool verbose = false;
     bool printApiReference = false;
+    bool printComponentReference = false;
     int traceEvery = 0; // print the player state every N ticks (0 = off)
 };
 
@@ -45,7 +48,8 @@ void printUsage() {
                  "usage: px-headless <project-dir> [--ticks N] [--input-script FILE]\n"
                  "                   [--expect-level-complete] [--expect-no-script-errors]\n"
                  "                   [--log-events] [--trace-every N] [--verbose]\n"
-                 "       px-headless --print-api-reference\n",
+                 "       px-headless --print-api-reference\n"
+                 "       px-headless --print-component-reference\n",
                  version::productName, version::string);
 }
 
@@ -81,6 +85,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.verbose = true;
         } else if (arg == "--print-api-reference") {
             o.printApiReference = true;
+        } else if (arg == "--print-component-reference") {
+            o.printComponentReference = true;
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -90,7 +96,7 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             return std::nullopt;
         }
     }
-    if (o.projectDir.empty() && !o.printApiReference) return std::nullopt;
+    if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference) return std::nullopt;
     return o;
 }
 
@@ -116,6 +122,11 @@ int main(int argc, char** argv) {
     }
     if (options->printApiReference) {
         const std::string md = scripting::generateApiReferenceMarkdown();
+        std::fwrite(md.data(), 1, md.size(), stdout);
+        return 0;
+    }
+    if (options->printComponentReference) {
+        const std::string md = scene::generateComponentReferenceMarkdown();
         std::fwrite(md.data(), 1, md.size(), stdout);
         return 0;
     }

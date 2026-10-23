@@ -396,6 +396,12 @@ def main():
 
     scenery_sources = {"c": ([0, 0, 32, 16], [32, 16], -20), "b": ([32, 0, 32, 16], [32, 16], -1),
                        "f": ([0, 16, 16, 16], [16, 16], -1), "s": ([16, 16, 16, 16], [16, 16], -1)}
+    # Group entities (no components) keep the hierarchy tidy in Studio.
+    # Children of a group without a Transform keep their own positions.
+    coins_group = gid("entity/group/coins")
+    scenery_group = gid("entity/group/scenery")
+    coins = []
+    scenery = []
     coin_count = 0
     spawn = None
     for y, row in enumerate(LEVEL):
@@ -403,34 +409,40 @@ def main():
             cx, cy = x * 16 + 8, y * 16 + 8
             if ch == "o":
                 coin_count += 1
-                entities.append({"id": gid(f"entity/coin/{coin_count}"), "name": f"Coin {coin_count}", "components": {
+                coins.append({"id": gid(f"entity/coin/{coin_count}"), "name": f"Coin {coin_count}",
+                              "parent": coins_group, "components": {
                     "Transform": {"position": [cx, cy]},
                     "Sprite": {"texture": tex["coin"], "source": [0, 0, 16, 16], "size": [16, 16], "layer": 5},
                     "SpriteAnimation": {"frames": [[i * 16, 0, 16, 16] for i in range(4)], "framesPerSecond": 8},
                     "BoxCollider": {"size": [10, 12], "isTrigger": True},
                     "Tags": ["coin"],
-                    "Script": {"script": script["coin"], "properties": {"value": 1}}}})
+                    "Scripts": [{"script": script["coin"], "properties": {"value": 1}}]}})
             elif ch in scenery_sources:
                 source, size, layer = scenery_sources[ch]
                 name = {"c": "Cloud", "b": "Bush", "f": "Flowers", "s": "Sign"}[ch]
                 # Ground decorations sit on the tile below; clouds float.
                 pos = [cx + (8 if size[0] == 32 else 0), cy]
-                entities.append({"id": gid(f"entity/{name.lower()}/{x}/{y}"), "name": name, "components": {
+                scenery.append({"id": gid(f"entity/{name.lower()}/{x}/{y}"), "name": name,
+                                "parent": scenery_group, "components": {
                     "Transform": {"position": pos},
                     "Sprite": {"texture": tex["scenery"], "source": source, "size": size, "layer": layer}}})
             elif ch == "P":
                 spawn = [cx, cy]
+    entities.append({"id": scenery_group, "name": "Scenery", "components": {}})
+    entities.extend(scenery)
+    entities.append({"id": coins_group, "name": "Coins", "components": {}})
+    entities.extend(coins)
 
     width_px = PLATFORM_TILES * 16
     entities.append({"id": gid("entity/moving-platform"), "name": "Moving Platform", "components": {
         "Transform": {"position": [PLATFORM_COLUMN * 16 + width_px // 2, PLATFORM_ROW * 16 + 8]},
         "Sprite": {"texture": tex["platform"], "size": [width_px, 16], "layer": 1},
         "BoxCollider": {"size": [width_px, 16]},
-        "Script": {"script": script["moving_platform"],
-                   "properties": {"offset": [PLATFORM_TRAVEL, 0], "period": 4}}}})
+        "Scripts": [{"script": script["moving_platform"],
+                     "properties": {"offset": [PLATFORM_TRAVEL, 0], "period": 4}}]}})
     entities.append({"id": gid("entity/level-rules"), "name": "Level Rules", "components": {
-        "Script": {"script": script["level_rules"],
-                   "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}}}})
+        "Scripts": [{"script": script["level_rules"],
+                     "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}}]}})
 
     entities.append({"id": player_id, "name": "Player", "components": {
         "Transform": {"position": spawn},
@@ -442,7 +454,7 @@ def main():
 
     scene = {
         "format": "px.scene",
-        "formatVersion": 2,
+        "formatVersion": 3,
         "name": "Level 1",
         "settings": {"backgroundColor": "#9bd4f0", "killPlaneY": num(len(LEVEL) * 16 + 40)},
         "entities": entities,
@@ -454,7 +466,7 @@ def main():
         "formatVersion": 1,
         "id": gid("project/example-platformer"),
         "name": "Example Platformer",
-        "engineVersion": "0.2.0",
+        "engineVersion": "0.3.0",
         "startScene": scene_id,
         "settings": {"tickRate": 60,
                      "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3},

@@ -22,6 +22,16 @@ bool pairLess(const Entity& a1, const Entity& b1, const Entity& a2, const Entity
 // Solid owners in the collision world are entity index + 1 (0 = tiles).
 physics::SolidOwner ownerOf(Entity e) { return e.index + 1; }
 
+// Moves an entity by a world-space offset. Root entities (the common case)
+// are moved exactly; children are moved through their parent's transform.
+void moveWorld(Scene& scene, Entity e, Transform& t, Vec2 delta) {
+    if (scene.parent(e).isNull()) {
+        t.position += delta;
+    } else {
+        scene.setWorldPosition(e, scene.worldPosition(e) + delta);
+    }
+}
+
 } // namespace
 
 GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
@@ -51,7 +61,8 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
         log::warn("Scene uses PlatformerController but the project does not define all of the "
                   "'move_left', 'move_right' and 'jump' input actions");
     }
-    reg.each<Player, Transform>([](Entity, Player& player, Transform& t) { player.spawnPoint = t.position; });
+    Scene& sc = session->m_scene;
+    reg.each<Player, Transform>([&sc](Entity e, Player& player, Transform&) { player.spawnPoint = sc.worldPosition(e); });
 
     scripting::ScriptSystemOptions scriptOptions;
     scriptOptions.realm = scripting::Realm::Authority;
@@ -77,13 +88,15 @@ Entity GameSession::player() const {
 void GameSession::buildStaticCollision() {
     m_collision.clear();
     bool haveBounds = false;
-    m_scene.registry().each<Tilemap, Transform>([&](Entity, Tilemap& map, Transform& t) {
-        const Rect bounds = map.worldBounds(t.position);
+    // Tilemaps use their world position; rotation and scale do not apply to them.
+    m_scene.registry().each<Tilemap, Transform>([&](Entity e, Tilemap& map, Transform&) {
+        const Vec2 origin = m_scene.worldPosition(e);
+        const Rect bounds = map.worldBounds(origin);
         m_worldBounds = haveBounds ? unite(m_worldBounds, bounds) : bounds;
         haveBounds = true;
         if (!map.solid) return;
         physics::SolidGrid grid;
-        grid.origin = t.position;
+        grid.origin = origin;
         grid.cellSize = map.tileSize;
         grid.width = map.width;
         grid.height = map.height;
@@ -133,21 +146,27 @@ void GameSession::requestDestroy(Entity entity) {
 
 void GameSession::flushDestroyed() {
     for (std::size_t i = 0; i < m_pendingDestroy.size(); ++i) {
-        const Entity e = m_pendingDestroy[i];
-        if (!m_scene.isAlive(e)) continue;
-        // Partners of active trigger overlaps are told the overlap ended.
-        std::vector<TriggerPair> ended;
-        std::erase_if(m_triggerPairs, [&](const TriggerPair& p) {
-            if (p.trigger != e && p.other != e) return false;
-            ended.push_back(p);
-            return true;
-        });
-        for (const TriggerPair& p : ended) {
-            const Entity partner = p.trigger == e ? p.other : p.trigger;
-            m_scripts->triggerExit(partner, e);
+        const Entity root = m_pendingDestroy[i];
+        if (!m_scene.isAlive(root)) continue;
+        // Destroying an entity destroys its descendants too. Each is told in
+        // hierarchy order (parents first) while all of them are still readable.
+        const std::vector<Entity> doomed = m_scene.subtree(root);
+        for (const Entity e : doomed) {
+            if (!m_scene.isAlive(e)) continue;
+            // Partners of active trigger overlaps are told the overlap ended.
+            std::vector<TriggerPair> ended;
+            std::erase_if(m_triggerPairs, [&](const TriggerPair& p) {
+                if (p.trigger != e && p.other != e) return false;
+                ended.push_back(p);
+                return true;
+            });
+            for (const TriggerPair& p : ended) {
+                const Entity partner = p.trigger == e ? p.other : p.trigger;
+                if (std::find(doomed.begin(), doomed.end(), partner) == doomed.end()) m_scripts->triggerExit(partner, e);
+            }
+            m_scripts->entityDestroyed(e); // runs Destroy(); the entity is still readable
         }
-        m_scripts->entityDestroyed(e); // runs Destroy(); the entity is still readable
-        m_scene.destroyEntity(e);
+        m_scene.destroyEntity(root);
     }
     m_pendingDestroy.clear();
 }
@@ -162,8 +181,9 @@ void GameSession::updateMovingSolids() {
         const auto* c = m_scene.tryGet<BoxCollider>(e);
         const auto* t = m_scene.tryGet<Transform>(e);
         if (c == nullptr || t == nullptr || c->isTrigger || m_scene.tryGet<KinematicBody>(e) != nullptr) continue;
-        m_collision.addBox(c->worldRect(t->position), ownerOf(e));
-        m_solids.push_back({e, t->position});
+        const Vec2 position = m_scene.worldPosition(e);
+        m_collision.addBox(c->worldRect(position), ownerOf(e));
+        m_solids.push_back({e, position});
     }
 
     // Carry bodies that stood on a solid that moved since the last tick.
@@ -174,10 +194,10 @@ void GameSession::updateMovingSolids() {
         const Vec2 delta = now.position - it->position;
         if (delta.x == 0.0f && delta.y == 0.0f) continue;
         m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
-            [&](Entity, KinematicBody& body, BoxCollider& c, Transform& t) {
+            [&](Entity e, KinematicBody& body, BoxCollider& c, Transform& t) {
                 if (!body.onGround || body.ground != now.entity) return;
-                const physics::MoveResult r = m_collision.moveBox(c.worldRect(t.position), delta);
-                t.position += r.moved;
+                const physics::MoveResult r = m_collision.moveBox(c.worldRect(m_scene.worldPosition(e)), delta);
+                moveWorld(m_scene, e, t, r.moved);
             });
     }
 }
@@ -231,10 +251,10 @@ void GameSession::updatePlatformers() {
 void GameSession::moveKinematicBodies() {
     const float dt = m_dt;
     m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
-        [&](Entity, KinematicBody& body, BoxCollider& c, Transform& t) {
-            const Rect box = c.worldRect(t.position);
+        [&](Entity e, KinematicBody& body, BoxCollider& c, Transform& t) {
+            const Rect box = c.worldRect(m_scene.worldPosition(e));
             const physics::MoveResult r = m_collision.moveBox(box, body.velocity * dt);
-            t.position += r.moved;
+            moveWorld(m_scene, e, t, r.moved);
             body.onGround = r.hitBottom;
             body.hitCeiling = r.hitTop;
             body.hitWall = r.hitLeft || r.hitRight;
@@ -266,12 +286,11 @@ void GameSession::updateTriggers() {
     std::vector<Box> bodies;
     for (const Entity e : m_scene.entities()) {
         const auto* c = m_scene.tryGet<BoxCollider>(e);
-        const auto* t = m_scene.tryGet<Transform>(e);
-        if (c == nullptr || t == nullptr) continue;
+        if (c == nullptr || m_scene.tryGet<Transform>(e) == nullptr) continue;
         if (c->isTrigger) {
-            triggers.push_back({e, c->worldRect(t->position)});
+            triggers.push_back({e, c->worldRect(m_scene.worldPosition(e))});
         } else if (m_scene.tryGet<KinematicBody>(e) != nullptr) {
-            bodies.push_back({e, c->worldRect(t->position)});
+            bodies.push_back({e, c->worldRect(m_scene.worldPosition(e))});
         }
     }
     std::vector<TriggerPair> current;
@@ -314,9 +333,9 @@ void GameSession::updateKillPlane() {
     const auto& killPlane = m_scene.settings().killPlaneY;
     if (!killPlane) return;
     auto& reg = m_scene.registry();
-    reg.each<Player, Transform>([&](Entity e, Player& player, Transform& t) {
-        if (t.position.y <= *killPlane) return;
-        t.position = player.spawnPoint;
+    reg.each<Player, Transform>([&](Entity e, Player& player, Transform&) {
+        if (m_scene.worldPosition(e).y <= *killPlane) return;
+        m_scene.setWorldPosition(e, player.spawnPoint);
         if (auto* body = reg.tryGet<KinematicBody>(e)) *body = KinematicBody{};
         if (auto* c = reg.tryGet<PlatformerController>(e)) {
             c->coyoteTimer = 0.0f;
@@ -350,10 +369,10 @@ void GameSession::updateCameras() {
     auto& reg = m_scene.registry();
     reg.each<Camera>([&](Entity e, Camera& cam) {
         Vec2 target = cam.position;
-        if (const auto* t = reg.tryGet<Transform>(e)) target = t->position;
+        if (reg.tryGet<Transform>(e) != nullptr) target = m_scene.worldPosition(e);
         if (!cam.follow.isNil()) {
             const Entity followed = m_scene.findById(cam.follow);
-            if (const auto* ft = reg.tryGet<Transform>(followed)) target = ft->position;
+            if (reg.tryGet<Transform>(followed) != nullptr) target = m_scene.worldPosition(followed);
         }
         if (cam.clampToBounds && !m_worldBounds.empty()) {
             const Vec2 half = m_viewSize * (0.5f / cam.zoom);

@@ -8,6 +8,7 @@
 #include "Internal.hpp"
 
 #include "px/scripting/ApiReference.hpp"
+#include "px/scene/ComponentInfo.hpp"
 #include "px/scripting/ScriptSystem.hpp"
 
 #include "px/core/Guid.hpp"
@@ -358,17 +359,42 @@ struct Bindings {
         lua_pushlstring(L, name.data(), name.size());
     }
     static void getPosition(lua_State* L, ScriptSystem& s, scene::Entity e) {
-        const Vec2 p = need<scene::Transform>(L, s, e, "Transform").position;
+        (void)need<scene::Transform>(L, s, e, "Transform");
+        const Vec2 p = s.m_scene.worldPosition(e);
         lua_pushvector(L, p.x, p.y, 0.0f);
     }
     static void setPosition(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        (void)need<scene::Transform>(L, s, e, "Transform");
+        s.m_scene.setWorldPosition(e, checkVec2(L, idx));
+    }
+    static void getLocalPosition(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const Vec2 p = need<scene::Transform>(L, s, e, "Transform").position;
+        lua_pushvector(L, p.x, p.y, 0.0f);
+    }
+    static void setLocalPosition(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
         need<scene::Transform>(L, s, e, "Transform").position = checkVec2(L, idx);
     }
     static void getRotation(lua_State* L, ScriptSystem& s, scene::Entity e) {
-        lua_pushnumber(L, need<scene::Transform>(L, s, e, "Transform").rotation);
+        (void)need<scene::Transform>(L, s, e, "Transform");
+        lua_pushnumber(L, s.m_scene.worldTransform(e).rotation);
     }
     static void setRotation(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        (void)need<scene::Transform>(L, s, e, "Transform");
+        s.m_scene.setWorldRotation(e, static_cast<float>(checkFinite(L, idx)));
+    }
+    static void getLocalRotation(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        lua_pushnumber(L, need<scene::Transform>(L, s, e, "Transform").rotation);
+    }
+    static void setLocalRotation(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
         need<scene::Transform>(L, s, e, "Transform").rotation = static_cast<float>(checkFinite(L, idx));
+    }
+    static void getParent(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const scene::Entity parent = s.m_scene.parent(e);
+        if (parent.isNull()) {
+            lua_pushnil(L);
+        } else {
+            s.pushEntity(L, parent);
+        }
     }
     static void getScale(lua_State* L, ScriptSystem& s, scene::Entity e) {
         const Vec2 v = need<scene::Transform>(L, s, e, "Transform").scale;
@@ -422,6 +448,26 @@ struct Bindings {
         return 1;
     }
     static int entityHasComponent(lua_State* L);
+    static int entityGetChildren(lua_State* L) {
+        const scene::Entity e = checkLiveEntity(L, 1);
+        ScriptSystem& s = system(L);
+        const std::vector<scene::Entity> children = s.m_scene.children(e);
+        lua_createtable(L, static_cast<int>(children.size()), 0);
+        int n = 0;
+        for (const scene::Entity child : children) {
+            s.pushEntity(L, child);
+            lua_rawseti(L, -2, ++n);
+        }
+        return 1;
+    }
+    static int entitySetParent(lua_State* L) {
+        requireAuthority(L, "Entity:setParent");
+        const scene::Entity e = checkLiveEntity(L, 1);
+        const scene::Entity parent = lua_isnoneornil(L, 2) ? scene::kNullEntity : checkLiveEntity(L, 2);
+        const Status status = system(L).m_scene.setParent(e, parent, scene::kNullEntity, true);
+        if (!status) luaL_errorL(L, "%s", status.error().message.c_str());
+        return 0;
+    }
 
     // --- Entity metatable -------------------------------------------------------------
 
@@ -494,37 +540,16 @@ struct Bindings {
     static void registerApi(lua_State* L, ScriptSystem& s);
 };
 
-// Component names scripts can test with entity:hasComponent().
-namespace {
-const std::vector<std::string>& componentNames() {
-    static const std::vector<std::string> names = {"Transform", "Sprite",   "SpriteAnimation", "Tilemap",
-                                                   "BoxCollider", "KinematicBody", "PlatformerController",
-                                                   "Player",    "Camera",   "Tags",            "Script"};
-    return names;
-}
-} // namespace
-
 int Bindings::entityHasComponent(lua_State* L) {
     const scene::Entity e = checkLiveEntity(L, 1);
-    const std::string name = luaL_checkstring(L, 2);
-    const scene::Scene& sc = system(L).m_scene;
-    bool has = false;
-    if (name == "Transform") has = sc.tryGet<scene::Transform>(e) != nullptr;
-    else if (name == "Sprite") has = sc.tryGet<scene::Sprite>(e) != nullptr;
-    else if (name == "SpriteAnimation") has = sc.tryGet<scene::SpriteAnimation>(e) != nullptr;
-    else if (name == "Tilemap") has = sc.tryGet<scene::Tilemap>(e) != nullptr;
-    else if (name == "BoxCollider") has = sc.tryGet<scene::BoxCollider>(e) != nullptr;
-    else if (name == "KinematicBody") has = sc.tryGet<scene::KinematicBody>(e) != nullptr;
-    else if (name == "PlatformerController") has = sc.tryGet<scene::PlatformerController>(e) != nullptr;
-    else if (name == "Player") has = sc.tryGet<scene::Player>(e) != nullptr;
-    else if (name == "Camera") has = sc.tryGet<scene::Camera>(e) != nullptr;
-    else if (name == "Tags") has = sc.tryGet<scene::Tags>(e) != nullptr;
-    else if (name == "Script") has = sc.tryGet<scene::Script>(e) != nullptr;
-    else {
-        const std::string hint = suggestName(name, componentNames());
+    std::string name = luaL_checkstring(L, 2);
+    if (name == "Script") name = "Scripts"; // scene format 2 name, still accepted
+    const scene::ComponentInfo* info = scene::findComponentType(name);
+    if (info == nullptr) {
+        const std::string hint = suggestName(name, scene::componentTypeNames());
         luaL_errorL(L, "unknown component '%s'%s", name.c_str(), hint.c_str());
     }
-    lua_pushboolean(L, has);
+    lua_pushboolean(L, info->has(system(L).m_scene, e));
     return 1;
 }
 
@@ -579,13 +604,13 @@ const Binding kBindings[] = {
 
     // World: finding entities.
     {{"World", "find", K::Function, A::Everywhere, "World.find(name: string): Entity?",
-      "The first entity with this name, or nil.", false, true},
+      "The first entity with this name (in hierarchy order), or nil.", false, true},
      &Bindings::worldFind},
     {{"World", "findById", K::Function, A::Everywhere, "World.findById(id: string): Entity?",
       "The entity with this id, or nil.", false, true},
      &Bindings::worldFindById},
     {{"World", "findWithTag", K::Function, A::Everywhere, "World.findWithTag(tag: string): {Entity}",
-      "All entities with the tag, in creation order.", false, true},
+      "All entities with the tag, in hierarchy order.", false, true},
      &Bindings::worldFindWithTag},
 
     // Input: named actions from the project's input settings.
@@ -615,13 +640,25 @@ const Binding kBindings[] = {
     {{"Entity", "name", K::Property, A::Everywhere, "entity.name: string", "Display name.", false, true},
      nullptr, &Bindings::getName},
     {{"Entity", "position", K::Property, A::Everywhere, "entity.position: vector",
-      "World position (Transform). Y points down. Assigning teleports the entity.", true, true},
+      "World position (Transform). Y points down. Assigning teleports the entity; its children move with it.",
+      true, true},
      nullptr, &Bindings::getPosition, &Bindings::setPosition},
+    {{"Entity", "localPosition", K::Property, A::Everywhere, "entity.localPosition: vector",
+      "Position relative to the parent (the Transform's own value). Same as position for entities without a "
+      "parent.", true, true},
+     nullptr, &Bindings::getLocalPosition, &Bindings::setLocalPosition},
     {{"Entity", "rotation", K::Property, A::Everywhere, "entity.rotation: number",
-      "Rotation in degrees, clockwise (Transform).", true, true},
+      "World rotation in degrees, clockwise (Transform).", true, true},
      nullptr, &Bindings::getRotation, &Bindings::setRotation},
-    {{"Entity", "scale", K::Property, A::Everywhere, "entity.scale: vector", "Scale (Transform).", true, true},
+    {{"Entity", "localRotation", K::Property, A::Everywhere, "entity.localRotation: number",
+      "Rotation relative to the parent, in degrees.", true, true},
+     nullptr, &Bindings::getLocalRotation, &Bindings::setLocalRotation},
+    {{"Entity", "scale", K::Property, A::Everywhere, "entity.scale: vector",
+      "Scale relative to the parent (Transform). Negative values mirror.", true, true},
      nullptr, &Bindings::getScale, &Bindings::setScale},
+    {{"Entity", "parent", K::Property, A::Everywhere, "entity.parent: Entity?",
+      "The parent entity, or nil for top-level entities. Change it with setParent.", false, true},
+     nullptr, &Bindings::getParent},
     {{"Entity", "velocity", K::Property, A::Everywhere, "entity.velocity: vector",
       "Velocity in units per second (KinematicBody).", true, true},
      nullptr, &Bindings::getVelocity, &Bindings::setVelocity},
@@ -636,14 +673,21 @@ const Binding kBindings[] = {
       "False once the entity has been destroyed. Other members raise an error on destroyed entities.", false,
       true}, &Bindings::entityIsValid},
     {{"Entity", "destroy", K::Method, A::AuthorityOnly, "entity:destroy()",
-      "Removes the entity at the end of the current phase (after the running handlers)."},
+      "Removes the entity and its children at the end of the current phase (after the running handlers)."},
      &Bindings::entityDestroy},
     {{"Entity", "hasTag", K::Method, A::Everywhere, "entity:hasTag(tag: string): boolean",
       "True if the entity's Tags component contains the tag.", false, true},
      &Bindings::entityHasTag},
     {{"Entity", "hasComponent", K::Method, A::Everywhere, "entity:hasComponent(name: string): boolean",
-      "True if the entity has the named component, e.g. \"Player\".", false, true},
+      "True if the entity has the named component, e.g. \"Player\" (see docs/components.md).", false, true},
      &Bindings::entityHasComponent},
+    {{"Entity", "getChildren", K::Method, A::Everywhere, "entity:getChildren(): {Entity}",
+      "The entity's direct children, in hierarchy order.", false, true},
+     &Bindings::entityGetChildren},
+    {{"Entity", "setParent", K::Method, A::AuthorityOnly, "entity:setParent(parent: Entity?)",
+      "Moves the entity (with its children) under another entity, or to the top level with nil. It stays where "
+      "it is in the world. Errors if the parent is the entity itself or one of its descendants."},
+     &Bindings::entitySetParent},
 };
 // clang-format on
 

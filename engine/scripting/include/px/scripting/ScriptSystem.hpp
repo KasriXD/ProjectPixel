@@ -38,11 +38,11 @@ struct ScriptStats {
     std::size_t memoryBytes = 0;
 };
 
-// Runs the Luau behaviours attached to scene entities (Script components).
+// Runs the Luau behaviours attached to scene entities (Scripts components).
 //
 // Lifecycle (see docs/scripting.md#lifecycle):
-//  * create(): modules are loaded and instances created for every entity
-//    with a Script component, in entity creation order. Property errors and
+//  * create(): modules are loaded and one instance is created per attached
+//    script, in hierarchy order and then attachment order. Property errors and
 //    module errors fail creation (they are content errors, like bad JSON).
 //  * start(): Start() runs once per instance before its first Tick.
 //  * tick(dt): Tick(dt) runs for instances whose behaviour defines it.
@@ -114,12 +114,13 @@ private:
                  const ScriptSystemOptions& options);
 
     Result<std::size_t> loadBehaviour(const CompiledScript& script);
-    Status createInstance(scene::Entity entity, const scene::Script& component);
+    Status createInstance(scene::Entity entity, const scene::AttachedScript& attached);
     void call(std::size_t instance, LifecycleEvent event, scene::Entity other = scene::kNullEntity, float dt = 0.0f);
     void reportError(const std::string& script, const std::string& entity, const std::string& phase,
                      const ScriptVm::CallResult& result);
     void disable(std::size_t instance);
-    [[nodiscard]] int findInstance(scene::Entity entity) const;
+    // Live instances of the entity, in attachment order.
+    [[nodiscard]] std::vector<std::size_t> instancesOf(scene::Entity entity) const;
     [[nodiscard]] std::string currentScriptName() const;
 
     // Used by the bindings (Bindings is a friend).
@@ -135,7 +136,7 @@ private:
     std::vector<Behaviour> m_behaviours;
     std::unordered_map<assets::AssetId, std::size_t> m_behaviourIndex;
     std::vector<Instance> m_instances;                          // creation order
-    std::unordered_map<std::uint32_t, std::size_t> m_byEntity; // entity index -> instance
+    std::unordered_map<std::uint32_t, std::vector<std::size_t>> m_byEntity; // entity index -> instances
     std::unordered_map<std::uint32_t, EntityHandle> m_entityHandles;
     std::vector<QueuedEvent> m_eventQueue;
     std::vector<Listener> m_listeners;

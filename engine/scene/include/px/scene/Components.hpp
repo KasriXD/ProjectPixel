@@ -19,16 +19,29 @@
 namespace px::scene {
 
 // Every entity has exactly one EntityInfo (added by Scene::createEntity).
+// The parent/child hierarchy is kept by Scene (Scene::parent, setParent).
 struct EntityInfo {
     Guid id;          // stable identity, persisted; used for references and networking
     std::string name; // display name; not required to be unique
 };
 
+// Position, rotation and scale relative to the parent entity (or to the
+// world for entities without a parent). Scene::worldTransform composes them.
 struct Transform {
     Vec2 position{};       // world units (1 unit = 1 pixel at zoom 1), Y-down
     float rotation = 0.0f; // degrees, clockwise
     Vec2 scale{1.0f, 1.0f};
 };
+
+// Maps a point from the space described by `space` (e.g. a parent's world
+// transform) to the space `space` itself is in: scale, rotate, translate.
+[[nodiscard]] Vec2 transformPoint(const Transform& space, Vec2 local);
+// The inverse of transformPoint. Axes with zero scale map to 0.
+[[nodiscard]] Vec2 inverseTransformPoint(const Transform& space, Vec2 point);
+// World transform of a child with transform `local` under a parent whose
+// world transform is `parent`. Rotations add and scales multiply per axis
+// (no shear: a rotated parent with non-uniform scale is approximated).
+[[nodiscard]] Transform compose(const Transform& parent, const Transform& local);
 
 struct Sprite {
     assets::AssetId texture;
@@ -130,12 +143,25 @@ struct ScriptProperty {
     ScriptValue value;
 };
 
-// Attaches a Luau behaviour (a script asset) to the entity. `properties`
+// One Luau behaviour (a script asset) attached to an entity. `properties`
 // override the defaults the script declares; the script defines the
 // available names and their types. See docs/scripting.md.
-struct Script {
+struct AttachedScript {
     assets::AssetId script;
     std::vector<ScriptProperty> properties;
+
+    [[nodiscard]] const ScriptProperty* findProperty(std::string_view name) const {
+        for (const auto& p : properties) {
+            if (p.name == name) return &p;
+        }
+        return nullptr;
+    }
+};
+
+// The behaviours attached to an entity. Each runs as its own instance, in
+// list order. (Scene format 2 allowed one, as the "Script" component.)
+struct Scripts {
+    std::vector<AttachedScript> items;
 };
 
 // Marks the locally or remotely controlled player character.

@@ -2,6 +2,10 @@
 
 #include "px/scene/Scene.hpp"
 
+#include <string>
+#include <utility>
+#include <vector>
+
 using namespace px;
 using namespace px::scene;
 
@@ -130,4 +134,149 @@ TEST_CASE("Tilemap helpers") {
     CHECK(map.tileAt(-1, 0) == -1);
     CHECK(map.tileAt(3, 0) == -1);
     CHECK(map.worldBounds({10, 20}) == Rect{10, 20, 48, 32});
+}
+
+namespace {
+std::vector<std::string> names(const Scene& scene, const std::vector<Entity>& entities) {
+    std::vector<std::string> out;
+    for (const Entity e : entities) out.push_back(scene.tryGet<EntityInfo>(e)->name);
+    return out;
+}
+using Names = std::vector<std::string>;
+} // namespace
+
+TEST_CASE("Scene hierarchy keeps depth-first order") {
+    Scene scene;
+    const Entity a = scene.createEntity("A");
+    const Entity b = scene.createEntity("B");
+    const Entity a1 = scene.createEntity("A1", a);
+    const Entity a2 = scene.createEntity("A2", a);
+    const Entity a1x = scene.createEntity("A1x", a1);
+    CHECK(names(scene, scene.entities()) == Names{"A", "A1", "A1x", "A2", "B"});
+    CHECK(scene.parent(a1x) == a1);
+    CHECK(scene.parent(a).isNull());
+    CHECK(scene.depth(a1x) == 2);
+    CHECK(scene.isAncestor(a, a1x));
+    CHECK_FALSE(scene.isAncestor(a1x, a));
+    CHECK(names(scene, scene.children(a)) == Names{"A1", "A2"});
+    CHECK(names(scene, scene.children(kNullEntity)) == Names{"A", "B"});
+    CHECK(scene.hasChildren(a1));
+    CHECK_FALSE(scene.hasChildren(a2));
+    CHECK(names(scene, scene.subtree(a1)) == Names{"A1", "A1x"});
+
+    // Moving a subtree carries its descendants; `before` controls sibling order.
+    REQUIRE(scene.setParent(a1, b).ok());
+    CHECK(names(scene, scene.entities()) == Names{"A", "A2", "B", "A1", "A1x"});
+    REQUIRE(scene.setParent(a2, b, a1).ok());
+    CHECK(names(scene, scene.entities()) == Names{"A", "B", "A2", "A1", "A1x"});
+    REQUIRE(scene.setParent(b, kNullEntity, a).ok()); // reorder roots
+    CHECK(names(scene, scene.entities()) == Names{"B", "A2", "A1", "A1x", "A"});
+
+    // Cycles and bad insertion points are refused without changes.
+    CHECK_FALSE(scene.setParent(b, a1x).ok());
+    CHECK_FALSE(scene.setParent(b, b).ok());
+    CHECK_FALSE(scene.setParent(a, b, a).ok());
+    CHECK(names(scene, scene.entities()) == Names{"B", "A2", "A1", "A1x", "A"});
+
+    // Destroying a parent destroys its descendants.
+    scene.destroyEntity(a1);
+    CHECK_FALSE(scene.isAlive(a1x));
+    CHECK(names(scene, scene.entities()) == Names{"B", "A2", "A"});
+    CHECK(scene.findByName("A1x").isNull());
+}
+
+TEST_CASE("Scene::setParents restores hierarchy order and rejects loops") {
+    Scene scene;
+    const Entity child = scene.createEntity("Child");
+    const Entity other = scene.createEntity("Other");
+    const Entity parent = scene.createEntity("Parent");
+    const std::pair<Entity, Entity> links[] = {{child, parent}};
+    REQUIRE(scene.setParents(links).ok());
+    CHECK(names(scene, scene.entities()) == Names{"Other", "Parent", "Child"});
+    CHECK(scene.parent(other).isNull());
+
+    const std::pair<Entity, Entity> loop[] = {{parent, child}};
+    const Status status = scene.setParents(loop);
+    REQUIRE_FALSE(status.ok());
+    CHECK(status.error().message.find("loop") != std::string::npos);
+    CHECK(scene.parent(parent).isNull()); // unchanged
+    CHECK(names(scene, scene.entities()) == Names{"Other", "Parent", "Child"});
+
+    // Depth limit.
+    Scene deep;
+    Entity last = deep.createEntity("0");
+    for (int i = 1; i <= kMaxHierarchyDepth; ++i) last = deep.createEntity(std::to_string(i), last);
+    CHECK(deep.depth(last) == kMaxHierarchyDepth);
+    CHECK(deep.createEntity("too deep", last).isNull());
+}
+
+TEST_CASE("World transforms compose through parents") {
+    Scene scene;
+    const Entity parent = scene.createEntity("Parent");
+    scene.set(parent, Transform{{100, 50}, 0.0f, {2, 2}});
+    const Entity child = scene.createEntity("Child", parent);
+    scene.set(child, Transform{{10, 5}, 0.0f, {1, 1}});
+    CHECK(scene.worldPosition(child) == Vec2{120, 60});
+    CHECK(scene.worldTransform(child).scale == Vec2{2, 2});
+
+    // A parent without Transform contributes nothing.
+    const Entity group = scene.createEntity("Group");
+    const Entity inGroup = scene.createEntity("InGroup", group);
+    scene.set(inGroup, Transform{{7, 8}});
+    CHECK(scene.worldPosition(inGroup) == Vec2{7, 8});
+
+    // Setting the world position changes the local one.
+    scene.setWorldPosition(child, {200, 100});
+    CHECK(scene.tryGet<Transform>(child)->position == Vec2{50, 25});
+    CHECK(scene.worldPosition(child) == Vec2{200, 100});
+
+    // Rotation: a child 10 units right of a parent rotated 90 degrees
+    // clockwise (Y-down) ends up 10 units below it.
+    scene.tryGet<Transform>(parent)->rotation = 90.0f;
+    scene.tryGet<Transform>(parent)->scale = {1, 1};
+    scene.tryGet<Transform>(child)->position = {10, 0};
+    const Vec2 rotated = scene.worldPosition(child);
+    CHECK(rotated.x == doctest::Approx(100.0f));
+    CHECK(rotated.y == doctest::Approx(60.0f));
+    CHECK(scene.worldTransform(child).rotation == doctest::Approx(90.0f));
+
+    // Re-parenting can keep the world transform.
+    REQUIRE(scene.setParent(child, kNullEntity, kNullEntity, true).ok());
+    CHECK(scene.tryGet<Transform>(child)->position.x == doctest::Approx(100.0f));
+    CHECK(scene.tryGet<Transform>(child)->position.y == doctest::Approx(60.0f));
+    CHECK(scene.tryGet<Transform>(child)->rotation == doctest::Approx(90.0f));
+    REQUIRE(scene.setParent(child, parent, kNullEntity, true).ok());
+    CHECK(scene.worldPosition(child).x == doctest::Approx(100.0f));
+    CHECK(scene.worldPosition(child).y == doctest::Approx(60.0f));
+    CHECK(scene.tryGet<Transform>(child)->rotation == doctest::Approx(0.0f));
+}
+
+TEST_CASE("Entities and subtrees can be copied within and between scenes") {
+    Scene source;
+    const Entity root = source.createEntity("Root");
+    source.set(root, Transform{{1, 2}});
+    source.set(root, Health{7});
+    const Entity kid = source.createEntity("Kid", root);
+    source.set(kid, Tag{});
+
+    Scene target;
+    const Entity copy = target.copySubtree(source, root);
+    REQUIRE_FALSE(copy.isNull());
+    CHECK(target.entityCount() == 2);
+    CHECK(target.tryGet<Health>(copy)->value == 7);
+    CHECK(target.tryGet<Transform>(copy)->position == Vec2{1, 2});
+    CHECK(target.tryGet<EntityInfo>(copy)->name == "Root");
+    CHECK(target.tryGet<EntityInfo>(copy)->id != source.tryGet<EntityInfo>(root)->id);
+    REQUIRE(target.children(copy).size() == 1);
+    CHECK(target.tryGet<Tag>(target.children(copy)[0]) != nullptr);
+
+    // Duplicate within the same scene, inserted before the original.
+    const Entity dup = source.copySubtree(source, root, kNullEntity, root);
+    REQUIRE_FALSE(dup.isNull());
+    CHECK(source.entityCount() == 4);
+    CHECK(source.entities()[0] == dup);
+    CHECK(source.findById(source.tryGet<EntityInfo>(dup)->id) == dup);
+    CHECK(source.findById(source.tryGet<EntityInfo>(root)->id) == root);
+    source.tryGet<Health>(dup)->value = 1;
+    CHECK(source.tryGet<Health>(root)->value == 7);
 }

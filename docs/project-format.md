@@ -1,6 +1,6 @@
 # Project format
 
-Current versions: project manifest **1**, scene **2**.
+Current versions: project manifest **1**, scene **3**.
 
 A game project is a folder:
 
@@ -100,7 +100,7 @@ file and line.
 ```json
 {
   "format": "px.scene",
-  "formatVersion": 2,
+  "formatVersion": 3,
   "name": "Level 1",
   "settings": { "backgroundColor": "#9bd4f0", "killPlaneY": 264 },
   "entities": [
@@ -115,6 +115,16 @@ file and line.
         "PlatformerController": { "maxSpeed": 110, "jumpSpeed": 300 },
         "Player": {}
       }
+    },
+    {
+      "id": "0a7d41a6-...",
+      "name": "Coin 1",
+      "parent": "c3b42f97-...",
+      "components": {
+        "Transform": { "position": [104, 120] },
+        "Tags": ["coin"],
+        "Scripts": [ { "script": "4be1b3f2-...", "properties": { "value": 1 } } ]
+      }
     }
   ]
 }
@@ -125,7 +135,20 @@ file and line.
 | `name` | no | scene display name |
 | `settings.backgroundColor` | no | clear colour, `"#rrggbb"` or `"#rrggbbaa"` |
 | `settings.killPlaneY` | no | players whose Y exceeds this are respawned at their start position |
-| `entities` | yes | at most 100 000 entities; each has `id` (GUID, unique in the scene), optional `name`, optional `components` |
+| `entities` | yes | at most 100 000 entities, see below |
+
+Each entity has:
+
+| Field | Required | Meaning |
+|---|---|---|
+| `id` | yes | GUID, unique in the scene |
+| `name` | no | display name; need not be unique |
+| `parent` | no | id of the parent entity. Its `Transform` is relative to the parent's. Hierarchies may be at most 64 levels deep and may not loop. Destroying an entity destroys its children. |
+| `components` | no | object mapping component names to their data |
+
+Studio writes entities in hierarchy order (each parent before its children,
+depth first), which is also the draw order within a layer and the order in
+which scripts run. The loader accepts any order and restores it.
 
 Units: world units, where 1 unit is 1 pixel at zoom 1. Y points **down**.
 Angles are degrees, clockwise. Vectors are `[x, y]`; rectangles are
@@ -133,61 +156,39 @@ Angles are degrees, clockwise. Vectors are `[x, y]`; rectangles are
 
 ### Components
 
-Defaults are shown; every field is optional unless marked *required*.
+Every component, field, default and allowed range is listed in the generated
+**[component reference](components.md)**, produced from the same descriptor
+table that the loader, the writer and Studio's inspector use. In short:
 
-**Transform**: `position [0, 0]`, `rotation 0`, `scale [1, 1]`.
+| Component | Purpose |
+|---|---|
+| `Transform` | position, rotation, scale relative to the parent |
+| `Sprite`, `SpriteAnimation` | draw an image; play frames on it |
+| `Tilemap` | grid of tiles from a tileset; `rows` are strings of space-separated tile numbers or `.` for empty |
+| `BoxCollider` | solid box or trigger |
+| `KinematicBody` | moved by velocity, stopped by solids |
+| `PlatformerController` | running and jumping; requires `Transform`, `BoxCollider`, `KinematicBody` |
+| `Player` | the player character; respawns at its start position |
+| `Camera` | the view; can follow an entity |
+| `Tags` | an array of labels, e.g. `["coin"]` |
+| `Scripts` | an array of Luau behaviours, each `{ "script": <script asset id>, "properties": {...} }` |
 
-**Sprite**: `texture` (*required*, texture asset id), `source [0, 0, 0, 0]`
-(texel rectangle; empty = whole texture), `size [16, 16]` (world size before
-scale), `pivot [0.5, 0.5]` (point of the sprite placed at the position),
-`tint "#ffffff"`, `layer 0` (lower draws first), `flipX false`, `flipY false`,
-`visible true`.
+Script properties override defaults declared in the script's `properties`
+table and must have the same type: number, `true`/`false`, string, or vector
+`[x, y]`. Undeclared names and wrong types are load errors. Up to 16 scripts
+per entity; each runs as its own instance (see [scripting.md](scripting.md)).
 
-**SpriteAnimation**: `frames` (*required*, non-empty list of rectangles, at
-most 1024), `framesPerSecond 8` (0-240, exclusive of 0), `loop true`,
-`playing true`. Sets the entity's `Sprite.source` each tick.
+Physics and rendering use world positions (the composed transform of the
+entity and its ancestors). Colliders and tilemaps are axis-aligned: rotation
+and scale do not apply to them. Solid `BoxCollider`s without a
+`KinematicBody` may be moved by scripts (moving platforms); bodies standing
+on them are carried along.
 
-**Tilemap**: `tileset` (*required*, texture asset id), `tileSize [16, 16]`,
-`tilesetColumns 1`, `solid true` (every non-empty tile collides), `layer 0`,
-`tint "#ffffff"`, `rows` (*required*). Each row is a string of
-space-separated tokens: `.` for empty or a tile index (left to right, top to
-bottom in the tileset). All rows must have the same number of tokens; at most
-4096 x 4096 tiles. `Transform.position` is the map's top-left corner.
-In version 1 a tileset cell is `tileSize` texels; tileset assets with their
-own cell size and per-tile properties are planned.
+### Copied entities
 
-**BoxCollider**: `size [16, 16]` (positive), `offset [0, 0]`,
-`isTrigger false`. Centred on `Transform.position + offset`. Solid colliders
-on entities without a `KinematicBody` are static level geometry.
-
-**KinematicBody**: no authored fields. Moved by gameplay code and stopped by
-solids.
-
-**PlatformerController**: `maxSpeed 110`, `acceleration 1200`,
-`deceleration 1600`, `airAcceleration 900`, `jumpSpeed 300`, `gravity 900`,
-`maxFallSpeed 420`, `jumpCutMultiplier 0.45` (0-1), `coyoteTime 0.08`,
-`jumpBufferTime 0.1`. All non-negative. Requires `Transform`, `BoxCollider` and
-`KinematicBody`. Reads the `move_left`, `move_right` and `jump` actions.
-
-**Tags**: an array of strings, e.g. `["coin", "pickup"]` (at most 32
-tags of 1-64 characters). Scripts find tagged entities with
-`World.findWithTag` and test them with `entity:hasTag`.
-
-**Script**: `script` (*required*, script asset id), `properties` (object,
-default `{}`). Attaches a Luau behaviour to the entity. Each property
-overrides a default declared in the script's `properties` table and must
-have the same type: number, `true`/`false`, string, or vector `[x, y]`.
-Undeclared names and wrong types are load errors. See
-[scripting.md](scripting.md).
-
-**Player**: no fields. Marks the player character. Its start position is its
-respawn point.
-
-**Camera**: `follow` (entity id, optional), `zoom 1` (0-64, exclusive of 0),
-`clampToBounds true` (keep the view inside the union of all tilemaps).
-
-Solid `BoxCollider`s without a `KinematicBody` may be moved by scripts
-(moving platforms); bodies standing on them are carried along.
+Studio copies entities to the clipboard as a `px.entities` document: the same
+entity objects as a scene, plus `"sceneFormatVersion"`. Pasting gives every
+entity a new id and rewires references between the pasted entities.
 
 ## Format history
 
@@ -195,6 +196,7 @@ Solid `BoxCollider`s without a `KinematicBody` may be moved by scripts
 |---|---|---|---|
 | 1 | 0.1 | Initial format | |
 | 2 | 0.2 | Added `Script` and `Tags`. Removed `Collectible`: collecting is now scripted | `Collectible { kind }` becomes a `kind` tag; `value` is dropped. A warning tells the creator to add a script (see the example's `coin.luau`) |
+| 3 | 0.3 | Entity `parent` (hierarchy). `Script` replaced by `Scripts`, a list, so an entity can have several behaviours | `"Script": {...}` becomes `"Scripts": [{...}]`; behaviour is unchanged |
 
 The project manifest is still format 1; `script` assets and
 `settings.scripting` were added compatibly (older files remain valid).

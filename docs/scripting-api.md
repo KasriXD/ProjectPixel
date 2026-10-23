@@ -47,9 +47,9 @@ Finding entities in the running scene.
 
 | Member | Kind | Available in | Description |
 |---|---|---|---|
-| `World.find(name: string): Entity?` | function, pure | all | The first entity with this name, or nil. |
+| `World.find(name: string): Entity?` | function, pure | all | The first entity with this name (in hierarchy order), or nil. |
 | `World.findById(id: string): Entity?` | function, pure | all | The entity with this id, or nil. |
-| `World.findWithTag(tag: string): {Entity}` | function, pure | all | All entities with the tag, in creation order. |
+| `World.findWithTag(tag: string): {Entity}` | function, pure | all | All entities with the tag, in hierarchy order. |
 
 ## Input
 
@@ -78,14 +78,19 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 |---|---|---|---|
 | `entity.id: string` | property (read-only), pure | all | Stable unique id (from the scene file). |
 | `entity.name: string` | property (read-only), pure | all | Display name. |
-| `entity.position: vector` | property (read/write), pure | all | World position (Transform). Y points down. Assigning teleports the entity. |
-| `entity.rotation: number` | property (read/write), pure | all | Rotation in degrees, clockwise (Transform). |
-| `entity.scale: vector` | property (read/write), pure | all | Scale (Transform). |
+| `entity.position: vector` | property (read/write), pure | all | World position (Transform). Y points down. Assigning teleports the entity; its children move with it. |
+| `entity.localPosition: vector` | property (read/write), pure | all | Position relative to the parent (the Transform's own value). Same as position for entities without a parent. |
+| `entity.rotation: number` | property (read/write), pure | all | World rotation in degrees, clockwise (Transform). |
+| `entity.localRotation: number` | property (read/write), pure | all | Rotation relative to the parent, in degrees. |
+| `entity.scale: vector` | property (read/write), pure | all | Scale relative to the parent (Transform). Negative values mirror. |
+| `entity.parent: Entity?` | property (read-only), pure | all | The parent entity, or nil for top-level entities. Change it with setParent. |
 | `entity.velocity: vector` | property (read/write), pure | all | Velocity in units per second (KinematicBody). |
 | `entity.onGround: boolean` | property (read-only), pure | all | True if the body is standing on something (KinematicBody). |
 | `entity.visible: boolean` | property (read/write), pure | all | Whether the Sprite is drawn. |
 | `entity.flipX: boolean` | property (read/write), pure | all | Mirrors the Sprite horizontally. |
 | `entity:isValid(): boolean` | method, pure | all | False once the entity has been destroyed. Other members raise an error on destroyed entities. |
-| `entity:destroy()` | method | authority | Removes the entity at the end of the current phase (after the running handlers). |
+| `entity:destroy()` | method | authority | Removes the entity and its children at the end of the current phase (after the running handlers). |
 | `entity:hasTag(tag: string): boolean` | method, pure | all | True if the entity's Tags component contains the tag. |
-| `entity:hasComponent(name: string): boolean` | method, pure | all | True if the entity has the named component, e.g. "Player". |
+| `entity:hasComponent(name: string): boolean` | method, pure | all | True if the entity has the named component, e.g. "Player" (see docs/components.md). |
+| `entity:getChildren(): {Entity}` | method, pure | all | The entity's direct children, in hierarchy order. |
+| `entity:setParent(parent: Entity?)` | method | authority | Moves the entity (with its children) under another entity, or to the top level with nil. It stays where it is in the world. Errors if the parent is the entity itself or one of its descendants. |

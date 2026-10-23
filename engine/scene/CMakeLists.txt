@@ -1,5 +1,7 @@
 px_add_module(scene
     SOURCES
+        src/ComponentInfo.cpp
+        src/Components.cpp
         src/Registry.cpp
         src/Scene.cpp
     DEPS

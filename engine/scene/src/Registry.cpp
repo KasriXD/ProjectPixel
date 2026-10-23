@@ -47,6 +47,30 @@ void Registry::destroy(Entity entity) {
     --m_aliveCount;
 }
 
+void Registry::copyComponents(const Registry& source, Entity from, Entity to) {
+    if (!source.isAlive(from) || !isAlive(to)) return;
+    if (&source == this && from == to) return;
+    // Component type ids are per process, so pool i holds the same type in
+    // every registry.
+    // (When source == this, every pool already exists, so m_pools is not
+    // resized while `sourcePool` refers into it. ComponentPool::set takes its
+    // value by copy, so copying within one pool is safe too.)
+    for (std::size_t id = 0; id < source.m_pools.size(); ++id) {
+        const detail::IComponentPool* sourcePool = source.m_pools[id].get();
+        if (sourcePool == nullptr || !sourcePool->contains(from.index)) continue;
+        if (id >= m_pools.size()) m_pools.resize(id + 1);
+        if (!m_pools[id]) m_pools[id] = sourcePool->createEmpty();
+        m_pools[id]->copyFrom(*sourcePool, from.index, to.index);
+    }
+}
+
+void Registry::clearComponents(Entity entity) {
+    if (!isAlive(entity)) return;
+    for (auto& p : m_pools) {
+        if (p) p->remove(entity.index);
+    }
+}
+
 bool Registry::isAlive(Entity entity) const {
     return entity.index < m_generations.size() && m_alive[entity.index] != 0 &&
            m_generations[entity.index] == entity.generation;

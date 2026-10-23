@@ -61,11 +61,16 @@ Result<std::unique_ptr<ScriptSystem>> ScriptSystem::create(scene::Scene& scene,
     if (!vm) return vm.error();
     system->m_vm = std::move(vm.value());
 
-    // Instances are created in entity creation order, which is also the
-    // order in which their handlers run.
-    for (const Entity e : scene.entities()) {
-        if (const auto* component = scene.tryGet<scene::Script>(e)) {
-            if (auto status = system->createInstance(e, *component); !status) return status.error();
+    // Instances are created in hierarchy order, then attachment order; this
+    // is also the order in which their handlers run. (The list is copied:
+    // module code runs while instances are created.)
+    const std::vector<Entity> entities = scene.entities();
+    for (const Entity e : entities) {
+        const auto* scripts = scene.tryGet<scene::Scripts>(e);
+        if (scripts == nullptr) continue;
+        const std::vector<scene::AttachedScript> items = scripts->items;
+        for (const auto& attached : items) {
+            if (auto status = system->createInstance(e, attached); !status) return status.error();
         }
     }
     return system;
@@ -183,12 +188,12 @@ Result<std::size_t> ScriptSystem::loadBehaviour(const CompiledScript& script) {
     return m_behaviours.size() - 1;
 }
 
-Status ScriptSystem::createInstance(Entity entity, const scene::Script& component) {
+Status ScriptSystem::createInstance(Entity entity, const scene::AttachedScript& component) {
     const auto* info = m_scene.tryGet<scene::EntityInfo>(entity);
     const std::string entityName = info != nullptr ? info->name : std::string("?");
     const CompiledScript* script = m_library->find(component.script);
     if (script == nullptr) {
-        return makeError(ErrorCode::NotFound, "Entity '{}': Script refers to {}, which is not a loaded script asset",
+        return makeError(ErrorCode::NotFound, "Entity '{}': Scripts refers to {}, which is not a loaded script asset",
                          entityName, component.script.toString());
     }
     auto behaviourIndex = loadBehaviour(*script);
@@ -237,7 +242,7 @@ Status ScriptSystem::createInstance(Entity entity, const scene::Script& componen
         return makeError(ErrorCode::LimitExceeded, "Entity '{}': could not create script instance: {}", entityName,
                          result.message);
     }
-    m_byEntity[entity.index] = m_instances.size();
+    m_byEntity[entity.index].push_back(m_instances.size());
     m_instances.push_back(std::move(instance));
     return {};
 }
@@ -258,22 +263,25 @@ void ScriptSystem::beginTick() {
         }
         m_instances = std::move(kept);
         m_byEntity.clear();
-        for (std::size_t i = 0; i < m_instances.size(); ++i) m_byEntity[m_instances[i].entity.index] = i;
+        for (std::size_t i = 0; i < m_instances.size(); ++i) m_byEntity[m_instances[i].entity.index].push_back(i);
         for (auto& l : m_listeners) {
             if (l.ownerInstance >= 0) l.ownerInstance = remap[static_cast<std::size_t>(l.ownerInstance)];
         }
     }
 }
 
-int ScriptSystem::findInstance(Entity entity) const {
+std::vector<std::size_t> ScriptSystem::instancesOf(Entity entity) const {
+    std::vector<std::size_t> out;
     const auto it = m_byEntity.find(entity.index);
-    if (it == m_byEntity.end()) return -1;
-    const Instance& inst = m_instances[it->second];
-    if (inst.destroyed || inst.entity != entity) return -1;
-    return static_cast<int>(it->second);
+    if (it == m_byEntity.end()) return out;
+    for (const std::size_t i : it->second) {
+        const Instance& inst = m_instances[i];
+        if (!inst.destroyed && inst.entity == entity) out.push_back(i);
+    }
+    return out;
 }
 
-bool ScriptSystem::hasScript(Entity entity) const { return findInstance(entity) >= 0; }
+bool ScriptSystem::hasScript(Entity entity) const { return !instancesOf(entity).empty(); }
 
 std::string ScriptSystem::currentScriptName() const {
     if (m_currentInstance >= 0) {
@@ -355,30 +363,29 @@ void ScriptSystem::tick(float dt) {
 }
 
 void ScriptSystem::triggerEnter(Entity self, Entity other) {
-    const int index = findInstance(self);
-    if (index >= 0 && m_instances[static_cast<std::size_t>(index)].started) {
-        call(static_cast<std::size_t>(index), LifecycleEvent::TriggerEnter, other);
+    for (const std::size_t i : instancesOf(self)) {
+        if (m_instances[i].started) call(i, LifecycleEvent::TriggerEnter, other);
     }
 }
 
 void ScriptSystem::triggerExit(Entity self, Entity other) {
-    const int index = findInstance(self);
-    if (index >= 0 && m_instances[static_cast<std::size_t>(index)].started) {
-        call(static_cast<std::size_t>(index), LifecycleEvent::TriggerExit, other);
+    for (const std::size_t i : instancesOf(self)) {
+        if (m_instances[i].started) call(i, LifecycleEvent::TriggerExit, other);
     }
 }
 
 void ScriptSystem::entityDestroyed(Entity entity) {
-    const int index = findInstance(entity);
-    if (index >= 0) {
-        const auto i = static_cast<std::size_t>(index);
+    const std::vector<std::size_t> instances = instancesOf(entity);
+    for (const std::size_t i : instances) {
         if (m_instances[i].started) call(i, LifecycleEvent::Destroy);
+    }
+    for (const std::size_t i : instances) {
         disable(i);
         m_instances[i].destroyed = true;
         m_vm->releaseRef(m_instances[i].tableRef);
         m_instances[i].tableRef = 0;
-        m_byEntity.erase(entity.index);
     }
+    if (!instances.empty()) m_byEntity.erase(entity.index);
     if (const auto it = m_entityHandles.find(entity.index);
         it != m_entityHandles.end() && it->second.generation == entity.generation) {
         m_vm->releaseRef(it->second.ref);

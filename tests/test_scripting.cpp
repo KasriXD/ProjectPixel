@@ -107,7 +107,7 @@ struct TestGame {
                      std::vector<ScriptProperty> properties = {}) {
         const Entity e = scene.createEntity(name);
         scene.set(e, Transform{});
-        if (script) scene.set(e, Script{*script, std::move(properties)});
+        if (script) scene.set(e, Scripts{{AttachedScript{*script, std::move(properties)}}});
         return e;
     }
 
@@ -540,7 +540,7 @@ TEST_CASE("Invalid scripts and script components are rejected at load with clear
     game.addEntity("Orphan", assets::AssetId{Guid(9, 9)});
     auto missing = game.start();
     REQUIRE_FALSE(missing.ok());
-    CHECK(contains(missing.error().message, "Entity 'Orphan': Script refers to"));
+    CHECK(contains(missing.error().message, "Entity 'Orphan': Scripts refers to"));
 
     // A misspelled handler is a warning, not an error: it would otherwise silently never run.
     TestGame typo;
@@ -771,7 +771,7 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
         return C
     )lua")
                 .ok());
-    scene.set(e, Script{id, {}});
+    scene.set(e, Scripts{{AttachedScript{id, {}}}});
     FakeHost host;
     scripting::ScriptSystemOptions options;
     options.realm = scripting::Realm::Client;
@@ -791,7 +791,7 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
     for (const auto& m : scripting::apiReference()) {
         if (m.availability == scripting::ApiAvailability::AuthorityOnly) ++authorityOnly;
     }
-    CHECK(authorityOnly == 4); // addScore, setObjective, completeLevel, destroy
+    CHECK(authorityOnly == 5); // addScore, setObjective, completeLevel, destroy, setParent
 }
 
 TEST_CASE("math.random is deterministic per session seed") {
@@ -847,6 +847,125 @@ TEST_CASE("A scripted moving platform carries a body standing on it") {
     CHECK(need(session->scene().tryGet<KinematicBody>(rider)).onGround);
 }
 
+// --- Multiple behaviours and hierarchy ------------------------------------------------------
+
+TEST_CASE("Several scripts on one entity run as separate instances, in order") {
+    LogCapture capture;
+    TestGame game;
+    const auto a = game.addScript("scripts/a.luau", R"lua(
+        local A = { properties = { n = 1 } }
+        function A:Start() print("A start", self.n) end
+        function A:TriggerEnter(other) print("A enter", other.name) end
+        function A:Destroy() print("A destroy") end
+        return A
+    )lua");
+    const auto b = game.addScript("scripts/b.luau", R"lua(
+        local B = { properties = { n = 1 } }
+        function B:Start() print("B start", self.n) end
+        function B:Tick() if Game.tickCount() == 2 then self.entity:destroy() end end
+        function B:TriggerEnter(other) print("B enter", other.name) end
+        function B:Destroy() print("B destroy") end
+        return B
+    )lua");
+    const Entity e = game.addEntity("Both");
+    game.scene.set(e, Scripts{{AttachedScript{a, {{"n", 7.0}}}, AttachedScript{b, {}}}});
+    game.scene.set(e, BoxCollider{{16, 16}, {}, true});
+    const Entity body = game.addEntity("Body");
+    game.scene.set(body, BoxCollider{{8, 8}});
+    game.scene.set(body, KinematicBody{});
+
+    auto session = game.mustStart();
+    CHECK(session->scripts().stats().instances == 2);
+    run(*session, 4);
+    CHECK(capture.printed() == std::vector<std::string>{"A start\t7", "B start\t1", "A enter\tBody", "B enter\tBody",
+                                                        "A destroy", "B destroy"});
+    CHECK(session->scripts().stats().instances == 0);
+    CHECK(session->state().scriptErrors == 0);
+}
+
+TEST_CASE("Scripts see the hierarchy: world and local positions, parents, children") {
+    LogCapture capture;
+    TestGame game;
+    const auto probe = game.addScript("scripts/probe.luau", R"lua(
+        local P = {}
+        function P:Start()
+            local e = self.entity
+            local parent = World.find("Parent")
+            print(e.parent == parent, e.position.x, e.localPosition.x, #parent:getChildren())
+            e.position = Vec2(300, 0)
+            print(e.localPosition.x)
+            e:setParent(nil)
+            print(e.parent == nil, e.position.x, e.localPosition.x)
+            print(pcall(function() parent:setParent(e) e:setParent(parent) parent:setParent(e) end))
+            print(e.rotation, e.localRotation)
+        end
+        return P
+    )lua");
+    const auto destroyer = game.addScript("scripts/destroyer.luau", R"lua(
+        local D = {}
+        function D:Tick() if Game.tickCount() == 1 then self.entity:destroy() end end
+        function D:Destroy() print("destroy", self.entity.name) end
+        return D
+    )lua");
+    const Entity parent = game.addEntity("Parent");
+    game.scene.set(parent, Transform{{100, 0}});
+    const Entity child = game.scene.createEntity("Child", parent);
+    game.scene.set(child, Transform{{20, 0}});
+    game.scene.set(child, Scripts{{AttachedScript{probe, {}}}});
+
+    const Entity doomed = game.addEntity("Doomed", destroyer);
+    const Entity kid = game.scene.createEntity("Kid", doomed);
+    game.scene.set(kid, Scripts{{AttachedScript{destroyer, {}}}});
+
+    auto session = game.mustStart();
+    run(*session, 3);
+    const auto printed = capture.printed();
+    REQUIRE(printed.size() >= 7);
+    CHECK(printed[0] == "true\t120\t20\t1");
+    CHECK(printed[1] == "200");
+    CHECK(printed[2] == "true\t300\t300");
+    CHECK(contains(printed[3], "false"));
+    CHECK(contains(printed[3], "cannot become a child of itself or of its own child"));
+    CHECK(printed[4] == "0\t0");
+    // Destroying a parent destroys its children; both get Destroy, parent first.
+    CHECK(printed[5] == "destroy\tDoomed");
+    CHECK(printed[6] == "destroy\tKid");
+    CHECK(session->scene().findByName("Kid").isNull());
+    CHECK(session->state().scriptErrors == 0);
+}
+
+TEST_CASE("Physics, triggers and rendering use world positions of children") {
+    TestGame game;
+    const auto counter = game.addScript("scripts/counter.luau", R"lua(
+        local C = {}
+        function C:TriggerEnter() Game.addScore(1) end
+        return C
+    )lua");
+    // A trigger that is a child of a moved group: it must be found at its world position.
+    const Entity group = game.addEntity("Group");
+    game.scene.set(group, Transform{{200, 0}});
+    const Entity trigger = game.scene.createEntity("Trigger", group);
+    game.scene.set(trigger, Transform{{0, 0}});
+    game.scene.set(trigger, BoxCollider{{16, 16}, {}, true});
+    game.scene.set(trigger, Scripts{{AttachedScript{counter, {}}}});
+    // A falling body that lands on a solid box that is a child of the group.
+    const Entity floor = game.scene.createEntity("Floor", group);
+    game.scene.set(floor, Transform{{0, 100}});
+    game.scene.set(floor, BoxCollider{{64, 16}});
+    const Entity body = game.addEntity("Body");
+    game.scene.set(body, Transform{{200, 0}});
+    game.scene.set(body, BoxCollider{{8, 8}});
+    KinematicBody falling;
+    falling.velocity = {0, 200};
+    game.scene.set(body, falling);
+
+    auto session = game.mustStart();
+    run(*session, 120);
+    CHECK(session->state().score == 1); // overlapped the trigger at world (200, 0)
+    const Vec2 p = session->scene().worldPosition(body);
+    CHECK(p.y == doctest::Approx(100 - 8 - 4)); // stopped by the floor at world y 100
+}
+
 // --- Formats and documentation ------------------------------------------------------------
 
 TEST_CASE("Scene format 1 Collectible components migrate to tags with a warning") {
@@ -864,7 +983,7 @@ TEST_CASE("Scene format 1 Collectible components migrate to tags with a warning"
     REQUIRE(warnings.size() == 1);
     CHECK(contains(warnings[0], "old.scene.json: scene format 1 -> 2: 1 Collectible component(s) were converted"));
     // Saving writes the current version.
-    CHECK(contains(project::serializeScene(scene.value()), "\"formatVersion\": 2"));
+    CHECK(contains(project::serializeScene(scene.value()), "\"formatVersion\": 3"));
 }
 
 TEST_CASE("Projects requiring a newer scripting API are refused") {

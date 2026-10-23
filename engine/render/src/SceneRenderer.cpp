@@ -12,7 +12,7 @@ namespace {
 
 struct DrawItem {
     int layer = 0;
-    const Transform* transform = nullptr;
+    Transform world;                  // world transform of the entity
     const Tilemap* tilemap = nullptr; // exactly one of tilemap/sprite is set
     const Sprite* sprite = nullptr;
 };
@@ -115,23 +115,25 @@ SceneRenderStats renderScene(const Scene& scene, const Camera2D& camera, IRender
     std::vector<DrawItem> items;
     items.reserve(scene.entityCount());
     for (const Entity e : scene.entities()) {
-        const auto* t = scene.tryGet<Transform>(e);
         const auto* map = scene.tryGet<Tilemap>(e);
-        if (t != nullptr && map != nullptr) items.push_back({map->layer, t, map, nullptr});
+        if (map != nullptr && scene.tryGet<Transform>(e) != nullptr) {
+            items.push_back({map->layer, scene.worldTransform(e), map, nullptr});
+        }
     }
     for (const Entity e : scene.entities()) {
-        const auto* t = scene.tryGet<Transform>(e);
         const auto* sprite = scene.tryGet<Sprite>(e);
-        if (t != nullptr && sprite != nullptr && sprite->visible) items.push_back({sprite->layer, t, nullptr, sprite});
+        if (sprite != nullptr && sprite->visible && scene.tryGet<Transform>(e) != nullptr) {
+            items.push_back({sprite->layer, scene.worldTransform(e), nullptr, sprite});
+        }
     }
     std::stable_sort(items.begin(), items.end(), [](const DrawItem& a, const DrawItem& b) { return a.layer < b.layer; });
 
     SceneRenderStats stats;
     for (const DrawItem& item : items) {
         if (item.tilemap != nullptr) {
-            drawTilemap(*item.tilemap, *item.transform, camera, renderer, textures, stats);
+            drawTilemap(*item.tilemap, item.world, camera, renderer, textures, stats);
         } else if (item.sprite != nullptr) {
-            drawSprite(*item.sprite, *item.transform, camera, renderer, textures, stats);
+            drawSprite(*item.sprite, item.world, camera, renderer, textures, stats);
         }
     }
     return stats;
@@ -144,21 +146,21 @@ void renderCollisionOverlay(const Scene& scene, const Camera2D& camera, IRendere
     const Color triggerColor{255, 220, 40, 255};
 
     for (const Entity e : scene.entities()) {
-        const auto* t = scene.tryGet<Transform>(e);
-        if (t == nullptr) continue;
+        if (scene.tryGet<Transform>(e) == nullptr) continue;
+        const Vec2 position = scene.worldPosition(e);
         if (const auto* map = scene.tryGet<Tilemap>(e); map && map->solid) {
             for (int y = 0; y < map->height; ++y) {
                 for (int x = 0; x < map->width; ++x) {
                     if (map->tileAt(x, y) < 0) continue;
-                    const Rect world{t->position.x + static_cast<float>(x) * map->tileSize.x,
-                                     t->position.y + static_cast<float>(y) * map->tileSize.y, map->tileSize.x,
+                    const Rect world{position.x + static_cast<float>(x) * map->tileSize.x,
+                                     position.y + static_cast<float>(y) * map->tileSize.y, map->tileSize.x,
                                      map->tileSize.y};
                     if (world.intersects(view)) renderer.drawRect(snapRect(camera.worldRectToScreen(world)), tileColor);
                 }
             }
         }
         if (const auto* c = scene.tryGet<BoxCollider>(e)) {
-            const Rect world = c->worldRect(t->position);
+            const Rect world = c->worldRect(position);
             if (world.intersects(view)) {
                 renderer.drawRect(snapRect(camera.worldRectToScreen(world)), c->isTrigger ? triggerColor : solidColor);
             }

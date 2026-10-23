@@ -32,10 +32,12 @@ AddressSanitizer), Windows (MSVC in CI, MinGW under Wine) and macOS (CI).
    { "id": "<new guid>", "type": "script", "name": "Spinner", "path": "scripts/spinner.luau" }
    ```
 
-3. Attach it to an entity in a scene:
+3. Attach it to an entity: in Studio, select the entity, choose **Add
+   Script** in the inspector and pick it (the inspector then lists its
+   properties). In a scene file the same looks like:
 
    ```json
-   "Script": { "script": "<the script's asset id>", "properties": { "speed": 180 } }
+   "Scripts": [ { "script": "<the script's asset id>", "properties": { "speed": 180 } } ]
    ```
 
 4. Run `px-player`. While it runs, edit the script and press **F5**: the
@@ -57,13 +59,17 @@ loads, and it must `return` a **behaviour table**. The table may contain:
 - a `properties` table of defaults,
 - any helper functions (`function Coin:award() ... end`).
 
-Each entity with a `Script` component gets its own **instance**: a table
-whose fields are `entity` (the owning Entity) plus every property, and which
-inherits the behaviour's functions. Inside handlers `self` is the instance,
-so per-entity state lives on `self` (`self.collected += 1`).
+Every script attached to an entity (its `Scripts` component) gets its own
+**instance**: a table whose fields are `entity` (the owning Entity) plus
+every property, and which inherits the behaviour's functions. Inside
+handlers `self` is the instance, so per-entity state lives on `self`
+(`self.collected += 1`). An entity can have several scripts (up to 16), for
+example a `Coin` and a `Bob` behaviour; each is a separate instance with its
+own properties, and they run in the order they are attached.
 
 **Properties** are how scenes configure a behaviour without code. Defaults
-are declared in `properties`; the scene's `Script.properties` override them.
+are declared in `properties`; the values set in the scene (Studio's
+inspector, or `properties` in the file) override them.
 Allowed types are number, boolean, string and vector (`Vec2(x, y)` in Luau,
 `[x, y]` in JSON). A scene that sets an undeclared property or the wrong type
 fails to load with a message like:
@@ -92,8 +98,10 @@ nothing per tick.
 
 Within one tick (`GameSession::tick`):
 
-1. `Start` for every instance that has not started, in **entity creation order**.
-2. `Tick` for every started instance, in entity creation order.
+1. `Start` for every instance that has not started, in **hierarchy order**
+   (the order of Studio's hierarchy panel: parents before children), and for
+   an entity's several scripts in attachment order.
+2. `Tick` for every started instance, in the same order.
 3. Moving solids carry the bodies standing on them.
 4. Platformer controllers, then kinematic movement and collision.
 5. Trigger overlaps are compared with the previous tick: exits first, then
@@ -102,9 +110,10 @@ Within one tick (`GameSession::tick`):
 6. Kill plane, sprite animation, cameras.
 
 After phases 1, 2 and 5 the engine **flushes**: entities destroyed during
-the phase are removed (partners get `TriggerExit`, the entity gets
-`Destroy`), then queued custom events are delivered. Flushing repeats until
-nothing is left (bounded by the event limit).
+the phase are removed together with their children (partners get
+`TriggerExit`; the entity and then each descendant get `Destroy`), then
+queued custom events are delivered. Flushing repeats until nothing is left
+(bounded by the event limit).
 
 Consequences worth knowing:
 
@@ -117,8 +126,8 @@ Consequences worth knowing:
 
 - **Load-time errors stop the game from starting** (like a broken scene
   file): syntax errors, a module that errors or does not return a table,
-  non-function lifecycle fields, unknown or mistyped properties, a Script
-  that refers to a missing asset. Messages name the file and line.
+  non-function lifecycle fields, unknown or mistyped properties, a script
+  attachment that refers to a missing asset. Messages name the file and line.
 - **Runtime errors disable only the failing instance.** The error is logged
   with script, entity, event, `file:line` and a traceback, counted in
   `GameState::scriptErrors`, raised as a `ScriptError` game event and shown
@@ -221,7 +230,7 @@ client-side authority.
 | queries (`World.find`, `entity.position`, `Game.getScore`, `Input.isDown`) | all | reading is safe; on clients they read replicated state |
 | `Events.emit/on/off` | all | each VM has its own event bus; events never cross the network implicitly |
 
-Planned for Milestone 4 (not implemented): a `Script` component setting
+Planned for Milestone 4 (not implemented): a per-script setting
 for where a behaviour runs (`server`, `client`, `both`), explicit network
 messages (client-to-server *requests* that the server validates, like
 Roblox RemoteEvents), per-player input on the server (`Input` becomes
@@ -261,10 +270,24 @@ the network without changing the API.
 Not implemented yet. The API was designed for it: see
 [visual-scripting.md](visual-scripting.md).
 
-## Limitations of version 1
+## Hierarchy
 
-- One Script per entity. Multiple behaviours per entity are planned
-  (a format change: `Script` becomes a list).
+Entities can have a parent (Studio's hierarchy panel, or `parent` in the
+scene file). In scripts:
+
+- `entity.position` and `entity.rotation` are **world** values; assigning
+  them moves the entity in the world (its children follow).
+- `entity.localPosition` and `entity.localRotation` are relative to the
+  parent (the `Transform` values); `entity.scale` is always relative.
+- `entity.parent` is the parent or `nil`; `entity:getChildren()` lists the
+  direct children; `entity:setParent(other)` (authority only) re-parents the
+  entity and keeps it where it is in the world.
+- `entity:destroy()` also destroys the children.
+
+For entities without a parent nothing changed: world and local values are
+the same, so version 1 scripts behave exactly as before.
+
+## Limitations of version 1
 - No `require`: scripts cannot share code modules yet. Planned as
   `require` of script assets by id, resolved by the engine.
 - Scripts cannot create entities yet (needs prefabs, Milestone 3/5).
