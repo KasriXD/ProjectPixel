@@ -319,16 +319,16 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
             const Vec2 world = app.placeOnGrid(screenToWorld(ImGui::GetMousePos(), origin));
             switch (entry->type) {
                 case assets::AssetType::Texture: {
+                    // One undo step: create, then size the sprite like the image.
+                    doc->beginEdit("Create Sprite");
                     const Entity e = doc->createEntity(editor::EntityPreset::Sprite, entry->name, kNullEntity, world, id);
-                    // Size the sprite like the image.
                     const Vec2i texSize = app.renderer().textureSize(app.textures()->get(id));
                     if (texSize.x > 0 && texSize.y > 0) {
-                        doc->beginEdit("Create Sprite");
                         doc->sceneForEdit().tryGet<Sprite>(e)->size = {static_cast<float>(texSize.x),
                                                                        static_cast<float>(texSize.y)};
                         doc->markChanged();
-                        doc->endEdit();
                     }
+                    doc->endEdit();
                     break;
                 }
                 case assets::AssetType::Script: {

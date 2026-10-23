@@ -97,8 +97,11 @@ return {1}
 scene::Scene newSceneContent(std::string_view name, Vec2i resolution) {
     scene::Scene scene;
     scene.setName(std::string(name));
+    // Players who fall off the level respawn instead of falling forever.
+    scene.settings().killPlaneY = static_cast<float>(resolution.y) * 2.0f;
     const scene::Entity camera = scene.createEntity("Main Camera");
-    scene.set(camera, scene::Transform{{static_cast<float>(resolution.x) * 0.5f, static_cast<float>(resolution.y) * 0.5f}});
+    const Vec2 center{static_cast<float>(resolution.x) * 0.5f, static_cast<float>(resolution.y) * 0.5f};
+    scene.set(camera, scene::Transform{center});
     scene::Camera cam;
     cam.clampToBounds = true;
     scene.set(camera, cam);
@@ -230,6 +233,19 @@ Status EditorProject::reloadManifest() {
 
 // --- Assets -----------------------------------------------------------------------------------
 
+std::string EditorProject::uniqueAssetName(std::string_view wanted, assets::AssetType type) const {
+    const auto taken = [&](std::string_view name) {
+        const auto& entries = m_manifest.assets.entries();
+        return std::any_of(entries.begin(), entries.end(),
+                           [&](const assets::AssetEntry& e) { return e.type == type && e.name == name; });
+    };
+    if (!taken(wanted)) return std::string(wanted);
+    for (int i = 2;; ++i) {
+        std::string candidate = std::format("{} {}", wanted, i);
+        if (!taken(candidate)) return candidate;
+    }
+}
+
 Result<std::string> EditorProject::uniquePath(std::string_view folder, std::string_view stem,
                                               std::string_view extension) const {
     const std::string base = stem.empty() ? std::string("asset") : std::string(stem);
@@ -307,7 +323,7 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
     assets::AssetEntry entry;
     entry.id = assets::AssetId{Guid::generate()};
     entry.type = type;
-    entry.name = stem;
+    entry.name = uniqueAssetName(stem, type);
     entry.path = path;
     if (auto added = m_manifest.assets.add(entry); !added) return added.error();
     if (auto saved = saveManifest(); !saved) {
@@ -330,7 +346,8 @@ Result<assets::AssetId> EditorProject::createScript(std::string_view name) {
     if (auto written = m_files.writeText(path.value(), scriptTemplate(name, toIdentifier(name))); !written) {
         return written.error();
     }
-    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Script, std::string(name),
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Script,
+                             uniqueAssetName(name, assets::AssetType::Script),
                              path.value(), assets::TextureFilter::Nearest};
     if (auto added = m_manifest.assets.add(entry); !added) return added.error();
     if (auto saved = saveManifest(); !saved) {
@@ -349,7 +366,8 @@ Result<assets::AssetId> EditorProject::createScene(std::string_view name) {
     if (auto written = m_files.writeText(path.value(), project::serializeScene(content)); !written) {
         return written.error();
     }
-    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Scene, std::string(name),
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Scene,
+                             uniqueAssetName(name, assets::AssetType::Scene),
                              path.value(), assets::TextureFilter::Nearest};
     if (auto added = m_manifest.assets.add(entry); !added) return added.error();
     const bool first = m_manifest.startScene.isNil() || m_manifest.assets.find(m_manifest.startScene) == nullptr;

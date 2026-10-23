@@ -534,6 +534,15 @@ scene::Entity StudioApp::createEntity(editor::EntityPreset preset, scene::Entity
             m_document->markChanged();
         }
     }
+    // A tilemap's position is its top-left corner: centre the map in the view
+    // and put its corner on a grid line, so tiles line up with the grid.
+    if (const auto* map = e.isNull() ? nullptr : m_document->scene().tryGet<scene::Tilemap>(e); map && parent.isNull()) {
+        Vec2 corner = m_viewport->viewCenter() - Vec2{static_cast<float>(map->width) * map->tileSize.x * 0.5f,
+                                                      static_cast<float>(map->height) * map->tileSize.y * 0.5f};
+        if (m_settings.snapToGrid) corner = editor::snapToGrid(corner, m_settings.gridSize);
+        m_document->sceneForEdit().setWorldPosition(e, corner);
+        m_document->markChanged();
+    }
     m_document->endEdit();
     return e;
 }
@@ -924,6 +933,9 @@ void StudioApp::handleShortcuts() {
             if (!pasted) notify(pasted.error().message, true);
             SDL_free(text);
         }
+    }
+    if (ImGui::Shortcut(ImGuiMod_Ctrl | ImGuiKey_A, ImGuiInputFlags_RouteGlobal)) {
+        m_document->setSelection(m_document->scene().children(scene::kNullEntity)); // top level: moves everything
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Delete, false)) m_document->deleteSelection();
 }

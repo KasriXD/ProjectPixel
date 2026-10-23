@@ -77,7 +77,9 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 1. Read the "Breaking Changes" section of the new release's changelog.
 2. `python3 tools/update_imgui.py <tag>-docking` (e.g. `v1.93.0-docking`); it
    replaces the vendored files and records tag and commit in
-   `third_party/imgui/VERSION`.
+   `third_party/imgui/UPSTREAM_VERSION.txt`. (Not `VERSION`: the folder is an
+   include path, and on case-insensitive file systems such as macOS's a file
+   named `VERSION` is picked up by `#include <version>`.)
 3. Rebuild Studio, run the tests including `studio_smoke_headless_display`, and
    look at Studio (layout, fonts, docking, text input).
 4. Update the version in this file and `third_party/VERSIONS.md`, commit.

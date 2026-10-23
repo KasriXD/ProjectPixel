@@ -128,6 +128,8 @@ private:
 
     [[nodiscard]] Result<std::string> uniquePath(std::string_view folder, std::string_view stem,
                                                  std::string_view extension) const;
+    // `wanted`, or "wanted 2", "wanted 3", ... if another asset of the type has that name.
+    [[nodiscard]] std::string uniqueAssetName(std::string_view wanted, assets::AssetType type) const;
     [[nodiscard]] Result<std::string> readSource(assets::AssetId id) const;
     [[nodiscard]] ScriptInfo describeScript(const assets::AssetEntry& entry) const;
 

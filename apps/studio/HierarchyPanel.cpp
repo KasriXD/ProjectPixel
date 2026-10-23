@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <format>
 #include <optional>
 #include <unordered_map>
 
@@ -154,10 +155,13 @@ void HierarchyPanel::draw(StudioApp& app) {
             if (isSelected(e)) flags |= ImGuiTreeNodeFlags_Selected;
             ImGui::PushID(static_cast<int>(e.index));
             const bool group = isGroup(*scene, e);
-            if (group) ImGui::PushStyleColor(ImGuiCol_Text, ui::kDimColor);
+            // Entities that would stop the scene from saving are shown in red.
+            const bool broken = editable && !validateEntity(*scene, e, &app.project()->assets()).empty();
+            if (broken || group) ImGui::PushStyleColor(ImGuiCol_Text, broken ? ui::kErrorColor : ui::kDimColor);
             const bool open =
                 ImGui::TreeNodeEx("##node", flags, "%s", info->name.empty() ? "(unnamed)" : info->name.c_str());
-            if (group) ImGui::PopStyleColor();
+            if (broken || group) ImGui::PopStyleColor();
+            if (broken) ui::tooltip("This entity has problems; select it to see them in the Inspector.");
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) clickSelect(e);
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) app.frameSelection();
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !isSelected(e)) app.select(e);
@@ -178,6 +182,21 @@ void HierarchyPanel::draw(StudioApp& app) {
                     std::memcpy(&dragged, payload->Data, sizeof(Guid));
                     dropRequest = std::make_pair(dragged, e);
                     dropBefore = ImGui::GetIO().KeyShift;
+                }
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
+                    assets::AssetId asset;
+                    std::memcpy(&asset, payload->Data, sizeof(asset));
+                    const auto* entry = app.project()->asset(asset);
+                    if (entry != nullptr && entry->type == assets::AssetType::Script) {
+                        if (auto attached = app.document()->attachScript(e, asset); !attached) {
+                            app.notify(attached.error().message, true);
+                        } else {
+                            app.select(e);
+                            app.notify(std::format("Attached {} to {}", entry->name, info->name));
+                        }
+                    } else if (entry != nullptr) {
+                        app.notify("Only scripts can be dropped onto entities here; drop images into the Scene view", true);
+                    }
                 }
                 ImGui::EndDragDropTarget();
             }

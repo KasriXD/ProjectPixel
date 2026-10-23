@@ -271,6 +271,20 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
     if (ImGui::Button("Add Component", {width * 0.5f - 4.0f, 0})) ImGui::OpenPopup("AddComponent");
     ImGui::SameLine();
     if (ImGui::Button("Add Script", {-FLT_MIN, 0})) ImGui::OpenPopup("AddScript");
+    ui::tooltip("Attach a behaviour. You can also drop a script from Assets here or onto the entity.");
+    if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
+            assets::AssetId asset;
+            std::memcpy(&asset, payload->Data, sizeof(asset));
+            const auto* entry = app.project()->asset(asset);
+            if (entry != nullptr && entry->type == assets::AssetType::Script) {
+                if (auto added = app.document()->attachScript(entity, asset); !added) {
+                    app.notify(added.error().message, true);
+                }
+            }
+        }
+        ImGui::EndDragDropTarget();
+    }
     if (ImGui::BeginPopup("AddComponent")) {
         const Scene& scene = app.document()->scene();
         std::vector<std::string_view> categories;

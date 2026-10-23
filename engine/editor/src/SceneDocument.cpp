@@ -316,6 +316,11 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
             m_scene.set(e, KinematicBody{});
             m_scene.set(e, PlatformerController{});
             m_scene.set(e, Player{});
+            // Cameras that follow nothing yet follow the new player.
+            const Guid id = m_scene.tryGet<EntityInfo>(e)->id;
+            for (const Entity other : m_scene.entities()) {
+                if (auto* cam = m_scene.tryGet<Camera>(other); cam != nullptr && cam->follow.isNil()) cam->follow = id;
+            }
             break;
         }
         case EntityPreset::Camera: {

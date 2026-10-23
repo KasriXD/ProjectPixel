@@ -82,6 +82,8 @@ TEST_CASE("Editor: a new empty project is valid, opens again and plays") {
     DirectoryFileSystem files(folder);
     auto game = must(runtime::loadGame(files));
     CHECK(game.startScene.findByName("Main Camera") != kNullEntity);
+    // A player who falls off the level respawns (kill plane below the screen).
+    CHECK(game.startScene.settings().killPlaneY.value_or(0.0f) > 180.0f);
     CHECK(runtime::startSession(game).ok());
 
     // Creating into a folder that is not empty is refused.
@@ -304,6 +306,7 @@ TEST_CASE("Editor: importing, renaming and deleting assets") {
     // A second import of a file with the same name gets a new file name.
     const auto second = must(project->importFile(kExample / "assets" / "coin.png"));
     CHECK(project->asset(second)->path == "assets/coin-2.png");
+    CHECK(project->asset(second)->name == "coin 2"); // names stay distinguishable
 
     // Broken and unsupported files are refused without changing the project.
     writeFile(temp.path() / "broken.png", "not an image");
@@ -315,6 +318,7 @@ TEST_CASE("Editor: importing, renaming and deleting assets") {
     CHECK(project->assets().size() == 3); // scene + 2 textures
 
     const auto script = must(project->importFile(kExample / "scripts" / "coin.luau"));
+    CHECK(project->asset(script)->name == "coin"); // unique per type: an image and a script may share a name
     const ScriptInfo* info = project->scriptInfo(script);
     REQUIRE(info != nullptr);
     CHECK(info->compiled);
@@ -449,15 +453,10 @@ TEST_CASE("Editor: building, saving and playing a small game without editing fil
         doc.endEdit();
     }
     doc.createEntity(EntityPreset::Player, "Hero", kNullEntity, {24, 120}, hero);
-    // The empty template's camera follows nothing yet; point it at the hero.
+    // The empty template's camera followed nothing; now it follows the hero.
     const Entity camera = doc.scene().findByName("Main Camera");
-    {
-        doc.beginEdit("Follow");
-        doc.sceneForEdit().tryGet<Camera>(camera)->follow =
-            doc.scene().tryGet<EntityInfo>(doc.scene().findByName("Hero"))->id;
-        doc.markChanged();
-        doc.endEdit();
-    }
+    CHECK(doc.scene().tryGet<Camera>(camera)->follow ==
+          doc.scene().tryGet<EntityInfo>(doc.scene().findByName("Hero"))->id);
     const Entity coins = doc.createEntity(EntityPreset::Group, "Coins");
     const Entity coin = doc.createEntity(EntityPreset::Sprite, "Coin 1", coins, {80, 116}, coinImage);
     {

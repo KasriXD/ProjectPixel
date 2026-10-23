@@ -66,7 +66,7 @@ def main():
             target = DEST / name
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(checkout / name, target)
-    (DEST / "VERSION").write_text(f"{tag}\n{commit}\n")
+    (DEST / "UPSTREAM_VERSION.txt").write_text(f"{tag}\n{commit}\n")
     print(f"Vendored Dear ImGui {tag} ({commit}) into {DEST}")
 
 
