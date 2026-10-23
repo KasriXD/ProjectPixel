@@ -411,3 +411,27 @@ TEST_CASE("Component reference document is up to date") {
     const bool upToDate = onDisk == generateComponentReferenceMarkdown();
     CHECK_MESSAGE(upToDate, "docs/components.md is out of date; regenerate it with px-headless --print-component-reference");
 }
+
+TEST_CASE("The example project is stored exactly as Studio saves it") {
+    // So opening and saving it in Studio produces no changes. Regenerate with
+    // tools/generate_example_project.py (which runs px-headless --resave).
+    DirectoryFileSystem fs(kExampleDir);
+    auto manifestText = fs.readText("project.json");
+    REQUIRE(manifestText.ok());
+    std::string manifestOnDisk = manifestText.value();
+    std::erase(manifestOnDisk, '\r');
+    auto manifest = parseProjectManifest(manifestOnDisk, "project.json");
+    REQUIRE(manifest.ok());
+    CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
+    for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type != assets::AssetType::Scene) continue;
+        auto text = fs.readText(entry.path);
+        REQUIRE(text.ok());
+        std::string onDisk = text.value();
+        std::erase(onDisk, '\r');
+        auto scene = parseScene(onDisk, entry.path, &manifest->assets);
+        REQUIRE(scene.ok());
+        CHECK_MESSAGE(serializeScene(scene.value()) == onDisk, entry.path, " is not in canonical form; run "
+                                                                           "px-headless examples/platformer --resave");
+    }
+}

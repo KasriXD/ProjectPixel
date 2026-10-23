@@ -11,3 +11,8 @@ add_subdirectory(luau)
 # doctest: header-only test framework.
 add_library(px_doctest INTERFACE)
 target_include_directories(px_doctest SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/doctest")
+
+# Dear ImGui: Studio's user interface (desktop only).
+if(PX_STUDIO_ENABLED)
+    add_subdirectory(imgui)
+endif()

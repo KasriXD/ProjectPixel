@@ -1,6 +1,6 @@
 #include "px/platform_sdl/SdlPlatform.hpp"
 
-#include "SdlKeys.hpp"
+#include "px/platform_sdl/SdlKeys.hpp"
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"

@@ -31,8 +31,18 @@ public:
 
     [[nodiscard]] SDL_Renderer* sdlRenderer() const { return m_renderer; }
 
+    // Render targets (used by Studio's viewport). createRenderTarget returns a
+    // texture that can be drawn into after setRenderTarget(handle) and then
+    // drawn like any texture; setRenderTarget(kNoTexture) draws to the window
+    // again. kNoTexture on failure.
+    [[nodiscard]] render::TextureHandle createRenderTarget(Vec2i size);
+    bool setRenderTarget(render::TextureHandle target);
+    // The SDL texture behind a handle (for UI libraries), or nullptr.
+    [[nodiscard]] SDL_Texture* sdlTexture(render::TextureHandle texture) const { return lookup(texture); }
+
 private:
     [[nodiscard]] SDL_Texture* lookup(render::TextureHandle texture) const;
+    [[nodiscard]] render::TextureHandle store(SDL_Texture* texture);
 
     SDL_Renderer* m_renderer;
     std::vector<SDL_Texture*> m_textures; // index = handle - 1; nullptr = free slot

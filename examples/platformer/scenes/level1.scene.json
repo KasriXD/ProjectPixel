@@ -12,7 +12,9 @@
       "name": "Main Camera",
       "components": {
         "Transform": {
-          "position": [160, 112]
+          "position": [160, 112],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Camera": {
           "follow": "78e3a2b6-c252-54d7-a6b1-3f2e391edac0",
@@ -26,7 +28,9 @@
       "name": "Level",
       "components": {
         "Transform": {
-          "position": [0, 0]
+          "position": [0, 0],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Tilemap": {
           "tileset": "782c3432-d57a-558a-a29f-2eb189772494",
@@ -34,6 +38,7 @@
           "tilesetColumns": 4,
           "solid": true,
           "layer": 0,
+          "tint": "#ffffff",
           "rows": [
             "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
             "2 2 . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . 2 2",
@@ -64,13 +69,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [128, 24]
+          "position": [128, 24],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -80,13 +92,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [448, 24]
+          "position": [448, 24],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -96,13 +115,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [752, 24]
+          "position": [752, 24],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -112,13 +138,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [1248, 24]
+          "position": [1248, 24],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -128,13 +161,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [928, 40]
+          "position": [928, 40],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -144,13 +184,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [1072, 40]
+          "position": [1072, 40],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -160,13 +207,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [304, 56]
+          "position": [304, 56],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -176,13 +230,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [688, 56]
+          "position": [688, 56],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 0, 32, 16],
           "size": [32, 16],
-          "layer": -20
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -192,13 +253,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [600, 152]
+          "position": [600, 152],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 16, 16, 16],
           "size": [16, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -208,13 +276,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [72, 168]
+          "position": [72, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [16, 16, 16, 16],
           "size": [16, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -224,13 +299,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [136, 168]
+          "position": [136, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 16, 16, 16],
           "size": [16, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -240,13 +322,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [400, 168]
+          "position": [400, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [32, 0, 32, 16],
           "size": [32, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -256,13 +345,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [816, 168]
+          "position": [816, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [32, 0, 32, 16],
           "size": [32, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -272,13 +368,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [968, 168]
+          "position": [968, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 16, 16, 16],
           "size": [16, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -288,13 +391,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [1184, 168]
+          "position": [1184, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [32, 0, 32, 16],
           "size": [32, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -304,13 +414,20 @@
       "parent": "ca60aab4-be39-500d-a52f-71d4929dffc1",
       "components": {
         "Transform": {
-          "position": [1272, 168]
+          "position": [1272, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "846d84be-cd6d-5b6e-8afd-31c0648b1e5b",
           "source": [0, 16, 16, 16],
           "size": [16, 16],
-          "layer": -1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": -1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         }
       }
     },
@@ -325,13 +442,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [728, 104]
+          "position": [728, 104],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -340,10 +464,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -365,13 +492,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [648, 120]
+          "position": [648, 120],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -380,10 +514,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -405,13 +542,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [232, 136]
+          "position": [232, 136],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -420,10 +564,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -445,13 +592,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [360, 136]
+          "position": [360, 136],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -460,10 +614,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -485,13 +642,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [472, 136]
+          "position": [472, 136],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -500,10 +664,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -525,13 +692,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [488, 136]
+          "position": [488, 136],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -540,10 +714,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -565,13 +742,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [936, 136]
+          "position": [936, 136],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -580,10 +764,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -605,13 +792,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [168, 152]
+          "position": [168, 152],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -620,10 +814,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -645,13 +842,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [584, 152]
+          "position": [584, 152],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -660,10 +864,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -685,13 +892,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [104, 168]
+          "position": [104, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -700,10 +914,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -725,13 +942,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [840, 168]
+          "position": [840, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -740,10 +964,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -765,13 +992,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [888, 168]
+          "position": [888, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -780,10 +1014,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -805,13 +1042,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [1064, 168]
+          "position": [1064, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -820,10 +1064,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -845,13 +1092,20 @@
       "parent": "faf97962-c6d1-5a53-9ffa-902f5d6d5da6",
       "components": {
         "Transform": {
-          "position": [1224, 168]
+          "position": [1224, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "557af178-14ef-5774-a06e-707ebfa25910",
           "source": [0, 0, 16, 16],
           "size": [16, 16],
-          "layer": 5
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "SpriteAnimation": {
           "frames": [
@@ -860,10 +1114,13 @@
             [32, 0, 16, 16],
             [48, 0, 16, 16]
           ],
-          "framesPerSecond": 8
+          "framesPerSecond": 8,
+          "loop": true,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 12],
+          "offset": [0, 0],
           "isTrigger": true
         },
         "Tags": [
@@ -884,15 +1141,25 @@
       "name": "Moving Platform",
       "components": {
         "Transform": {
-          "position": [1016, 184]
+          "position": [1016, 184],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "bda48900-1124-5368-a40a-cd76590e706f",
+          "source": [0, 0, 0, 0],
           "size": [48, 16],
-          "layer": 1
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 1,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "BoxCollider": {
-          "size": [48, 16]
+          "size": [48, 16],
+          "offset": [0, 0],
+          "isTrigger": false
         },
         "Scripts": [
           {
@@ -925,22 +1192,38 @@
       "name": "Player",
       "components": {
         "Transform": {
-          "position": [56, 168]
+          "position": [56, 168],
+          "rotation": 0,
+          "scale": [1, 1]
         },
         "Sprite": {
           "texture": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd",
+          "source": [0, 0, 0, 0],
           "size": [16, 16],
-          "layer": 10
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 10,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
         },
         "BoxCollider": {
           "size": [10, 14],
-          "offset": [0, 1]
+          "offset": [0, 1],
+          "isTrigger": false
         },
         "KinematicBody": {},
         "PlatformerController": {
           "maxSpeed": 110,
+          "acceleration": 1200,
+          "deceleration": 1600,
+          "airAcceleration": 900,
           "jumpSpeed": 300,
-          "gravity": 900
+          "gravity": 900,
+          "maxFallSpeed": 420,
+          "jumpCutMultiplier": 0.45,
+          "coyoteTime": 0.08,
+          "jumpBufferTime": 0.1
         },
         "Player": {}
       }

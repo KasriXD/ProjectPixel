@@ -4,6 +4,7 @@
 //   px-headless <project-dir> [--ticks N] [--input-script FILE]
 //               [--expect-level-complete] [--expect-no-script-errors]
 //               [--log-events] [--trace-every N] [--verbose]
+//   px-headless <project-dir> --resave
 //   px-headless --print-api-reference
 //   px-headless --print-component-reference
 //
@@ -11,10 +12,11 @@
 //             3 an --expect-* condition was not met.
 
 #include "px/core/FileSystem.hpp"
-#include "px/scene/ComponentInfo.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
+#include "px/project/SceneFormat.hpp"
 #include "px/runtime/GameLoader.hpp"
+#include "px/scene/ComponentInfo.hpp"
 #include "px/runtime/InputScript.hpp"
 #include "px/scripting/ApiReference.hpp"
 
@@ -24,6 +26,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace px;
 
@@ -39,6 +42,7 @@ struct Options {
     bool verbose = false;
     bool printApiReference = false;
     bool printComponentReference = false;
+    bool resave = false;
     int traceEvery = 0; // print the player state every N ticks (0 = off)
 };
 
@@ -48,6 +52,8 @@ void printUsage() {
                  "usage: px-headless <project-dir> [--ticks N] [--input-script FILE]\n"
                  "                   [--expect-level-complete] [--expect-no-script-errors]\n"
                  "                   [--log-events] [--trace-every N] [--verbose]\n"
+                 "       px-headless <project-dir> --resave   (rewrite project.json and scenes in the\n"
+                 "                                             current format, as Studio saves them)\n"
                  "       px-headless --print-api-reference\n"
                  "       px-headless --print-component-reference\n",
                  version::productName, version::string);
@@ -81,6 +87,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.expectNoScriptErrors = true;
         } else if (arg == "--log-events") {
             o.logEvents = true;
+        } else if (arg == "--resave") {
+            o.resave = true;
         } else if (arg == "--verbose") {
             o.verbose = true;
         } else if (arg == "--print-api-reference") {
@@ -112,6 +120,49 @@ const char* eventName(runtime::GameEvent::Type type) {
     return "?";
 }
 
+// Rewrites the manifest and every scene in the current format (migrations
+// applied, every field written), exactly as Studio would save them.
+int resaveProject(DirectoryFileSystem& files) {
+    auto manifest = project::loadProjectManifest(files);
+    if (!manifest) {
+        log::error("{}", manifest.error().message);
+        return 1;
+    }
+    for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type != assets::AssetType::Scene) continue;
+        auto text = files.readText(entry.path);
+        if (!text) {
+            log::error("{}", text.error().message);
+            return 1;
+        }
+        std::vector<std::string> warnings;
+        auto scene = project::parseScene(text.value(), files.describe(entry.path), &manifest->assets, &warnings);
+        if (!scene) {
+            log::error("{}", scene.error().message);
+            return 1;
+        }
+        for (const auto& w : warnings) log::warn("{}", w);
+        const std::string saved = project::serializeScene(scene.value());
+        if (saved != text.value()) {
+            if (auto written = files.writeText(entry.path, saved); !written) {
+                log::error("{}", written.error().message);
+                return 1;
+            }
+            log::info("Rewrote {}", entry.path);
+        }
+    }
+    const std::string manifestText = project::serializeProjectManifest(manifest.value());
+    auto current = files.readText(project::kProjectFileName);
+    if (!current || current.value() != manifestText) {
+        if (auto written = files.writeText(project::kProjectFileName, manifestText); !written) {
+            log::error("{}", written.error().message);
+            return 1;
+        }
+        log::info("Rewrote {}", project::kProjectFileName);
+    }
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -133,6 +184,7 @@ int main(int argc, char** argv) {
     if (options->verbose) log::setMinLevel(log::Level::Debug);
 
     DirectoryFileSystem files(options->projectDir);
+    if (options->resave) return resaveProject(files);
     auto game = runtime::loadGame(files);
     if (!game) {
         log::error("{}", game.error().message);

@@ -502,12 +502,11 @@ void EditorProject::setScriptBuffer(assets::AssetId id, std::string text) {
     buffer.text = std::move(text);
     auto disk = readSource(id);
     buffer.dirty = !disk || disk.value() != buffer.text;
-    m_scriptsStale = true;
+    m_staleScripts.insert(id);
 }
 
 void EditorProject::discardScriptBuffer(assets::AssetId id) {
-    m_scriptBuffers.erase(id);
-    m_scriptsStale = true;
+    if (m_scriptBuffers.erase(id) > 0) m_staleScripts.insert(id);
 }
 
 bool EditorProject::scriptBufferDirty(assets::AssetId id) const {
@@ -526,7 +525,11 @@ Status EditorProject::saveScript(assets::AssetId id) {
     if (entry == nullptr) return makeError(ErrorCode::NotFound, "Script {} is not part of the project", id.toString());
     if (auto written = m_files.writeText(entry->path, it->second.text); !written) return written;
     m_scriptBuffers.erase(it);
-    m_scriptsStale = true;
+    m_staleScripts.insert(id);
+    // Our own write is not an outside change.
+    std::error_code ec;
+    const auto time = std::filesystem::last_write_time(m_root / std::filesystem::path(entry->path), ec);
+    if (!ec) m_scriptTimes[id] = time;
     return {};
 }
 
@@ -550,45 +553,54 @@ bool EditorProject::checkScriptsChangedOnDisk() {
         if (ec) continue;
         const auto it = m_scriptTimes.find(entry.id);
         if (it == m_scriptTimes.end() || it->second != time) {
-            if (it != m_scriptTimes.end()) changed = true;
+            if (it != m_scriptTimes.end()) {
+                changed = true;
+                m_staleScripts.insert(entry.id);
+            }
             m_scriptTimes[entry.id] = time;
         }
     }
-    if (changed) m_scriptsStale = true;
     return changed;
+}
+
+ScriptInfo EditorProject::describeScript(const assets::AssetEntry& entry) const {
+    ScriptInfo info;
+    auto source = scriptText(entry.id);
+    auto library = std::make_shared<scripting::ScriptLibrary>();
+    if (!source) {
+        info.error = source.error().message;
+    } else if (auto added = library->add(entry.id, entry.path, source.value()); !added) {
+        info.error = added.error().message;
+    } else {
+        info.compiled = true;
+        // Each script is described in its own sandbox, so one broken script
+        // does not hide the others.
+        auto described = scripting::ScriptSystem::describe(library, entry.id);
+        if (described) {
+            info.behaviour = std::move(described.value());
+        } else {
+            info.error = described.error().message;
+        }
+    }
+    return info;
 }
 
 void EditorProject::refreshScripts() {
     m_scriptInfo.clear();
-    auto library = std::make_shared<scripting::ScriptLibrary>();
     for (const auto& entry : m_manifest.assets.entries()) {
-        if (entry.type != assets::AssetType::Script) continue;
-        ScriptInfo info;
-        auto source = scriptText(entry.id);
-        if (!source) {
-            info.error = source.error().message;
-        } else if (auto added = library->add(entry.id, entry.path, source.value()); !added) {
-            info.error = added.error().message;
-        } else {
-            info.compiled = true;
-            // Each script is described in its own sandbox, so one broken
-            // script does not hide the others.
-            auto single = std::make_shared<scripting::ScriptLibrary>();
-            (void)single->add(entry.id, entry.path, source.value());
-            auto described = scripting::ScriptSystem::describe(single, entry.id);
-            if (described) {
-                info.behaviour = std::move(described.value());
-            } else {
-                info.error = described.error().message;
-            }
-        }
-        m_scriptInfo.emplace(entry.id, std::move(info));
+        if (entry.type == assets::AssetType::Script) m_scriptInfo.emplace(entry.id, describeScript(entry));
     }
     m_scriptsStale = false;
+    m_staleScripts.clear();
 }
 
 const ScriptInfo* EditorProject::scriptInfo(assets::AssetId id) {
-    if (m_scriptsStale) refreshScripts();
+    if (m_scriptsStale) {
+        refreshScripts();
+    } else if (m_staleScripts.erase(id) > 0) {
+        // Only the script that changed is compiled again (typing in the editor).
+        if (const auto* entry = m_manifest.assets.find(id)) m_scriptInfo[id] = describeScript(*entry);
+    }
     const auto it = m_scriptInfo.find(id);
     return it == m_scriptInfo.end() ? nullptr : &it->second;
 }

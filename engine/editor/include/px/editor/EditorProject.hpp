@@ -12,6 +12,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -128,6 +129,7 @@ private:
     [[nodiscard]] Result<std::string> uniquePath(std::string_view folder, std::string_view stem,
                                                  std::string_view extension) const;
     [[nodiscard]] Result<std::string> readSource(assets::AssetId id) const;
+    [[nodiscard]] ScriptInfo describeScript(const assets::AssetEntry& entry) const;
 
     std::filesystem::path m_root;
     DirectoryFileSystem m_files;
@@ -141,7 +143,8 @@ private:
     std::map<assets::AssetId, ScriptBuffer> m_scriptBuffers;
     std::map<assets::AssetId, ScriptInfo> m_scriptInfo;
     std::map<assets::AssetId, std::filesystem::file_time_type> m_scriptTimes;
-    bool m_scriptsStale = true;
+    std::set<assets::AssetId> m_staleScripts; // changed since last described
+    bool m_scriptsStale = true;               // everything must be described again
 };
 
 // "Enemy Patrol" -> "enemy_patrol" (file names); empty if nothing usable.

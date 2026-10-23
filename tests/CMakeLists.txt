@@ -43,3 +43,16 @@ if(PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
     set_tests_properties(player_smoke_headless_display PROPERTIES
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0")
 endif()
+
+# Studio smoke test: the real editor UI with SDL's "dummy" video driver. It
+# opens the example project, selects and creates entities, opens the script
+# editor and project settings, undoes everything, plays for two seconds and
+# checks that a coin was collected; nothing is saved. See docs/studio.md.
+if(PX_STUDIO_ENABLED)
+    add_test(NAME studio_smoke_headless_display
+        COMMAND px_studio "${PX_EXAMPLES_DIR}/platformer" --smoke-test
+                --screenshot "${CMAKE_CURRENT_BINARY_DIR}/studio_smoke.png")
+    set_tests_properties(studio_smoke_headless_display PROPERTIES
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0"
+        TIMEOUT 300)
+endif()

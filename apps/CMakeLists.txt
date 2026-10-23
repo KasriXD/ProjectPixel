@@ -6,3 +6,7 @@ add_subdirectory(headless)
 if(PX_BUILD_CLIENT)
     add_subdirectory(player)
 endif()
+
+if(PX_STUDIO_ENABLED)
+    add_subdirectory(studio)
+endif()

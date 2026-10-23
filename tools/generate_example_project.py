@@ -13,10 +13,15 @@ All art is original and drawn procedurally here. Ids are deterministic
 
 Requires Pillow:  python3 -m pip install pillow
 Usage:            python3 tools/generate_example_project.py
+
+The scene is then rewritten with `px-headless examples/platformer --resave`
+(found in build/*/apps/headless), so it is stored exactly as Studio saves it
+and opening and saving it in Studio changes nothing. A test checks this.
 """
 
 import json
 import pathlib
+import subprocess
 import uuid
 
 from PIL import Image
@@ -493,6 +498,13 @@ def main():
     (ROOT / "project.json").write_text(dump_pretty(project) + "\n")
     print("\n".join(LEVEL))
     print(f"Wrote example project to {ROOT} ({coin_count} coins, level {width}x{len(LEVEL)} tiles)")
+    build = ROOT.parent.parent / "build"
+    tools = list(build.glob("*/apps/headless/px-headless")) + list(build.glob("*/apps/headless/px-headless.exe"))
+    tools.sort(key=lambda p: p.stat().st_mtime, reverse=True)  # the most recently built one
+    if tools:
+        subprocess.run([str(tools[0]), str(ROOT), "--resave"], check=True)
+    else:
+        print("Build px-headless and run: px-headless examples/platformer --resave")
 
 
 if __name__ == "__main__":

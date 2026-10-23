@@ -24,6 +24,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 endif()
 
 option(PX_BUILD_CLIENT "Build the SDL3 client (player). OFF gives a headless, graphics-free build." ON)
+option(PX_BUILD_STUDIO "Build Studio, the desktop editor (requires PX_BUILD_CLIENT; not for the browser)" ON)
 option(PX_BUILD_TESTS "Build the automated test suite" ON)
 option(PX_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(PX_ENABLE_SANITIZERS "Build with AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
@@ -40,6 +41,13 @@ endif()
 include(PxCompilerOptions)
 include(PxDependencies)
 
+# Studio needs the SDL client and a desktop platform.
+if(PX_BUILD_STUDIO AND PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
+    set(PX_STUDIO_ENABLED ON)
+else()
+    set(PX_STUDIO_ENABLED OFF)
+endif()
+
 # Location of the bundled example projects, used for dev defaults and tests.
 set(PX_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples")
 
@@ -52,4 +60,4 @@ if(PX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
+message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")

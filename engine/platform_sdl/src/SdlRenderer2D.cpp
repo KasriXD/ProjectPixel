@@ -4,6 +4,7 @@
 
 #include <SDL3/SDL.h>
 
+#include <algorithm>
 #include <string>
 
 namespace px::platform {
@@ -31,7 +32,10 @@ render::TextureHandle SdlRenderer2D::createTexture(const assets::Image& image, a
     SDL_SetTextureBlendMode(texture, SDL_BLENDMODE_BLEND);
     SDL_SetTextureScaleMode(texture,
                             filter == assets::TextureFilter::Nearest ? SDL_SCALEMODE_NEAREST : SDL_SCALEMODE_LINEAR);
+    return store(texture);
+}
 
+render::TextureHandle SdlRenderer2D::store(SDL_Texture* texture) {
     for (std::size_t i = 0; i < m_textures.size(); ++i) {
         if (m_textures[i] == nullptr) {
             m_textures[i] = texture;
@@ -40,6 +44,23 @@ render::TextureHandle SdlRenderer2D::createTexture(const assets::Image& image, a
     }
     m_textures.push_back(texture);
     return static_cast<render::TextureHandle>(m_textures.size());
+}
+
+render::TextureHandle SdlRenderer2D::createRenderTarget(Vec2i size) {
+    SDL_Texture* texture = SDL_CreateTexture(m_renderer, SDL_PIXELFORMAT_RGBA32, SDL_TEXTUREACCESS_TARGET,
+                                             std::max(1, size.x), std::max(1, size.y));
+    if (texture == nullptr) {
+        log::error("SDL_CreateTexture(render target {}x{}) failed: {}", size.x, size.y, SDL_GetError());
+        return render::kNoTexture;
+    }
+    SDL_SetTextureScaleMode(texture, SDL_SCALEMODE_NEAREST);
+    return store(texture);
+}
+
+bool SdlRenderer2D::setRenderTarget(render::TextureHandle target) {
+    SDL_Texture* texture = target == render::kNoTexture ? nullptr : lookup(target);
+    if (target != render::kNoTexture && texture == nullptr) return false;
+    return SDL_SetRenderTarget(m_renderer, texture);
 }
 
 SDL_Texture* SdlRenderer2D::lookup(render::TextureHandle texture) const {
