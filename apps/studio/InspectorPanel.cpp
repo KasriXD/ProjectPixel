@@ -273,6 +273,11 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
     if (ImGui::Button("Add Script", {-FLT_MIN, 0})) ImGui::OpenPopup("AddScript");
     ui::tooltip("Attach a behaviour. You can also drop a script from Assets here or onto the entity.");
     if (ImGui::BeginDragDropTarget()) {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kLibraryPayload)) {
+            ui::LibraryPayload item;
+            std::memcpy(&item, payload->Data, sizeof(item));
+            if (item.kind == ui::LibraryPayload::Kind::Behaviour) app.attachLibraryScript(item.asset, entity);
+        }
         if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
             assets::AssetId asset;
             std::memcpy(&asset, payload->Data, sizeof(asset));
@@ -324,6 +329,15 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
             ui::tooltip(entry.path);
         }
         if (!any) ImGui::TextDisabled("The project has no scripts yet.");
+        if (const editor::Library* library = app.library()) {
+            ImGui::SeparatorText("From the Toolbox");
+            for (const auto& asset : library->manifest().assets) {
+                if (asset.entry.type != assets::AssetType::Script) continue;
+                if (app.project()->asset(asset.entry.id) != nullptr) continue; // already listed above
+                if (ImGui::MenuItem(asset.entry.name.c_str())) app.attachLibraryScript(asset.entry.id, entity);
+                ui::tooltip(asset.description);
+            }
+        }
         ImGui::Separator();
         ImGui::TextUnformatted("New script:");
         static std::string newName = "New Behaviour";

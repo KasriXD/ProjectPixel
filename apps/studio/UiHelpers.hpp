@@ -4,6 +4,7 @@
 #include "px/core/Color.hpp"
 #include "px/core/Math.hpp"
 #include "px/editor/SceneDocument.hpp"
+#include "px/render/TextureCache.hpp"
 
 #include <imgui.h>
 
@@ -25,6 +26,14 @@ inline constexpr ImVec4 kPlayColor{1.0f, 0.6f, 0.2f, 1.0f};
 // Drag-and-drop payload types.
 inline constexpr const char* kAssetPayload = "PX_ASSET";   // assets::AssetId
 inline constexpr const char* kEntityPayload = "PX_ENTITY"; // Guid
+inline constexpr const char* kLibraryPayload = "PX_LIBRARY"; // LibraryPayload
+
+// Something dragged from the Toolbox.
+struct LibraryPayload {
+    enum class Kind : int { Object, Image, Behaviour } kind = Kind::Object;
+    int object = -1;         // Object: index in the library
+    assets::AssetId asset;   // Image, Behaviour
+};
 
 // Connects inspector widgets to the document's undo transactions.
 //
@@ -76,8 +85,12 @@ Color fromImVec4(const ImVec4& v);
 // ImGui texture id for an SDL texture handle of the app's renderer.
 ImTextureID textureId(StudioApp& app, unsigned int handle);
 // Draws a texture asset (or part of it) fitted into `size`, keeping its aspect ratio.
-// With an `id` the area is an invisible button (a drag source or click target).
-void textureImage(StudioApp& app, assets::AssetId texture, ImVec2 size, Rect source = {}, const char* id = nullptr);
+// With an `id` the area is an invisible button (a drag source or click target), and
+// the result is true when it was clicked (pressed and released on it).
+bool textureImage(StudioApp& app, assets::AssetId texture, ImVec2 size, Rect source = {}, const char* id = nullptr);
+// The same for a texture of another cache (the starter library's).
+bool textureImage(StudioApp& app, render::TextureCache* cache, assets::AssetId texture, ImVec2 size, Rect source = {},
+                  const char* id = nullptr);
 
 } // namespace ui
 } // namespace px::studio

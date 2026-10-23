@@ -183,6 +183,15 @@ void HierarchyPanel::draw(StudioApp& app) {
                     dropRequest = std::make_pair(dragged, e);
                     dropBefore = ImGui::GetIO().KeyShift;
                 }
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kLibraryPayload)) {
+                    ui::LibraryPayload item;
+                    std::memcpy(&item, payload->Data, sizeof(item));
+                    if (item.kind == ui::LibraryPayload::Kind::Behaviour) {
+                        app.attachLibraryScript(item.asset, e);
+                    } else {
+                        app.notify("Drop objects and images into the Scene view; behaviours go onto entities", true);
+                    }
+                }
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
                     assets::AssetId asset;
                     std::memcpy(&asset, payload->Data, sizeof(asset));

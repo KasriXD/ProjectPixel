@@ -45,7 +45,7 @@ def ground_rows():
     for y in range(H):
         row = []
         for x in range(W):
-            t = 1 if (x * 7 + y * 5) % 13 == 0 else 0  # flowers here and there
+            t = 1 if lib.scatter(x, y, 12) else 0  # flowers here and there
             px, py, pw, ph = POND
             if px - 1 <= x <= px + pw and py - 1 <= y <= py + ph:
                 t = 3  # sand around the pond
@@ -162,7 +162,7 @@ def main():
         "Scripts": [{"script": S["patrol"], "properties": {"offset": [0, 48], "period": 3}},
                     {"script": S["hazard"], "properties": {}}]}, parent="hazards"))
     entities.append(e("nature", "Nature", {}))
-    for i, (x, y) in enumerate([(104, 56), (248, 40), (232, 208), (312, 216)], start=1):
+    for i, (x, y) in enumerate([(296, 72), (248, 40), (232, 208), (312, 216)], start=1):
         entities.append(e(f"tree/{i}", "Tree", {
             "Transform": {"position": [x, y]}, "Sprite": sprite("tree", [32, 32], layer=8),
             "BoxCollider": {"size": [10, 8], "offset": [0, 10]}}, parent="nature"))

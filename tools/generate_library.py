@@ -134,6 +134,13 @@ def entity(key, name, *component_dicts, parent=None):
     return e
 
 
+def scatter(x, y, one_in):
+    """True for about one cell in `one_in`, spread without visible lines (an integer hash)."""
+    h = (x * 374761393 + y * 668265263) & 0xFFFFFFFF
+    h = ((h ^ (h >> 13)) * 1274126177) & 0xFFFFFFFF
+    return (h ^ (h >> 16)) % one_in == 0
+
+
 def tile_rows(grid):
     return [" ".join("." if t is None else str(t) for t in row) for row in grid]
 
@@ -237,7 +244,7 @@ def objects():
     add("ground_strip", "Ground", "Ground", [P], "A solid strip of grass and dirt, 16 tiles wide. Paint more in it.",
         ("tiles", (0, 0, 16, 16)),
         entity("ground_strip", "Ground", transform(), tilemap("tiles", 4, ground, True, 0)))
-    meadow = [[1 if (x * 7 + y * 3) % 11 == 0 else 0 for x in range(20)] for y in range(12)]
+    meadow = [[1 if scatter(x, y, 10) else 0 for x in range(20)] for y in range(12)]
     add("meadow", "Meadow", "Ground", [T], "A 20 x 12 field of grass to walk on (not solid).",
         ("topdown_tiles", (0, 0, 16, 16)),
         entity("meadow", "Meadow", transform(), tilemap("topdown_tiles", 8, meadow, False, -10)))

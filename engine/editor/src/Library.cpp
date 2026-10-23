@@ -161,6 +161,7 @@ Result<std::vector<Entity>> insertLibraryObject(EditorProject& project, SceneDoc
             }
         }
     }
+    for (const Entity e : pasted.value()) document.followIfCameraIdle(e);
     document.markChanged();
     document.endEdit();
     return pasted;

@@ -71,6 +71,32 @@ change to a scene goes through a `SceneDocument` transaction
 what makes it undoable ([ADR 0015](docs/adr/0015-studio-architecture.md)).
 Try changes in Studio itself; `px-studio --smoke-test` must keep passing.
 
+## Starter library
+
+`library/` (Studio's Toolbox, [format](docs/library-format.md)) and
+`examples/` are generated; edit the generators in `tools/`, not the files:
+
+```sh
+pip install pillow                          # once
+python3 tools/generate_example_project.py   # examples/platformer (art + level)
+python3 tools/generate_library.py           # library/ (copies the platformer art and scripts)
+python3 tools/generate_topdown_example.py   # examples/topdown (uses library/)
+```
+
+Run them in that order and commit the output. The example generators then
+rewrite their project through `px-headless --resave` when a build exists, so
+files are stored exactly as Studio saves them. To add a Toolbox item, draw
+its art in `tools/library_art.py` and list it in `LIBRARY_TEXTURES` (or reuse
+an image), write its behaviour in `library/scripts/` if it needs one
+(hand-written, short, commented) and list it in `LIBRARY_SCRIPTS`, then add
+the object with `add(...)` in `generate_library.py`, giving the game types it
+fits. Ids are derived from
+names (`uuid5`), so regenerating never changes them. The editor tests insert
+every object into empty projects of both kinds and play them, so a broken
+item fails `unit_tests`. A new kind of game needs a controller component, a
+`GameType` value, default input in `engine/editor`, a player object and an
+example.
+
 ## Adding to the scripting API
 
 Scripts are untrusted and the API is versioned, so API changes get extra care:
@@ -109,12 +135,13 @@ single header in `third_party/` and record it in `third_party/VERSIONS.md`.
 - `example_platformer_playthrough` replays `examples/platformer/tests/full_run.input`
   and requires the level to be completed (by its Luau scripts) with no
   script errors. If you change the level, scripts or movement tuning,
-  re-tune the route (see comments in the file).
+  re-tune the route (see comments in the file). `example_topdown_playthrough`
+  does the same for `examples/topdown` (key, gate, stairs).
 - `player_smoke_headless_display` runs the real client for 120 frames with
   SDL's dummy video driver and software renderer, no display needed.
 - `studio_smoke_headless_display` runs Studio the same way through a scripted
-  session (create, duplicate, paste, undo everything, play, stop) on the
-  example project, without writing to it.
+  session (create, insert Toolbox objects, duplicate, paste, undo everything,
+  play, stop) on the example project, without writing to it.
 - `tests/test_editor.cpp` covers the editor model, including building and
   playing a game from an empty project without any UI.
 - The experimental WebAssembly CI job builds with Emscripten, runs the unit

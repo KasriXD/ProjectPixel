@@ -169,6 +169,20 @@ TEST_CASE("Editor: a drag is one undo step and can be cancelled") {
     CHECK(doc.scene().worldPosition(parent) == Vec2{100, 0});
 }
 
+TEST_CASE("Editor: the top-down player preset walks instead of jumping") {
+    SceneDocument doc(assets::AssetId{Guid(1, 1)}, Scene{});
+    const Entity camera = doc.createEntity(EntityPreset::Camera);
+    const Entity player = doc.createEntity(EntityPreset::TopDownPlayer);
+    const Scene& sc = doc.scene();
+    CHECK(sc.get<EntityInfo>(player).name == "Player");
+    CHECK(sc.tryGet<TopDownController>(player) != nullptr);
+    CHECK(sc.tryGet<PlatformerController>(player) == nullptr);
+    CHECK(sc.tryGet<Player>(player) != nullptr);
+    CHECK(sc.get<BoxCollider>(player).size == Vec2{10, 8});
+    CHECK(sc.get<Camera>(camera).follow == sc.get<EntityInfo>(player).id);
+    CHECK(presetName(EntityPreset::TopDownPlayer) == "Top-down Player");
+}
+
 TEST_CASE("Editor: delete, duplicate, copy and paste keep references sensible") {
     SceneDocument doc(assets::AssetId{Guid(1, 1)}, Scene{});
     const Entity player = doc.createEntity(EntityPreset::Player);

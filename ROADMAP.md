@@ -17,7 +17,7 @@ creator feedback (see "Recommended adjustments" below).
 | Not yet run on real macOS hardware (CI passes) | Rendering/input on Macs unconfirmed | A Mac check when one is available. Windows: played on a Windows 11 PC (2026-10-23) |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 | Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
-| Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the tutorial in docs/studio.md is the script |
+| Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
 
@@ -127,7 +127,7 @@ visual nodes, per-tick total CPU budget for servers, trigger broadphase.
       scripts (they need the same "instantiate an entity template" mechanism)
 
 Deliverable met: a creator can build and save a simple game using the editor
-rather than manually editing project files ([walkthrough](docs/studio.md#tutorial-a-game-from-an-empty-project)).
+rather than manually editing project files ([walkthrough](docs/studio.md#tutorial-your-own-art-and-behaviour)).
 
 Known limitations: one entity at a time in Properties, whole-scene undo
 snapshots, plain-text script editor, rotation/scale ignored by colliders and
@@ -144,10 +144,25 @@ Driven by the founder's first session on Windows 11:
       the previous arrangement remains as *View > Layout > Classic*
 - [x] `windows` CMake preset that uses the newest installed Visual Studio or
       Build Tools (2022 or 2026); Windows build steps in the README
+- [x] New projects go into the folder used last time (remembered per user)
+- [x] Game types chosen on the welcome screen: **platformer** and
+      **top-down** (new `TopDownController`, 8-direction movement), each with
+      an example level, default input and player; project format 2 stores
+      the choice. More kinds (e.g. racing, puzzle grid) need a controller,
+      art and library entries each
+- [x] **Toolbox** panel: a starter library of 32 images and behaviours and 28
+      ready-made objects (heroes, ground and walls, coins, gems, keys and
+      locks, hazards, enemies, springs, moving platforms, checkpoints,
+      exits, signs, scenery) that can be clicked or dragged into any
+      project, empty ones included ([format](docs/library-format.md)); new
+      scripting API `entity:respawn()`, `entity.spawnPoint`,
+      `Game.getObjective()`
 - [ ] A toolbar with large Move/Rotate/Scale, Insert and Play buttons;
       rotate and scale handles in the Scene view
 - [ ] Editing several selected entities at once in Properties
 - [ ] Animation frame picker for sprite sheets
+- [ ] Let creators add their own items to the Toolbox (their saved objects;
+      later the marketplace of Milestone 8)
 - [ ] Feedback from two or three more creators
 
 ## Milestone 4: Multiplayer prototype (**Planned**)

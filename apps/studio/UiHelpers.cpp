@@ -62,35 +62,32 @@ ImTextureID textureId(StudioApp& app, unsigned int handle) {
     return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(app.renderer().sdlTexture(handle)));
 }
 
-void textureImage(StudioApp& app, assets::AssetId texture, ImVec2 size, Rect source, const char* id) {
+bool textureImage(StudioApp& app, assets::AssetId texture, ImVec2 size, Rect source, const char* id) {
+    return textureImage(app, app.textures(), texture, size, source, id);
+}
+
+bool textureImage(StudioApp& app, render::TextureCache* cache, assets::AssetId texture, ImVec2 size, Rect source,
+                  const char* id) {
     const auto reserve = [&] {
-        if (id != nullptr) {
-            ImGui::InvisibleButton(id, size);
-        } else {
-            ImGui::Dummy(size);
-        }
+        if (id != nullptr) return ImGui::InvisibleButton(id, size);
+        ImGui::Dummy(size);
+        return false;
     };
-    render::TextureCache* cache = app.textures();
-    if (cache == nullptr || texture.isNil()) {
-        reserve();
-        return;
-    }
+    if (cache == nullptr || texture.isNil()) return reserve();
     const render::TextureHandle handle = cache->get(texture);
     const Vec2i texSize = app.renderer().textureSize(handle);
-    if (texSize.x <= 0 || texSize.y <= 0) {
-        reserve();
-        return;
-    }
+    if (texSize.x <= 0 || texSize.y <= 0) return reserve();
     const Rect src = source.empty() ? Rect{0, 0, static_cast<float>(texSize.x), static_cast<float>(texSize.y)} : source;
     const float scale = std::min(size.x / src.w, size.y / src.h);
     const ImVec2 drawn{src.w * scale, src.h * scale};
     const ImVec2 origin = ImGui::GetCursorScreenPos();
-    reserve(); // reserves the space and is the hover/drag target
+    const bool pressed = reserve(); // reserves the space and is the hover/drag target
     const ImVec2 p0{origin.x + (size.x - drawn.x) * 0.5f, origin.y + (size.y - drawn.y) * 0.5f};
     const ImVec2 uv0{src.x / static_cast<float>(texSize.x), src.y / static_cast<float>(texSize.y)};
     const ImVec2 uv1{(src.x + src.w) / static_cast<float>(texSize.x), (src.y + src.h) / static_cast<float>(texSize.y)};
     ImGui::GetWindowDrawList()->AddImage(ImTextureRef(textureId(app, handle)), p0, {p0.x + drawn.x, p0.y + drawn.y},
                                          uv0, uv1);
+    return pressed;
 }
 
 } // namespace px::studio::ui

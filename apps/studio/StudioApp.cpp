@@ -29,7 +29,7 @@ namespace {
 constexpr const char* kDockSpace = "StudioDockSpace";
 // Bump when the default layouts or panel names change, so saved layouts
 // are rebuilt instead of leaving new panels floating.
-constexpr int kLayoutVersion = 2;
+constexpr int kLayoutVersion = 3;
 
 void applyStyle(float scale) {
     ImGui::StyleColorsDark();
@@ -76,22 +76,28 @@ bool parseInt(const char* text, int& out) {
     return true;
 }
 
-std::filesystem::path findTemplateFolder() {
+// Content shipped with Studio (examples, the starter library): next to the
+// executable in a package, otherwise in the source tree.
+std::filesystem::path findContentFolder(const char* name, const char* marker, const char* sourceTreePath) {
     if (const char* base = SDL_GetBasePath()) {
-        const auto packaged = std::filesystem::path(base) / "examples" / "platformer";
+        const auto packaged = std::filesystem::path(base) / name;
         std::error_code ec;
-        if (std::filesystem::is_regular_file(packaged / "project.json", ec)) return packaged;
+        if (std::filesystem::exists(packaged / marker, ec)) return packaged;
     }
-    return std::filesystem::path(PX_DEFAULT_TEMPLATE_DIR);
+    return std::filesystem::path(sourceTreePath);
+}
+
+const char* exampleFolderName(project::GameType type) {
+    return type == project::GameType::TopDown ? "topdown" : "platformer";
 }
 
 // Where new projects go: the folder used last time, else
 // "Documents/<product> Games" (created when the first project is made).
 std::filesystem::path defaultNewProjectFolder(const StudioSettings& settings) {
     if (!settings.newProjectFolder.empty()) return settings.newProjectFolder;
-    if (const char* documents = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS)) {
-        return fromUtf8(documents) / fromUtf8(std::string(version::productName) + " Games");
-    }
+    const std::string games = std::string(version::productName) + " Games";
+    if (const char* documents = SDL_GetUserFolder(SDL_FOLDER_DOCUMENTS)) return fromUtf8(documents) / fromUtf8(games);
+    if (const char* home = SDL_GetUserFolder(SDL_FOLDER_HOME)) return fromUtf8(home) / fromUtf8(games);
     return {};
 }
 
@@ -191,7 +197,16 @@ StudioApp::Status StudioApp::initWindowAndUi() {
             m_settings = StudioSettings::load(m_settingsFile);
         }
     }
-    m_templateFolder = findTemplateFolder();
+    m_examplesFolder = findContentFolder("examples", "platformer/project.json", PX_EXAMPLES_DIR);
+    const std::filesystem::path libraryFolder = findContentFolder("library", "library.json", PX_LIBRARY_DIR);
+    if (auto library = editor::Library::load(libraryFolder)) {
+        m_library = std::move(library.value());
+        m_libraryFiles = std::make_unique<DirectoryFileSystem>(libraryFolder);
+        m_libraryRegistry = m_library->manifest().registry();
+    } else {
+        m_libraryError = library.error().message;
+        log::warn("The starter library is not available: {}", m_libraryError);
+    }
     m_newParent = toUtf8(defaultNewProjectFolder(m_settings));
 
     float displayScale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
@@ -211,6 +226,9 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     if (m_sdlRenderer == nullptr) return Status::Failure;
     SDL_SetRenderVSync(m_sdlRenderer, m_options.smokeTest ? 0 : 1);
     m_renderer2d = std::make_unique<platform::SdlRenderer2D>(m_sdlRenderer);
+    if (m_libraryFiles) {
+        m_libraryTextures = std::make_unique<render::TextureCache>(*m_renderer2d, *m_libraryFiles, m_libraryRegistry);
+    }
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -234,12 +252,14 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     m_console = std::make_unique<ConsolePanel>();
     m_scripts = std::make_unique<ScriptEditorPanel>();
     m_projectSettings = std::make_unique<ProjectSettingsPanel>();
+    m_toolbox = std::make_unique<ToolboxPanel>();
     if (m_options.resetLayout) m_layoutBuilt = false;
     return Status::Continue;
 }
 
 StudioApp::~StudioApp() {
     m_play.reset();
+    m_libraryTextures.reset();
     if (!m_options.smokeTest && !m_settingsFile.empty()) (void)m_settings.save(m_settingsFile);
     m_textures.reset(); // GPU textures before the renderer
     m_renderer2d.reset();
@@ -318,12 +338,24 @@ void StudioApp::openProjectNow(const std::filesystem::path& folder) {
     openSceneNow(m_project->manifest().startScene);
 }
 
-void StudioApp::requestNewProject(const std::filesystem::path& folder, const std::string& name, bool fromTemplate) {
-    runAfterSaveCheck("create a project", [this, folder, name, fromTemplate] {
-        std::optional<std::filesystem::path> tpl;
-        if (fromTemplate) tpl = m_templateFolder;
+std::filesystem::path StudioApp::exampleFolder(project::GameType type) const {
+    const auto folder = m_examplesFolder / exampleFolderName(type);
+    std::error_code ec;
+    return std::filesystem::is_regular_file(folder / "project.json", ec) ? folder : std::filesystem::path();
+}
+
+void StudioApp::requestNewProject(const std::filesystem::path& folder, const std::string& name, project::GameType type,
+                                  bool fromExample) {
+    runAfterSaveCheck("create a project", [this, folder, name, type, fromExample] {
         editor::NewProjectOptions options;
-        options.templateFolder = tpl;
+        options.gameType = type;
+        if (fromExample) {
+            options.templateFolder = exampleFolder(type);
+            if (options.templateFolder->empty()) {
+                m_errorModal = "The example project for this game type was not found.";
+                return;
+            }
+        }
         auto project = editor::EditorProject::create(folder, name, options);
         if (!project) {
             m_errorModal = project.error().message;
@@ -537,6 +569,7 @@ assets::AssetId StudioApp::defaultTexture(editor::EntityPreset preset) const {
     bool avoidTiles = false;
     switch (preset) {
         case editor::EntityPreset::Player: prefer = "player"; break;
+        case editor::EntityPreset::TopDownPlayer: prefer = "hero"; break;
         case editor::EntityPreset::Tilemap: prefer = "tile"; break;
         case editor::EntityPreset::SolidBlock: prefer = "platform"; break;
         default: avoidTiles = true; break;
@@ -556,8 +589,35 @@ scene::Entity StudioApp::createEntity(editor::EntityPreset preset, scene::Entity
     if (!m_document || m_play) return scene::kNullEntity;
     const scene::Scene& sc = m_document->scene();
     const Vec2 at = parent.isNull() ? newEntityPosition() : sc.worldPosition(parent);
+    const bool topDown = gameType() == project::GameType::TopDown;
+    if (preset == editor::EntityPreset::Player) {
+        // The library's ready-made player for this kind of game, art included.
+        if (const int object = libraryPlayerObject(); object >= 0 && m_library && m_project) {
+            auto inserted = editor::insertLibraryObject(*m_project, *m_document, *m_library,
+                                                        static_cast<std::size_t>(object), at, parent);
+            if (inserted && !inserted->empty()) {
+                assetsChanged();
+                return inserted->front();
+            }
+        }
+        if (topDown) preset = editor::EntityPreset::TopDownPlayer;
+    }
+    if (preset == editor::EntityPreset::Tilemap && parent.isNull() && defaultTexture(preset).isNil() && m_library &&
+        m_project) {
+        // No tileset in the project yet: start with the library's one for this kind of game.
+        for (const auto& asset : m_library->manifest().assets) {
+            if (!asset.isTileset() || !asset.fits(gameType())) continue;
+            auto map = editor::insertLibraryImage(*m_project, *m_document, *m_library, asset.entry.id, at);
+            if (map) {
+                assetsChanged();
+                return map.value();
+            }
+            break;
+        }
+    }
     const bool usesTexture = preset == editor::EntityPreset::Sprite || preset == editor::EntityPreset::Tilemap ||
-                             preset == editor::EntityPreset::SolidBlock || preset == editor::EntityPreset::Player;
+                             preset == editor::EntityPreset::SolidBlock || preset == editor::EntityPreset::Player ||
+                             preset == editor::EntityPreset::TopDownPlayer;
     const assets::AssetId texture = usesTexture ? defaultTexture(preset) : assets::AssetId{};
     m_document->beginEdit(std::format("Create {}", editor::presetName(preset)));
     const scene::Entity e = m_document->createEntity(preset, {}, parent, at, texture);
@@ -566,7 +626,9 @@ scene::Entity StudioApp::createEntity(editor::EntityPreset preset, scene::Entity
         const Vec2i size = m_renderer2d->textureSize(m_textures->get(texture));
         scene::Scene& edit = m_document->sceneForEdit();
         if (size.x > 0 && size.y > 0) {
-            if (auto* sprite = edit.tryGet<scene::Sprite>(e); sprite && preset != editor::EntityPreset::Player) {
+            const bool player =
+                preset == editor::EntityPreset::Player || preset == editor::EntityPreset::TopDownPlayer;
+            if (auto* sprite = edit.tryGet<scene::Sprite>(e); sprite && !player) {
                 sprite->size = {static_cast<float>(size.x), static_cast<float>(size.y)};
                 if (auto* box = edit.tryGet<scene::BoxCollider>(e); box && preset == editor::EntityPreset::SolidBlock) {
                     box->size = sprite->size;
@@ -624,8 +686,58 @@ void StudioApp::importFiles(const std::vector<std::filesystem::path>& files) {
 }
 
 void StudioApp::assetsChanged() {
-    if (m_textures) m_textures->clear();
+    // GPU textures may already be in this frame's draw list; free them between frames.
+    defer([this] {
+        if (m_textures) m_textures->clear();
+    });
     if (m_project) m_project->refreshScripts();
+}
+
+int StudioApp::libraryPlayerObject() const {
+    if (!m_library) return -1;
+    const auto& objects = m_library->manifest().objects;
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+        if (objects[i].category == "Characters" && objects[i].fits(gameType())) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+void StudioApp::insertLibraryObject(std::size_t index, std::optional<Vec2> at) {
+    if (!m_library || !m_project || !m_document || m_play) return;
+    const Vec2 position = at ? placeOnGrid(*at) : newEntityPosition();
+    auto inserted = editor::insertLibraryObject(*m_project, *m_document, *m_library, index, position);
+    if (!inserted) {
+        notify(inserted.error().message, true);
+        return;
+    }
+    assetsChanged();
+}
+
+void StudioApp::insertLibraryImage(const assets::AssetId& image, std::optional<Vec2> at) {
+    if (!m_library || !m_project || !m_document || m_play) return;
+    const Vec2 position = at ? placeOnGrid(*at) : newEntityPosition();
+    auto inserted = editor::insertLibraryImage(*m_project, *m_document, *m_library, image, position);
+    if (!inserted) {
+        notify(inserted.error().message, true);
+        return;
+    }
+    assetsChanged();
+}
+
+void StudioApp::attachLibraryScript(const assets::AssetId& script, scene::Entity entity) {
+    if (!m_library || !m_project || !m_document || m_play) return;
+    if (entity.isNull()) {
+        notify("Select an entity first, then add the behaviour to it", true);
+        return;
+    }
+    if (auto attached = editor::attachLibraryScript(*m_project, *m_document, *m_library, script, entity); !attached) {
+        notify(attached.error().message, true);
+        return;
+    }
+    assetsChanged();
+    const auto* entry = m_project->asset(script);
+    notify(std::format("Added {} to {}", entry != nullptr ? entry->name : "the behaviour",
+                       m_document->scene().get<scene::EntityInfo>(entity).name));
 }
 
 void StudioApp::notify(std::string text, bool error) {
@@ -784,6 +896,7 @@ void StudioApp::drawUi() {
         m_hierarchy->draw(*this);
         m_inspector->draw(*this);
         m_viewport->draw(*this);
+        m_toolbox->draw(*this);
         m_assets->draw(*this);
         m_console->draw(*this);
         m_scripts->draw(*this);
@@ -808,11 +921,12 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
         const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.28f, nullptr, &center);
         ImGui::DockBuilderDockWindow(kExplorerWindow, left);
         ImGui::DockBuilderDockWindow(kPropertiesWindow, right);
+        ImGui::DockBuilderDockWindow(kToolboxWindow, bottom);
         ImGui::DockBuilderDockWindow(kAssetsWindow, bottom);
         ImGui::DockBuilderDockWindow(kOutputWindow, bottom);
     } else {
-        // Standard: Explorer above Properties on the right, Assets on the
-        // left (a toolbox to drag from), Output below the scene.
+        // Standard: Explorer above Properties on the right, Toolbox and
+        // Assets on the left (to drag things from), Output below the scene.
         const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.24f, nullptr, &center);
         ImGuiID rightTop = 0;
         const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.58f, nullptr, &rightTop);
@@ -820,6 +934,7 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
         const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.24f, nullptr, &center);
         ImGui::DockBuilderDockWindow(kExplorerWindow, rightTop);
         ImGui::DockBuilderDockWindow(kPropertiesWindow, rightBottom);
+        ImGui::DockBuilderDockWindow(kToolboxWindow, left);
         ImGui::DockBuilderDockWindow(kAssetsWindow, left);
         ImGui::DockBuilderDockWindow(kOutputWindow, bottom);
     }
@@ -1128,7 +1243,8 @@ void StudioApp::drawWelcome() {
     ImGui::Dummy({0, em});
 
     // New project.
-    ImGui::BeginChild("new", {columnWidth, em * 22.0f}, ImGuiChildFlags_Borders);
+    // The new-project box grows to fit (a long folder path wraps); the open box matches it.
+    ImGui::BeginChild("new", {columnWidth, 0.0f}, ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
     ImGui::TextColored(ui::kAccentColor, "New project");
     ImGui::Separator();
     ImGui::SetNextItemWidth(-1);
@@ -1141,25 +1257,88 @@ void StudioApp::drawWelcome() {
         m_dialogs.pickFolder(m_window, FileDialogs::Purpose::NewProjectParent, fromUtf8(m_newParent));
     }
     ImGui::Spacing();
-    if (ImGui::RadioButton("Platformer starter (art, player, coins, scripts)", m_newFromTemplate)) {
-        m_newFromTemplate = true;
+
+    // What kind of game: one card per game type.
+    ImGui::TextUnformatted("What kind of game?");
+    struct GameTypeCard {
+        project::GameType type;
+        const char* title;
+        const char* description;
+    };
+    constexpr GameTypeCard kCards[] = {
+        {project::GameType::Platformer, "Platformer", "Side view with gravity: run, jump, collect coins, dodge spikes."},
+        {project::GameType::TopDown, "Top-down", "Seen from above: walk anywhere, find keys, open gates, explore."},
+    };
+    const float spacing = ImGui::GetStyle().ItemSpacing.x;
+    const float cardWidth = (ImGui::GetContentRegionAvail().x - spacing) * 0.5f;
+    const float cardHeight = em * 7.0f;
+    for (std::size_t i = 0; i < std::size(kCards); ++i) {
+        const GameTypeCard& card = kCards[i];
+        if (i > 0) ImGui::SameLine();
+        ImGui::PushID(static_cast<int>(i));
+        const ImVec2 p = ImGui::GetCursorScreenPos();
+        if (ImGui::Selectable("##card", m_newGameType == card.type, ImGuiSelectableFlags_None, {cardWidth, cardHeight})) {
+            m_newGameType = card.type;
+        }
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        dl->AddRect(p, {p.x + cardWidth, p.y + cardHeight},
+                    m_newGameType == card.type ? IM_COL32(110, 170, 255, 255) : IM_COL32(70, 76, 86, 255), 6.0f,
+                    m_newGameType == card.type ? 2.0f : 1.0f);
+        // The player character of that kind of game, from the starter library.
+        if (m_library && m_libraryTextures) {
+            for (const auto& object : m_library->manifest().objects) {
+                if (object.category != "Characters" || !object.fits(card.type)) continue;
+                const render::TextureHandle handle = m_libraryTextures->get(object.iconTexture);
+                if (handle != render::kNoTexture) {
+                    const float icon = em * 2.5f;
+                    dl->AddImage(ImTextureRef(ui::textureId(*this, handle)), {p.x + em * 0.6f, p.y + em * 0.6f},
+                                 {p.x + em * 0.6f + icon, p.y + em * 0.6f + icon});
+                }
+                break;
+            }
+        }
+        dl->AddText({p.x + em * 3.6f, p.y + em * 0.8f}, IM_COL32(235, 240, 248, 255), card.title);
+        dl->AddText(nullptr, 0.0f, {p.x + em * 0.6f, p.y + em * 3.5f}, IM_COL32(170, 176, 186, 255), card.description,
+                    nullptr, cardWidth - em * 1.2f);
+        ImGui::PopID();
     }
-    if (ImGui::RadioButton("Empty (one scene with a camera)", !m_newFromTemplate)) m_newFromTemplate = false;
+    ImGui::Spacing();
+    const bool haveExample = !exampleFolder(m_newGameType).empty();
+    if (!haveExample) m_newFromTemplate = false;
+    ImGui::TextUnformatted("Start with:");
+    ImGui::BeginDisabled(!haveExample);
+    if (ImGui::RadioButton("A small example level (art, player, scripts)", m_newFromTemplate)) m_newFromTemplate = true;
+    ImGui::EndDisabled();
+    if (ImGui::RadioButton("An empty scene (add things from the Toolbox)", !m_newFromTemplate)) {
+        m_newFromTemplate = false;
+    }
     ImGui::Spacing();
     const std::string stem = editor::toFileStem(m_newName);
     const std::filesystem::path target = m_newParent.empty() || stem.empty()
                                              ? std::filesystem::path()
                                              : fromUtf8(m_newParent) / fromUtf8(m_newName);
-    if (!target.empty()) ImGui::TextColored(ui::kDimColor, "%s", toUtf8(target).c_str());
-    ImGui::BeginDisabled(target.empty());
-    if (ImGui::Button("Create Project", {-1, 0})) requestNewProject(target, m_newName, m_newFromTemplate);
+    std::error_code ec;
+    const bool taken = !target.empty() && std::filesystem::exists(target, ec) && !std::filesystem::is_empty(target, ec);
+    ImGui::PushTextWrapPos(0.0f);
+    if (taken) {
+        ImGui::TextColored(ui::kWarningColor, "A folder named \"%s\" already exists there; choose another name.",
+                           m_newName.c_str());
+    } else if (!target.empty()) {
+        ImGui::TextColored(ui::kDimColor, "Creates %s", toUtf8(target).c_str());
+    }
+    ImGui::PopTextWrapPos();
+    ImGui::BeginDisabled(target.empty() || taken);
+    if (ImGui::Button("Create Project", {-1, 0})) {
+        requestNewProject(target, m_newName, m_newGameType, m_newFromTemplate);
+    }
     ImGui::EndDisabled();
     ImGui::EndChild();
+    const float boxHeight = std::max(ImGui::GetItemRectSize().y, em * 20.0f);
 
     ImGui::SameLine(0, em * 2.0f);
 
     // Open project.
-    ImGui::BeginChild("open", {columnWidth, em * 22.0f}, ImGuiChildFlags_Borders);
+    ImGui::BeginChild("open", {columnWidth, boxHeight}, ImGuiChildFlags_Borders);
     ImGui::TextColored(ui::kAccentColor, "Open a project");
     ImGui::Separator();
     if (ImGui::Button("Open Project Folder...", {-1, 0})) {
@@ -1227,9 +1406,24 @@ void StudioApp::runSmokeTest() {
             for (const auto preset : {editor::EntityPreset::Empty, editor::EntityPreset::Group,
                                       editor::EntityPreset::Sprite, editor::EntityPreset::Tilemap,
                                       editor::EntityPreset::SolidBlock, editor::EntityPreset::Trigger,
-                                      editor::EntityPreset::Player, editor::EntityPreset::Camera}) {
+                                      editor::EntityPreset::Player, editor::EntityPreset::TopDownPlayer,
+                                      editor::EntityPreset::Camera}) {
                 created.push_back(m_document->createEntity(preset, {}, scene::kNullEntity, {100, 100}, texture));
             }
+            // Toolbox objects whose files the project already has (so nothing is written to it).
+            if (!m_library) return fail("the starter library did not load: " + m_libraryError);
+            int inserted = 0;
+            for (std::size_t i = 0; i < m_library->manifest().objects.size(); ++i) {
+                const auto& needs = m_library->objectAssets(i);
+                const bool present = std::all_of(needs.begin(), needs.end(),
+                                                 [&](const assets::AssetId& id) { return m_project->asset(id); });
+                if (!present) continue;
+                auto objects = editor::insertLibraryObject(*m_project, *m_document, *m_library, i, {120, 100});
+                if (!objects) return fail(objects.error().message);
+                created.insert(created.end(), objects->begin(), objects->end());
+                ++inserted;
+            }
+            if (inserted < 3) return fail("expected several Toolbox objects to fit the example project");
             m_document->setSelection(created);
             break;
         }

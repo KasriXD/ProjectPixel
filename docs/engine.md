@@ -57,15 +57,22 @@ seconds. Each tick runs, in order:
 2. **Moving solids**: solid colliders are re-read every tick (scripts may
    move them); bodies standing on a solid that moved are carried by the same
    offset, through collision.
-3. **Platformer control**: reads actions, applies acceleration, gravity, jump
-   (with coyote time and jump buffering) and jump cut, flips the sprite.
+3. **Character control**: `PlatformerController` reads actions, applies
+   acceleration, gravity, jump (with coyote time and jump buffering) and jump
+   cut, and flips the sprite. Then `TopDownController` moves in eight
+   directions without gravity (`move_left/right/up/down`; diagonals are
+   normalised so they are not faster), with separate acceleration and
+   deceleration per axis, remembers the facing direction and flips the
+   sprite when walking left.
 4. **Kinematic movement**: moves each body by `velocity * dt` through the
    collision world, X then Y; sets ground/ceiling/wall contacts, records
    which solid entity it stands on, and zeroes velocity into walls.
 5. **Triggers**: overlaps between trigger colliders and moving bodies are
    compared with the previous tick; `TriggerExit`/`TriggerEnter` go to the
    scripts of both entities.
-6. **Kill plane**: respawns players below `killPlaneY` (`PlayerRespawned`).
+6. **Kill plane**: respawns players below `killPlaneY` at their spawn point
+   (`PlayerRespawned`); scripts respawn players the same way with
+   `entity:respawn()`.
 7. **Animation**: advances `SpriteAnimation` and updates `Sprite.source`.
 8. **Cameras**: follow targets, clamp to level bounds.
 

@@ -62,12 +62,12 @@ not link SDL.
 | `assets` | `AssetId` (GUID), `AssetRegistry`, image decoding with size limits | core, stb_image |
 | `scene` | Generational entity handles, sparse-set component storage (`Registry`), built-in components, `Scene` (identity, lookup, parent/child hierarchy, world transforms), component descriptors (`ComponentInfo`: fields, ranges, requirements, validation) | core, assets |
 | `physics` | `CollisionWorld`: solid grids and boxes, swept per-axis AABB movement with contact flags | core |
-| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents | core, assets, scene, nlohmann/json (private) |
+| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
 | `scripting` | `ScriptLibrary` (compiles Luau at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference | core, assets, scene, Luau (private) |
-| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer, movement, moving solids, triggers) | core, scene, physics, project, scripting |
+| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
 | `platform_sdl` | SDL3 window, keyboard events, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
-| `editor` | The editor model without UI: `EditorProject` (create/open, assets, scenes, script buffers), `SceneDocument` (operations, selection, snapshot undo), picking, `PlayMode`, `LogBuffer` | core, assets, scene, project, scripting, runtime |
+| `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, script buffers), `SceneDocument` (operations, selection, snapshot undo), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
 Applications compose modules:
 
@@ -110,7 +110,11 @@ already deterministic for identical input on the same build (tested).
 
 **Content vs code.** Games are data: a project folder with a manifest,
 scenes and assets. Assets are referenced by GUID, never by path; paths appear
-only in the asset registry and are validated to stay inside the project.
+only in the asset registry and are validated to stay inside the project. The
+starter library behind Studio's Toolbox is content too (`library/`, generated
+by `tools/`): inserting an item copies its files into the project with the
+library's GUIDs, so a project never depends on the library at run time and
+repeated inserts reuse the same assets ([library-format.md](docs/library-format.md)).
 
 **Editor vs engine.** `editor` may use any engine module but no UI or SDL;
 engine modules never depend on `editor`. Studio plays games with the same

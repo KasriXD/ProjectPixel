@@ -1,6 +1,8 @@
 # Project format
 
-Current versions: project manifest **1**, scene **3**.
+Current versions: project manifest **2**, scene **3**. Starter library
+manifests and `px.entities` objects are described in
+[library-format.md](library-format.md).
 
 A game project is a folder:
 
@@ -32,12 +34,13 @@ or renaming a file therefore means editing one `path` entry.
 ```json
 {
   "format": "px.project",
-  "formatVersion": 1,
+  "formatVersion": 2,
   "id": "af5d3a02-6054-58d1-a81c-23a97281ae0f",
   "name": "Example Platformer",
-  "engineVersion": "0.1.0",
+  "engineVersion": "0.3.0",
   "startScene": "e0464a98-2756-52ff-8acd-37c81877ff1a",
   "settings": {
+    "gameType": "platformer",
     "tickRate": 60,
     "display": { "virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3 },
     "scripting": { "apiVersion": 1 }
@@ -59,11 +62,12 @@ or renaming a file therefore means editing one `path` entry.
 
 | Field | Required | Meaning |
 |---|---|---|
-| `format`, `formatVersion` | yes | `"px.project"`, `1` |
+| `format`, `formatVersion` | yes | `"px.project"`, `2` |
 | `id` | yes | project GUID |
 | `name` | yes | display name, not empty |
 | `engineVersion` | no | engine version that last saved the file (informational) |
 | `startScene` | yes | GUID of a `scene` asset |
+| `settings.gameType` | no (`"platformer"`) | the kind of game: `"platformer"` (side view with gravity) or `"topdown"` (seen from above). Studio uses it to choose the player preset, default input actions and which Toolbox items to show; the runtime does not depend on it (movement comes from the player's controller component) |
 | `settings.tickRate` | no (60) | fixed simulation steps per second, 1-240 |
 | `settings.display.virtualResolution` | no ([320, 180]) | logical screen size in pixels |
 | `settings.display.scaling` | no (`"integer"`) | `"integer"` (whole-number scale, crisp pixels) or `"letterbox"` |
@@ -77,8 +81,10 @@ Key names: `A`-`Z`, `0`-`9`, `Space`, `Enter`, `Escape`, `Backspace`, `Tab`,
 `RightCtrl`, `LeftAlt`, `RightAlt`, `F1`-`F12` (case-insensitive). Keys are
 physical positions, so `W`/`A`/`S`/`D` stay in place on non-QWERTY layouts.
 
-Standard actions used by built-in components: `move_left`, `move_right`,
-`move_up`, `move_down`, `jump`.
+Standard actions used by built-in components: `move_left`, `move_right` and
+`jump` (`PlatformerController`); `move_left`, `move_right`, `move_up` and
+`move_down` (`TopDownController`). New projects get the set for their game
+type, each on the arrow keys and WASD (plus Space and Z for jumping).
 
 ### Assets
 
@@ -134,7 +140,7 @@ file and line.
 |---|---|---|
 | `name` | no | scene display name |
 | `settings.backgroundColor` | no | clear colour, `"#rrggbb"` or `"#rrggbbaa"` |
-| `settings.killPlaneY` | no | players whose Y exceeds this are respawned at their start position |
+| `settings.killPlaneY` | no | players whose Y exceeds this are respawned at their spawn point (platformers; top-down scenes have none) |
 | `entities` | yes | at most 100 000 entities, see below |
 
 Each entity has:
@@ -168,7 +174,8 @@ table that the loader, the writer and Studio's Properties panel use. In short:
 | `BoxCollider` | solid box or trigger |
 | `KinematicBody` | moved by velocity, stopped by solids |
 | `PlatformerController` | running and jumping; requires `Transform`, `BoxCollider`, `KinematicBody` |
-| `Player` | the player character; respawns at its start position |
+| `TopDownController` | walking in eight directions without gravity, seen from above; requires the same |
+| `Player` | the player character; respawns at its spawn point (its start position unless a script moves it) |
 | `Camera` | the view; can follow an entity |
 | `Tags` | an array of labels, e.g. `["coin"]` |
 | `Scripts` | an array of Luau behaviours, each `{ "script": <script asset id>, "properties": {...} }` |
@@ -198,8 +205,10 @@ entity a new id and rewires references between the pasted entities.
 | 2 | 0.2 | Added `Script` and `Tags`. Removed `Collectible`: collecting is now scripted | `Collectible { kind }` becomes a `kind` tag; `value` is dropped. A warning tells the creator to add a script (see the example's `coin.luau`) |
 | 3 | 0.3 | Entity `parent` (hierarchy). `Script` replaced by `Scripts`, a list, so an entity can have several behaviours | `"Script": {...}` becomes `"Scripts": [{...}]`; behaviour is unchanged |
 
-The project manifest is still format 1; `script` assets and
-`settings.scripting` were added compatibly (older files remain valid).
+| Project format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.1 | Initial format; `script` assets and `settings.scripting` were added compatibly in 0.2 | |
+| 2 | 0.3 | Added `settings.gameType` | Projects of format 1 become `"platformer"` (every earlier project was one) |
 
 ## Versioning
 

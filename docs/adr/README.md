@@ -18,5 +18,6 @@
 | [0014](0014-component-descriptors.md) | Component descriptors as the single source of truth | Accepted |
 | [0015](0015-studio-architecture.md) | Studio architecture: a UI-free editor model with snapshot undo | Accepted |
 | [0016](0016-scene-hierarchy.md) | Scene hierarchy: parent links in the scene, computed world transforms | Accepted |
+| [0017](0017-game-types-and-starter-library.md) | Game types and a starter library copied into projects | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

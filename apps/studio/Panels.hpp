@@ -30,6 +30,7 @@ inline constexpr const char* kPropertiesWindow = "Properties";
 inline constexpr const char* kSceneWindow = "Scene";
 inline constexpr const char* kAssetsWindow = "Assets";
 inline constexpr const char* kOutputWindow = "Output";
+inline constexpr const char* kToolboxWindow = "Toolbox";
 
 class HierarchyPanel {
 public:
@@ -103,6 +104,18 @@ private:
     Vec2 m_lastClickWorld{};
     std::size_t m_clickCycle = 0;
     bool m_hovered = false;
+};
+
+// Ready-made objects, images and behaviours from the starter library.
+// Click to add one in the middle of the view; drag into the Scene view to
+// place it; drag a behaviour onto an entity to attach it.
+class ToolboxPanel {
+public:
+    void draw(StudioApp& app);
+
+private:
+    std::string m_filter;
+    bool m_allTypes = false;
 };
 
 class AssetsPanel {

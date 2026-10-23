@@ -8,7 +8,7 @@ A 2D user-generated game platform: an engine, a creator studio and an online
 platform where anyone can make, publish and play 2D games. The long-term
 vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
-![Studio editing the example platformer](docs/images/studio.png)
+![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
 ## Current status (version 0.3.0)
 
@@ -23,12 +23,14 @@ scripting) and 3 (Studio foundation) are complete. See
 | 2D rendering: sprites, tilemaps, layers, camera, pixel-perfect scaling, debug text | Implemented, verified by screenshots |
 | Entity/component scene model with stable ids, parent/child hierarchy | Implemented, unit tested |
 | Studio (desktop editor): projects, Explorer, Scene view, Properties, Assets, Output, script editor, undo, play/stop | Implemented; a game was built in it from an empty project and runs in `px-player`. Used on Linux (X11) and on a Windows 11 PC (Direct3D 11); builds and passes its smoke test in CI on Windows and macOS. **Not yet used on a real Mac** ([guide](docs/studio.md)) |
+| Game types: platformer and top-down, chosen when a project is created | Implemented; each has a controller, default input, an example and Toolbox items |
+| Toolbox: a starter library of art, behaviours and ready-made objects (28) usable in any project | Implemented; every object is inserted, saved and played in tests; a top-down game was built from an empty project with it in Studio |
 | Kinematic collision: solid tiles/boxes, triggers | Implemented, unit tested |
-| Platformer movement (coyote time, jump buffer, variable jump) | Implemented, unit tested |
+| Platformer movement (coyote time, jump buffer, variable jump), top-down movement (8 directions) | Implemented, unit tested |
 | Versioned project/scene file format with validation | Implemented, unit tested |
 | Headless simulation (no graphics) | Implemented; basis of the future dedicated server |
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
-| Example platformer, loaded from project files | Playable; coins, win condition and a moving platform are Luau scripts; an automated run completes the level |
+| Example games, loaded from project files | A platformer and a top-down game, both playable; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
 | Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
 | Windows | Builds and passes all tests in CI (Visual Studio 2022) and on a Windows 11 PC (Build Tools 2026), where the example level was played to the end in Studio; MinGW-w64 build runs under Wine 9 |
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
@@ -45,7 +47,8 @@ scripting) and 3 (Studio foundation) are complete. See
 - Ninja on Linux and macOS (Windows uses Visual Studio's own build system)
 - Internet access on the first configure (SDL3 and nlohmann/json are
   downloaded and verified by SHA-256; see [docs/dependencies.md](docs/dependencies.md))
-- Python 3 with Pillow, only to regenerate the example art (`tools/`)
+- Python 3 with Pillow, only to regenerate the example art and the starter
+  library (`tools/`)
 
 **Linux** also needs SDL3's system development headers. On Ubuntu/Debian:
 
@@ -72,7 +75,7 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 ```powershell
 cmake --preset windows                    # configure into build\windows (newest Visual Studio found)
 cmake --build --preset windows-debug      # first build also compiles SDL3 (a few minutes)
-ctest --preset windows-debug              # 4 tests, about 20 seconds
+ctest --preset windows-debug              # 5 tests, about 20 seconds
 .\build\windows\apps\studio\Debug\px-studio.exe
 ```
 
@@ -86,7 +89,7 @@ Studio...*).
 ```sh
 cmake --preset dev            # configure (Debug, Ninja) into build/dev
 cmake --build --preset dev    # first build also compiles SDL3 (~1-3 minutes)
-ctest --preset dev            # unit tests, headless playthrough, player smoke test
+ctest --preset dev            # unit tests, headless playthroughs, player smoke test
 ```
 
 `ctest` also runs Studio once with SDL's dummy video driver
@@ -105,8 +108,9 @@ cmake --build build/mingw
 ```
 
 The resulting `px-player.exe` and `px-studio.exe` need no extra DLLs. Copy
-`examples/` next to them: `px-player.exe` then starts the example with no
-arguments, and Studio uses it as the template for new projects.
+`examples/` and `library/` next to them: `px-player.exe` then starts the
+example with no arguments, and Studio uses the examples for new projects and
+the library for its Toolbox.
 
 ### Make a game in Studio
 
@@ -115,21 +119,26 @@ arguments, and Studio uses it as the template for new projects.
 ./build/dev/apps/studio/px-studio path/to/project      # open a project directly
 ```
 
-Create a project (empty, or from the platformer template), paint a level,
-add a player and coins, attach Luau behaviours, press F5 to play and Ctrl+S
-to save. The [Studio guide](docs/studio.md) has a ten-minute tutorial that
-builds a game from an empty project, plus every panel, shortcut and
+Create a project: give it a name (Studio remembers the folder you used last),
+choose the kind of game (platformer or top-down) and start from that kind's
+example level or an empty scene. Click or drag ready-made things from the
+**Toolbox** (heroes, ground, coins, keys, enemies, exits and more), paint
+tiles, attach Luau behaviours, press F5 to play and Ctrl+S to save. The
+[Studio guide](docs/studio.md) has a five-minute Toolbox tutorial, a
+tutorial with your own art and script, and every panel, shortcut and
 limitation.
 
 ### Run
 
 ```sh
 ./build/dev/apps/player/px-player                      # plays examples/platformer
+./build/dev/apps/player/px-player examples/topdown     # the top-down example
 ./build/dev/apps/player/px-player path/to/project      # any project folder
 ./build/dev/apps/headless/px-headless examples/platformer --ticks 600
 ```
 
-Controls: arrows or A/D to move, Space/Z/W/Up to jump, R restart, F5 reload
+Controls: arrows or A/D to move, Space/Z/W/Up to jump (top-down: arrows or
+WASD to walk), R restart, F5 reload
 scripts and scenes from disk, F1 debug overlay (colliders, FPS, player
 position, script memory), F2 screenshot, Esc quit.
 
@@ -172,9 +181,10 @@ engine/            engine modules (static libraries), one folder per module
 apps/player/       px-player, the desktop client
 apps/headless/     px-headless, graphics-free runner (seed of the dedicated server)
 apps/studio/       px-studio, the desktop editor (Dear ImGui)
-examples/          example game projects (content only, no code)
+examples/          example game projects (content only, no code): platformer, topdown
+library/           starter library behind Studio's Toolbox (generated by tools/)
 tests/             automated tests
-tools/             developer tools (example generator)
+tools/             developer tools (example and library generators, dependency updates)
 docs/              detailed documentation and architecture decision records
 third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImGui)
 ```
@@ -186,6 +196,7 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [CONTRIBUTING.md](CONTRIBUTING.md): coding standards and workflow
 - [docs/studio.md](docs/studio.md): Studio guide and tutorial
 - [docs/project-format.md](docs/project-format.md): `project.json` and scene files
+- [docs/library-format.md](docs/library-format.md): the starter library behind the Toolbox
 - [docs/components.md](docs/components.md): generated reference of every component and field
 - [docs/engine.md](docs/engine.md): coordinates, scene model, simulation loop, rendering
 - [docs/platform-support.md](docs/platform-support.md): desktop, mobile and browser: what is verified and what is planned

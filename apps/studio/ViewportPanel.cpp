@@ -309,6 +309,20 @@ void ViewportPanel::drawGameView(StudioApp& app, ImVec2 size) {
 
 void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
     if (app.playing() || !ImGui::BeginDragDropTarget()) return;
+    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kLibraryPayload)) {
+        ui::LibraryPayload item;
+        std::memcpy(&item, payload->Data, sizeof(item));
+        const Vec2 world = screenToWorld(ImGui::GetMousePos(), origin);
+        switch (item.kind) {
+            case ui::LibraryPayload::Kind::Object:
+                app.insertLibraryObject(static_cast<std::size_t>(item.object), world);
+                break;
+            case ui::LibraryPayload::Kind::Image: app.insertLibraryImage(item.asset, world); break;
+            case ui::LibraryPayload::Kind::Behaviour:
+                if (app.document() != nullptr) app.attachLibraryScript(item.asset, editor::pick(app.document()->scene(), world));
+                break;
+        }
+    }
     if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
         assets::AssetId id;
         std::memcpy(&id, payload->Data, sizeof(id));

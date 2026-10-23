@@ -26,6 +26,7 @@ enum class EntityPreset {
     SolidBlock, // Transform + Sprite (if a texture is given) + solid BoxCollider
     Trigger,    // Transform + trigger BoxCollider
     Player,     // a ready-to-play platformer character
+    TopDownPlayer, // a ready-to-play top-down character
     Camera,     // Transform + Camera (follows the player if there is one)
 };
 [[nodiscard]] std::string_view presetName(EntityPreset preset);
@@ -118,6 +119,10 @@ public:
     void resizeTilemap(scene::Entity entity, int width, int height);
     // Sets one tile (no-op outside the map). Use inside a transaction for strokes.
     bool setTile(scene::Entity entity, int x, int y, int tile);
+
+    // If `player` is a Player, cameras that follow nothing start following it.
+    // Call inside a transaction.
+    void followIfCameraIdle(scene::Entity player);
 
     // A name not used by any entity in the scene: "Coin 14" -> "Coin 15", "Player" -> "Player 2".
     [[nodiscard]] std::string uniqueName(std::string_view wanted) const;

@@ -50,6 +50,15 @@ The example project has three scripts worth reading:
 [moving_platform.luau](../examples/platformer/scripts/moving_platform.luau) (Tick + movement),
 [level_rules.luau](../examples/platformer/scripts/level_rules.luau) (events + win condition).
 
+The starter library behind Studio's Toolbox has more, each short and
+commented, in [library/scripts](../library/scripts):
+[hazard.luau](../library/scripts/hazard.luau) (sends the player back with `entity:respawn()`),
+[checkpoint.luau](../library/scripts/checkpoint.luau) (moves `entity.spawnPoint`),
+[key.luau](../library/scripts/key.luau) and [lock_block.luau](../library/scripts/lock_block.luau)
+(one script opening others through an event),
+[patrol.luau](../library/scripts/patrol.luau), [spring.luau](../library/scripts/spring.luau),
+[goal.luau](../library/scripts/goal.luau) and [sign.luau](../library/scripts/sign.luau).
+
 ## Behaviours and instances
 
 A script file is a **module**: its top-level code runs once when the game
@@ -226,8 +235,8 @@ client-side authority.
 | Today | Realm | Why |
 |---|---|---|
 | `Game.addScore`, `Game.setObjective`, `Game.completeLevel` | authority only | score, objectives and progress are trusted state |
-| `entity:destroy()`, assigning `entity.position` etc. | authority only | entity state is replicated from the server |
-| queries (`World.find`, `entity.position`, `Game.getScore`, `Input.isDown`) | all | reading is safe; on clients they read replicated state |
+| `entity:destroy()`, `entity:respawn()`, assigning `entity.position` etc. | authority only | entity state is replicated from the server |
+| queries (`World.find`, `entity.position`, `Game.getScore`, `Game.getObjective`, `Input.isDown`) | all | reading is safe; on clients they read replicated state |
 | `Events.emit/on/off` | all | each VM has its own event bus; events never cross the network implicitly |
 
 Planned for Milestone 4 (not implemented): a per-script setting

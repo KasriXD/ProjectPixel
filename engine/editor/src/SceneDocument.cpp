@@ -25,9 +25,18 @@ std::string defaultName(EntityPreset preset) {
         case EntityPreset::SolidBlock: return "Block";
         case EntityPreset::Trigger: return "Trigger";
         case EntityPreset::Player: return "Player";
+        case EntityPreset::TopDownPlayer: return "Player";
         case EntityPreset::Camera: return "Camera";
     }
     return "Entity";
+}
+
+// Cameras that follow nothing yet follow `player`.
+void followNewPlayer(Scene& scene, Entity player) {
+    const Guid id = scene.get<EntityInfo>(player).id;
+    for (const Entity other : scene.entities()) {
+        if (auto* cam = scene.tryGet<Camera>(other); cam != nullptr && cam->follow.isNil()) cam->follow = id;
+    }
 }
 
 // Selected entities whose ancestors are not selected (moving or deleting
@@ -53,9 +62,14 @@ std::string_view presetName(EntityPreset preset) {
         case EntityPreset::SolidBlock: return "Solid Block";
         case EntityPreset::Trigger: return "Trigger Area";
         case EntityPreset::Player: return "Player";
+        case EntityPreset::TopDownPlayer: return "Top-down Player";
         case EntityPreset::Camera: return "Camera";
     }
     return "Entity";
+}
+
+void SceneDocument::followIfCameraIdle(Entity player) {
+    if (m_scene.tryGet<Player>(player) != nullptr) followNewPlayer(m_scene, player);
 }
 
 std::size_t estimateSceneBytes(const Scene& scene) {
@@ -302,7 +316,8 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
             m_scene.set(e, c);
             break;
         }
-        case EntityPreset::Player: {
+        case EntityPreset::Player:
+        case EntityPreset::TopDownPlayer: {
             if (!texture.isNil()) {
                 Sprite sprite;
                 sprite.texture = texture;
@@ -310,17 +325,22 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
                 m_scene.set(e, sprite);
             }
             BoxCollider c;
-            c.size = {10, 14};
-            c.offset = {0, 1};
+            if (preset == EntityPreset::Player) {
+                c.size = {10, 14};
+                c.offset = {0, 1};
+            } else {
+                c.size = {10, 8}; // the feet: the head may overlap walls above, as seen from above
+                c.offset = {0, 4};
+            }
             m_scene.set(e, c);
             m_scene.set(e, KinematicBody{});
-            m_scene.set(e, PlatformerController{});
-            m_scene.set(e, Player{});
-            // Cameras that follow nothing yet follow the new player.
-            const Guid id = m_scene.get<EntityInfo>(e).id;
-            for (const Entity other : m_scene.entities()) {
-                if (auto* cam = m_scene.tryGet<Camera>(other); cam != nullptr && cam->follow.isNil()) cam->follow = id;
+            if (preset == EntityPreset::Player) {
+                m_scene.set(e, PlatformerController{});
+            } else {
+                m_scene.set(e, TopDownController{});
             }
+            m_scene.set(e, Player{});
+            followNewPlayer(m_scene, e);
             break;
         }
         case EntityPreset::Camera: {

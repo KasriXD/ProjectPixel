@@ -6,7 +6,9 @@
 #include "px/core/Keys.hpp"
 #include "px/core/Result.hpp"
 #include "px/core/Time.hpp"
+#include "px/core/FileSystem.hpp"
 #include "px/editor/EditorProject.hpp"
+#include "px/editor/Library.hpp"
 #include "px/editor/LogBuffer.hpp"
 #include "px/editor/PlayMode.hpp"
 #include "px/editor/SceneDocument.hpp"
@@ -35,6 +37,7 @@ class AssetsPanel;
 class ConsolePanel;
 class ScriptEditorPanel;
 class ProjectSettingsPanel;
+class ToolboxPanel;
 
 struct StudioOptions {
     std::filesystem::path projectDir; // open this project at start
@@ -107,7 +110,9 @@ public:
 
     // --- Commands ------------------------------------------------------------------------
     void requestOpenProject(const std::filesystem::path& folder);
-    void requestNewProject(const std::filesystem::path& folder, const std::string& name, bool fromTemplate);
+    // Creates a project of `type`: a copy of that type's example level, or an empty scene.
+    void requestNewProject(const std::filesystem::path& folder, const std::string& name, project::GameType type,
+                           bool fromExample);
     void requestCloseProject();
     void requestOpenScene(assets::AssetId scene);
     void requestQuit();
@@ -131,7 +136,23 @@ public:
 
     // Keyboard state for the game, fed only while the viewport has focus.
     void setGameInputFocus(bool focused) { m_gameHasFocus = focused; }
-    [[nodiscard]] const std::filesystem::path& templateFolder() const { return m_templateFolder; }
+    // The example project for a game type (empty if it was not found).
+    [[nodiscard]] std::filesystem::path exampleFolder(project::GameType type) const;
+    [[nodiscard]] project::GameType gameType() const {
+        return m_project ? m_project->manifest().settings.gameType : project::GameType::Platformer;
+    }
+
+    // --- Starter library (Toolbox) ------------------------------------------------------
+    [[nodiscard]] const editor::Library* library() const { return m_library ? &*m_library : nullptr; }
+    [[nodiscard]] const std::string& libraryError() const { return m_libraryError; }
+    [[nodiscard]] render::TextureCache* libraryTextures() { return m_libraryTextures.get(); }
+    // Each inserts at `at` (or the middle of the view) as one undo step, selects
+    // the result and reports problems as notifications.
+    void insertLibraryObject(std::size_t index, std::optional<Vec2> at = std::nullopt);
+    void insertLibraryImage(const assets::AssetId& image, std::optional<Vec2> at = std::nullopt);
+    void attachLibraryScript(const assets::AssetId& script, scene::Entity entity);
+    // The library's player object for the project's game type (-1 if none).
+    [[nodiscard]] int libraryPlayerObject() const;
 
 private:
     explicit StudioApp(StudioOptions options);
@@ -174,7 +195,12 @@ private:
     std::filesystem::path m_prefDir;
     std::filesystem::path m_settingsFile;
     std::string m_iniPath;
-    std::filesystem::path m_templateFolder;
+    std::filesystem::path m_examplesFolder;
+    std::optional<editor::Library> m_library;
+    std::string m_libraryError;
+    std::unique_ptr<DirectoryFileSystem> m_libraryFiles;
+    assets::AssetRegistry m_libraryRegistry;
+    std::unique_ptr<render::TextureCache> m_libraryTextures;
 
     StudioSettings m_settings;
     FileDialogs m_dialogs;
@@ -198,6 +224,7 @@ private:
     std::unique_ptr<ConsolePanel> m_console;
     std::unique_ptr<ScriptEditorPanel> m_scripts;
     std::unique_ptr<ProjectSettingsPanel> m_projectSettings;
+    std::unique_ptr<ToolboxPanel> m_toolbox;
 
     struct Toast {
         std::string text;
@@ -220,6 +247,7 @@ private:
     std::string m_newName = "My Game";
     std::string m_newParent;
     bool m_newFromTemplate = true;
+    project::GameType m_newGameType = project::GameType::Platformer;
     std::string m_openPath;
 
     bool m_layoutBuilt = false;

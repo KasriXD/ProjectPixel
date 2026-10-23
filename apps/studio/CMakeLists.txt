@@ -12,12 +12,14 @@ add_executable(px_studio
     AssetsPanel.cpp
     ConsolePanel.cpp
     ScriptEditorPanel.cpp
-    ProjectSettingsPanel.cpp)
+    ProjectSettingsPanel.cpp
+    ToolboxPanel.cpp)
 set_target_properties(px_studio PROPERTIES OUTPUT_NAME px-studio)
 target_link_libraries(px_studio PRIVATE px::editor px::render px::platform_sdl px_imgui)
 px_target_defaults(px_studio)
 target_compile_definitions(px_studio PRIVATE
-    PX_DEFAULT_TEMPLATE_DIR="${PX_EXAMPLES_DIR}/platformer"
+    PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
+    PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs")
 
 if(WIN32)
