@@ -67,6 +67,8 @@ private:
 };
 
 void helpMarker(std::string_view text);
+// `text`, shortened with ".." (by whole UTF-8 characters) to fit `width`.
+[[nodiscard]] std::string fitText(std::string text, float width);
 void tooltip(std::string_view text);
 bool iconButton(const char* label, const char* tooltipText, bool enabled = true);
 ImVec4 toImVec4(Color c);

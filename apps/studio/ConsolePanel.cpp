@@ -33,7 +33,7 @@ bool findScriptLocation(const std::string& text, std::string& path, int& line) {
 } // namespace
 
 void ConsolePanel::draw(StudioApp& app) {
-    if (!ImGui::Begin(kConsoleWindow)) {
+    if (!ImGui::Begin(kOutputWindow)) {
         ImGui::End();
         return;
     }

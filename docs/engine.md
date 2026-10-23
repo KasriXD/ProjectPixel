@@ -38,7 +38,7 @@ How the engine works today. For module boundaries see
   copyable; copies are fully independent (used for restart, Studio's undo
   history and play mode).
 - **Component descriptors** describe every component and field (type, range,
-  description). The file format, validation, Studio's inspector and
+  description). The file format, validation, Studio's Properties panel and
   [components.md](components.md) are generated from them
   ([ADR 0014](adr/0014-component-descriptors.md)).
 

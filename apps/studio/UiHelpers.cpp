@@ -16,6 +16,20 @@ void tooltip(std::string_view text) {
     ImGui::EndTooltip();
 }
 
+std::string fitText(std::string text, float width) {
+    if (ImGui::CalcTextSize(text.c_str()).x <= width) return text;
+    while (!text.empty()) {
+        // Drop one whole UTF-8 character: continuation bytes, then its first byte.
+        unsigned char removed = 0;
+        do {
+            removed = static_cast<unsigned char>(text.back());
+            text.pop_back();
+        } while (!text.empty() && (removed & 0xC0u) == 0x80u);
+        if (ImGui::CalcTextSize((text + "..").c_str()).x <= width) break;
+    }
+    return text + "..";
+}
+
 void helpMarker(std::string_view text) {
     ImGui::SameLine();
     ImGui::TextDisabled("(?)");

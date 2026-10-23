@@ -47,6 +47,17 @@ toolkit must not become a trap.
   suits game UI more than dense tools; Nuklear lacks docking and the tooling
   ecosystem of ImGui.
 
+## Update 2026-10-23: panel names and default layout
+After the founder's first session, the panels were renamed and rearranged
+to match what many creators on a UGC platform already know from Roblox
+Studio: **Explorer** (entity tree) above **Properties** (the selected
+entity's components) on the right, **Assets** on the left, **Output** (log)
+below the scene. The earlier arrangement remains as *View > Layout >
+Classic*. Saved layouts carry a version and are rebuilt when the defaults
+change. Only the arrangement and common words were adopted, not any
+product's look or branding. Code names (`HierarchyPanel`, `InspectorPanel`,
+`ConsolePanel`) are unchanged.
+
 ## Consequences
 - Fast iteration: the whole Studio is about 4,400 lines of UI code on top of
   `px_editor`. Debug builds of ImGui compile in about 20 seconds.

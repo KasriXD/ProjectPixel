@@ -108,7 +108,7 @@ bool scriptValueWidget(ScriptValue& value) {
 } // namespace
 
 void InspectorPanel::draw(StudioApp& app) {
-    if (!ImGui::Begin(kInspectorWindow)) {
+    if (!ImGui::Begin(kPropertiesWindow)) {
         ImGui::End();
         return;
     }
@@ -206,7 +206,7 @@ void InspectorPanel::drawSceneSettings(StudioApp& app, Scene& scene) {
                     stats.disabledInstances);
         ImGui::Text("Luau memory: %zu KiB", stats.memoryBytes / 1024);
         if (state.scriptErrors > 0) {
-            ImGui::TextColored(ui::kErrorColor, "%d script error%s (see Console)", state.scriptErrors,
+            ImGui::TextColored(ui::kErrorColor, "%d script error%s (see Output)", state.scriptErrors,
                                state.scriptErrors == 1 ? "" : "s");
         }
     }

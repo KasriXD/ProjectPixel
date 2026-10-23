@@ -50,9 +50,9 @@ jobs:
             cxx: g++-13
           - name: Windows MSVC
             os: windows-2022
-            configure: vs2022
-            build: vs2022-debug
-            test: vs2022-debug
+            configure: windows
+            build: windows-debug
+            test: windows-debug
           - name: macOS Apple Clang
             os: macos-14
             configure: dev

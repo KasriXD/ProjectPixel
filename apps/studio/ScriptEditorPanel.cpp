@@ -40,6 +40,8 @@ int editorCallback(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
+std::string windowId(const assets::AssetId& script) { return "###script-" + script.toString(); }
+
 // "scripts/x.luau:12: message" -> 12
 int errorLine(const std::string& error) {
     const std::size_t at = error.find(".luau:");
@@ -50,6 +52,12 @@ int errorLine(const std::string& error) {
 }
 
 } // namespace
+
+std::vector<std::string> ScriptEditorPanel::windowIds() const {
+    std::vector<std::string> ids;
+    for (const OpenScript& script : m_open) ids.push_back(windowId(script.id));
+    return ids;
+}
 
 void ScriptEditorPanel::open(StudioApp& app, assets::AssetId script, int line) {
     auto* project = app.project();
@@ -91,7 +99,7 @@ void ScriptEditorPanel::draw(StudioApp& app) {
                 script.text = disk.value();
             }
         }
-        const std::string title = std::format("{}{}###script-{}", entry->name, dirty ? " *" : "", script.id.toString());
+        const std::string title = std::format("{}{}{}", entry->name, dirty ? " *" : "", windowId(script.id));
         if (script.focus) {
             ImGui::SetNextWindowFocus();
             script.focus = false;

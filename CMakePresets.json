@@ -2,7 +2,7 @@
   "version": 6,
   "cmakeMinimumRequired": {
     "major": 3,
-    "minor": 24,
+    "minor": 25,
     "patch": 0
   },
   "configurePresets": [
@@ -68,6 +68,17 @@
       }
     },
     {
+      "name": "windows",
+      "displayName": "Windows: newest installed Visual Studio or Build Tools (2022 or 2026)",
+      "description": "No fixed generator: CMake picks the newest Visual Studio it finds, building for the host (x64).",
+      "inherits": "base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
       "name": "wasm-headless",
       "displayName": "WebAssembly, no graphics: engine + tests run under Node.js (experimental)",
       "inherits": "base",
@@ -118,6 +129,16 @@
       "configuration": "RelWithDebInfo"
     },
     {
+      "name": "windows-debug",
+      "configurePreset": "windows",
+      "configuration": "Debug"
+    },
+    {
+      "name": "windows-release",
+      "configurePreset": "windows",
+      "configuration": "RelWithDebInfo"
+    },
+    {
       "name": "wasm-headless",
       "configurePreset": "wasm-headless"
     },
@@ -158,6 +179,14 @@
     {
       "name": "vs2022-debug",
       "configurePreset": "vs2022",
+      "configuration": "Debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "windows-debug",
+      "configurePreset": "windows",
       "configuration": "Debug",
       "output": {
         "outputOnFailure": true

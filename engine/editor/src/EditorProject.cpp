@@ -71,8 +71,8 @@ std::optional<std::string> pathInside(const std::filesystem::path& root, const s
 
 std::string scriptTemplate(std::string_view displayName, const std::string& identifier) {
     return std::format(R"lua(-- {0}: describe what this behaviour does.
--- Attach it to an entity in Studio (inspector > Add Script). Properties
--- declared below appear in the inspector and can be set per entity.
+-- Attach it to an entity in Studio (Properties > Add Script). Values
+-- declared below appear in Properties and can be set per entity.
 -- API reference: docs/scripting-api.md
 
 local {1} = {{

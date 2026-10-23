@@ -20,12 +20,16 @@ namespace px::studio {
 
 class StudioApp;
 
-// Window names (also used to build the default layout).
-inline constexpr const char* kHierarchyWindow = "Hierarchy";
-inline constexpr const char* kInspectorWindow = "Inspector";
+// Window titles (also their ImGui ids, used to build the layouts). The
+// names follow what many creators know from other UGC tools: the entity
+// tree is the Explorer (HierarchyPanel), the selected entity's components
+// are its Properties (InspectorPanel), and the log is the Output
+// (ConsolePanel).
+inline constexpr const char* kExplorerWindow = "Explorer";
+inline constexpr const char* kPropertiesWindow = "Properties";
 inline constexpr const char* kSceneWindow = "Scene";
 inline constexpr const char* kAssetsWindow = "Assets";
-inline constexpr const char* kConsoleWindow = "Console";
+inline constexpr const char* kOutputWindow = "Output";
 
 class HierarchyPanel {
 public:
@@ -138,6 +142,9 @@ public:
     void draw(StudioApp& app);
     void open(StudioApp& app, assets::AssetId script, int line);
     [[nodiscard]] bool hasOpenScripts() const { return !m_open.empty(); }
+    // ImGui window ids of the open scripts ("###script-<id>"), so a layout
+    // reset can dock them next to the Scene view again.
+    [[nodiscard]] std::vector<std::string> windowIds() const;
 
 private:
     struct OpenScript {

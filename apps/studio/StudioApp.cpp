@@ -27,6 +27,9 @@ namespace px::studio {
 namespace {
 
 constexpr const char* kDockSpace = "StudioDockSpace";
+// Bump when the default layouts or panel names change, so saved layouts
+// are rebuilt instead of leaving new panels floating.
+constexpr int kLayoutVersion = 2;
 
 void applyStyle(float scale) {
     ImGui::StyleColorsDark();
@@ -752,7 +755,15 @@ void StudioApp::drawUi() {
     } else {
         const ImGuiID dockspace = ImGui::GetID(kDockSpace);
         if (!m_layoutBuilt) {
-            if (m_options.resetLayout || ImGui::DockBuilderGetNode(dockspace) == nullptr) buildDefaultLayout(dockspace);
+            // Rebuild when asked, when nothing is saved, or when the saved
+            // layout predates the current defaults (panels were renamed).
+            if (m_options.resetLayout || ImGui::DockBuilderGetNode(dockspace) == nullptr ||
+                m_settings.layoutVersion != kLayoutVersion) {
+                buildDefaultLayout(dockspace);
+                m_settings.layoutVersion = kLayoutVersion;
+                m_options.resetLayout = false;
+                if (!m_settingsFile.empty() && !m_options.smokeTest) (void)m_settings.save(m_settingsFile);
+            }
             m_layoutBuilt = true;
         }
         ImGui::DockSpaceOverViewport(dockspace, ImGui::GetMainViewport());
@@ -776,14 +787,30 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderAddNode(dockspace, ImGuiDockNodeFlags_DockSpace);
     ImGui::DockBuilderSetNodeSize(dockspace, viewport->WorkSize);
     ImGuiID center = dockspace;
-    const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.17f, nullptr, &center);
-    const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.27f, nullptr, &center);
-    const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.28f, nullptr, &center);
-    ImGui::DockBuilderDockWindow(kHierarchyWindow, left);
-    ImGui::DockBuilderDockWindow(kInspectorWindow, right);
-    ImGui::DockBuilderDockWindow(kAssetsWindow, bottom);
-    ImGui::DockBuilderDockWindow(kConsoleWindow, bottom);
+    if (m_settings.layout == "classic") {
+        // Explorer left, Properties right, Assets and Output tabbed below the scene.
+        const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.17f, nullptr, &center);
+        const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.27f, nullptr, &center);
+        const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.28f, nullptr, &center);
+        ImGui::DockBuilderDockWindow(kExplorerWindow, left);
+        ImGui::DockBuilderDockWindow(kPropertiesWindow, right);
+        ImGui::DockBuilderDockWindow(kAssetsWindow, bottom);
+        ImGui::DockBuilderDockWindow(kOutputWindow, bottom);
+    } else {
+        // Standard: Explorer above Properties on the right, Assets on the
+        // left (a toolbox to drag from), Output below the scene.
+        const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.24f, nullptr, &center);
+        ImGuiID rightTop = 0;
+        const ImGuiID rightBottom = ImGui::DockBuilderSplitNode(right, ImGuiDir_Down, 0.58f, nullptr, &rightTop);
+        const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.22f, nullptr, &center);
+        const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.24f, nullptr, &center);
+        ImGui::DockBuilderDockWindow(kExplorerWindow, rightTop);
+        ImGui::DockBuilderDockWindow(kPropertiesWindow, rightBottom);
+        ImGui::DockBuilderDockWindow(kAssetsWindow, left);
+        ImGui::DockBuilderDockWindow(kOutputWindow, bottom);
+    }
     ImGui::DockBuilderDockWindow(kSceneWindow, center);
+    for (const std::string& script : m_scripts->windowIds()) ImGui::DockBuilderDockWindow(script.c_str(), center);
     ImGui::DockBuilderFinish(dockspace);
 }
 
@@ -867,7 +894,7 @@ void StudioApp::drawMenuBar() {
         if (ImGui::MenuItem("Step One Tick", "F7", false, m_play != nullptr)) stepOnce();
         ImGui::Separator();
         ImGui::MenuItem("Game Camera While Playing", nullptr, &gameCameraInPlay);
-        ImGui::MenuItem("Clear Console On Play", nullptr, &m_settings.clearConsoleOnPlay);
+        ImGui::MenuItem("Clear Output On Play", nullptr, &m_settings.clearConsoleOnPlay);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("View")) {
@@ -876,9 +903,23 @@ void StudioApp::drawMenuBar() {
         ImGui::MenuItem("Snap To Grid", nullptr, &m_settings.snapToGrid);
         if (ImGui::MenuItem("Frame Selection", "F", false, haveDoc)) m_viewport->frameSelection(*this);
         ImGui::Separator();
-        if (ImGui::MenuItem("Reset Layout")) {
-            m_options.resetLayout = true;
-            m_layoutBuilt = false;
+        if (ImGui::BeginMenu("Layout")) {
+            const auto choose = [this](const char* name) {
+                m_settings.layout = name;
+                m_options.resetLayout = true;
+                m_layoutBuilt = false;
+            };
+            if (ImGui::MenuItem("Standard", nullptr, m_settings.layout != "classic")) choose("standard");
+            ui::tooltip("Explorer and Properties on the right, Assets on the left, Output below the scene");
+            if (ImGui::MenuItem("Classic", nullptr, m_settings.layout == "classic")) choose("classic");
+            ui::tooltip("Explorer on the left, Properties on the right, Assets and Output below the scene");
+            ImGui::Separator();
+            if (ImGui::MenuItem("Reset Layout")) {
+                m_options.resetLayout = true;
+                m_layoutBuilt = false;
+            }
+            ui::tooltip("Put every panel back where the chosen layout has it");
+            ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("UI Scale")) {
             for (const float s : {0.75f, 1.0f, 1.25f, 1.5f, 2.0f}) {
@@ -889,7 +930,7 @@ void StudioApp::drawMenuBar() {
             }
             ImGui::EndMenu();
         }
-        ImGui::MenuItem("Dear ImGui Demo", nullptr, &showDemoWindow);
+        if (m_options.verbose) ImGui::MenuItem("Dear ImGui Demo (developers)", nullptr, &showDemoWindow);
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {

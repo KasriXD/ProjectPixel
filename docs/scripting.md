@@ -33,8 +33,8 @@ AddressSanitizer), Windows (MSVC in CI, MinGW under Wine) and macOS (CI).
    ```
 
 3. Attach it to an entity: in Studio, select the entity, choose **Add
-   Script** in the inspector and pick it (the inspector then lists its
-   properties). In a scene file the same looks like:
+   Script** in the Properties panel and pick it (Properties then lists its
+   values). In a scene file the same looks like:
 
    ```json
    "Scripts": [ { "script": "<the script's asset id>", "properties": { "speed": 180 } } ]
@@ -69,7 +69,7 @@ own properties, and they run in the order they are attached.
 
 **Properties** are how scenes configure a behaviour without code. Defaults
 are declared in `properties`; the values set in the scene (Studio's
-inspector, or `properties` in the file) override them.
+Properties panel, or `properties` in the file) override them.
 Allowed types are number, boolean, string and vector (`Vec2(x, y)` in Luau,
 `[x, y]` in JSON). A scene that sets an undeclared property or the wrong type
 fails to load with a message like:
@@ -99,7 +99,7 @@ nothing per tick.
 Within one tick (`GameSession::tick`):
 
 1. `Start` for every instance that has not started, in **hierarchy order**
-   (the order of Studio's hierarchy panel: parents before children), and for
+   (the order of Studio's Explorer panel: parents before children), and for
    an entity's several scripts in attachment order.
 2. `Tick` for every started instance, in the same order.
 3. Moving solids carry the bodies standing on them.
@@ -272,8 +272,8 @@ Not implemented yet. The API was designed for it: see
 
 ## Hierarchy
 
-Entities can have a parent (Studio's hierarchy panel, or `parent` in the
-scene file). In scripts:
+Entities can have a parent (drag them onto each other in Studio's Explorer,
+or `parent` in the scene file). In scripts:
 
 - `entity.position` and `entity.rotation` are **world** values; assigning
   them moves the entity in the world (its children follow).

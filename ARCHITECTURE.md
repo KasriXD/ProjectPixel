@@ -147,7 +147,7 @@ restart (R) starts a new session, reload (F5) loads a new `LoadedGame`.
   unknown field 'jumpspeed' (did you mean 'jumpSpeed'?)`.
 - A missing or corrupt texture is logged once and drawn as a magenta/black
   checkerboard; a game never crashes because of one bad asset.
-- `px::log` writes to stderr and to registered sinks (Studio's console is a
+- `px::log` writes to stderr and to registered sinks (Studio's Output panel is a
   `LogBuffer` sink).
 
 ## What is deliberately simple for now

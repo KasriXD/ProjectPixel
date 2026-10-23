@@ -72,22 +72,39 @@ void AssetsPanel::draw(StudioApp& app) {
         return;
     }
 
-    // Toolbar.
+    // Toolbar. Items flow onto the next line when the panel is narrow (it is
+    // a tall column in the standard layout, a wide strip in the classic one).
+    const ImGuiStyle& style = ImGui::GetStyle();
+    const float em = ImGui::GetFontSize();
+    const float lineEnd = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+    bool firstItem = true;
+    const auto flow = [&](float width) {
+        if (!firstItem && ImGui::GetItemRectMax().x + style.ItemSpacing.x + width <= lineEnd) ImGui::SameLine();
+        firstItem = false;
+    };
+    const auto buttonWidth = [&](const char* label) {
+        return ImGui::CalcTextSize(label, nullptr, true).x + style.FramePadding.x * 2.0f;
+    };
+    flow(buttonWidth("Import..."));
     if (ImGui::Button("Import...")) app.dialogs().pickImportFiles(app.window());
     ui::tooltip("Copy images (.png .jpg .bmp .tga), Luau scripts or scenes into the project. You can also drop files "
                 "onto the Studio window.");
-    ImGui::SameLine();
-    if (ImGui::Button("New Script...")) m_openNewScript = true;
-    ImGui::SameLine();
-    if (ImGui::Button("New Scene...")) m_openNewScene = true;
-    ImGui::SameLine();
+    flow(buttonWidth("+ New"));
+    if (ImGui::Button("+ New")) ImGui::OpenPopup("NewAsset");
+    ui::tooltip("Create a script or a scene");
+    if (ImGui::BeginPopup("NewAsset")) {
+        if (ImGui::MenuItem("Script...")) m_openNewScript = true;
+        if (ImGui::MenuItem("Scene...")) m_openNewScene = true;
+        ImGui::EndPopup();
+    }
     const char* types[] = {"All", "Images", "Scripts", "Scenes"};
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+    flow(em * 6.0f);
+    ImGui::SetNextItemWidth(em * 6.0f);
     ImGui::Combo("##type", &m_typeFilter, types, 4);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(ImGui::GetFontSize() * 12.0f);
+    flow(em * 8.0f);
+    ImGui::SetNextItemWidth(std::min(em * 12.0f, lineEnd - ImGui::GetCursorScreenPos().x));
     ImGui::InputTextWithHint("##filter", "Search", &m_filter);
-    ImGui::SameLine();
+    flow(em * 16.0f);
     ImGui::SetNextItemWidth(-FLT_MIN);
     if (ImGui::InputTextWithHint("##importPath", "or type a file path to import, then Enter", &m_importPath,
                                  ImGuiInputTextFlags_EnterReturnsTrue) &&
@@ -98,7 +115,6 @@ void AssetsPanel::draw(StudioApp& app) {
 
     // Grid of assets.
     ImGui::BeginChild("grid", {0, 0}, ImGuiChildFlags_None);
-    const float em = ImGui::GetFontSize();
     const float tile = em * 6.0f;
     const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / (tile + em * 0.6f)));
     int column = 0;
@@ -139,8 +155,7 @@ void AssetsPanel::draw(StudioApp& app) {
             ImGui::EndPopup();
         }
         // Name, with markers.
-        std::string label = entry.name;
-        if (label.size() > 18) label = label.substr(0, 16) + "..";
+        const std::string label = ui::fitText(entry.name, tile);
         const editor::ScriptInfo* script =
             entry.type == assets::AssetType::Script ? project->scriptInfo(entry.id) : nullptr;
         if (script != nullptr && !script->error.empty()) {

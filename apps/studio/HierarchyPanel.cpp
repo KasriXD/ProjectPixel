@@ -79,7 +79,7 @@ void HierarchyPanel::drawEntityMenu(StudioApp& app, Entity entity) {
 }
 
 void HierarchyPanel::draw(StudioApp& app) {
-    const bool visible = ImGui::Begin(kHierarchyWindow);
+    const bool visible = ImGui::Begin(kExplorerWindow);
     if (!visible) {
         ImGui::End();
         return;
@@ -161,7 +161,7 @@ void HierarchyPanel::draw(StudioApp& app) {
             const bool open =
                 ImGui::TreeNodeEx("##node", flags, "%s", info->name.empty() ? "(unnamed)" : info->name.c_str());
             if (broken || group) ImGui::PopStyleColor();
-            if (broken) ui::tooltip("This entity has problems; select it to see them in the Inspector.");
+            if (broken) ui::tooltip("This entity has problems; select it to see them in Properties.");
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) clickSelect(e);
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) app.frameSelection();
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !isSelected(e)) app.select(e);

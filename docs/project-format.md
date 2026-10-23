@@ -158,7 +158,7 @@ Angles are degrees, clockwise. Vectors are `[x, y]`; rectangles are
 
 Every component, field, default and allowed range is listed in the generated
 **[component reference](components.md)**, produced from the same descriptor
-table that the loader, the writer and Studio's inspector use. In short:
+table that the loader, the writer and Studio's Properties panel use. In short:
 
 | Component | Purpose |
 |---|---|

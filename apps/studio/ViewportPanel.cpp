@@ -617,7 +617,7 @@ void ViewportPanel::drawOverlays(StudioApp& app, Scene& scene, ImVec2 origin, Im
         const Entity map = selectedTilemap(app);
         if (map.isNull()) {
             dl->AddText({origin.x + 10.0f, origin.y + 10.0f}, color(255, 200, 120),
-                        "Select a tilemap (Hierarchy) to paint tiles. Its palette is in the Inspector.");
+                        "Select a tilemap (Explorer) to paint tiles. Its palette is in Properties.");
         } else if (m_hovered) {
             const editor::TileCoord cell = editor::tileAt(scene, map, mouseWorld);
             if (cell.inside) {

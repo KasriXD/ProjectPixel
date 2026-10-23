@@ -26,12 +26,13 @@ Studio (`px-studio`) is desktop-only:
 | Linux x64 (X11) | Yes: GCC 13, Clang 18, ASan+UBSan | Yes: SDL `opengl` renderer | Used interactively on Xvfb (a game built from an empty project), smoke test in CTest |
 | No display | Yes | Yes: `dummy` driver + `software` renderer | CTest `studio_smoke_headless_display` (also under ASan) |
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: smoke test passes in a real window with the `direct3d` renderer | Not yet run on real Windows |
+| Windows x64 (MSVC, Build Tools 2026) | Yes | Yes: SDL `direct3d11` renderer | Used by the founder on a Windows 11 PC: a level played to the end in Studio; all 4 tests pass. (The crash on the Stop button found there is fixed.) |
 | Windows x64 (MSVC 2022) | Yes | Smoke test passes (dummy driver) | GitHub Actions |
 | macOS arm64 | Yes | Smoke test passes (dummy driver) | GitHub Actions; not yet used in a real window |
 | Browser, mobile | Not built | | Studio needs a desktop; a browser-based editor would be a separate decision |
 
-Desktop risks not covered by these checks: high-DPI scaling on real
-monitors, native file dialogs (they need the XDG desktop portal or zenity on
+Desktop risks not covered by these checks yet: high-DPI scaling on real
+monitors other than the one Windows PC, native file dialogs (they need the XDG desktop portal or zenity on
 Linux; Studio falls back to typed paths), keyboard layouts and IME text input.
 
 ## Desktop

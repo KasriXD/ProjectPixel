@@ -43,7 +43,7 @@ boundary) get an Architecture Decision Record in `docs/adr/` (copy
 
 Components are described once, in a descriptor table
 ([ADR 0014](docs/adr/0014-component-descriptors.md)); the file format,
-validation, Studio's inspector and the reference docs follow from it.
+validation, Studio's Properties panel and the reference docs follow from it.
 
 1. Define the struct in `engine/scene/include/px/scene/Components.hpp`.
 2. Add its descriptor in `engine/scene/src/ComponentInfo.cpp`: name,

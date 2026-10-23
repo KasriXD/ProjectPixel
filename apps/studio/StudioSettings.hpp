@@ -17,6 +17,12 @@ struct StudioSettings {
     bool showColliders = true;
     bool clearConsoleOnPlay = true;
     float uiScale = 1.0f; // multiplied with the monitor's scale
+    // Panel arrangement: "standard" (Explorer and Properties on the right)
+    // or "classic" (Explorer on the left, Properties on the right).
+    std::string layout = "standard";
+    // Version of the default layouts the saved panel layout was made with;
+    // Studio rebuilds the layout when its defaults change.
+    int layoutVersion = 0;
 
     static constexpr std::size_t kMaxRecent = 10;
 

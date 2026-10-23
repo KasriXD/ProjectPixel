@@ -22,7 +22,7 @@ scripting) and 3 (Studio foundation) are complete. See
 | Window, main loop, keyboard input (SDL3) | Implemented, verified on Linux (X11 + OpenGL) and Windows (Direct3D, under Wine); windowless smoke test passes in CI on Linux, Windows and macOS |
 | 2D rendering: sprites, tilemaps, layers, camera, pixel-perfect scaling, debug text | Implemented, verified by screenshots |
 | Entity/component scene model with stable ids, parent/child hierarchy | Implemented, unit tested |
-| Studio (desktop editor): projects, hierarchy, scene view, inspector, assets, script editor, undo, play/stop, console | Implemented; a game was built in it from an empty project and runs in `px-player`. Verified on Linux (X11) and under Wine (Direct3D); builds in CI on Windows (MSVC) and macOS. **Not yet used on a real Windows or macOS desktop** ([guide](docs/studio.md)) |
+| Studio (desktop editor): projects, Explorer, Scene view, Properties, Assets, Output, script editor, undo, play/stop | Implemented; a game was built in it from an empty project and runs in `px-player`. Used on Linux (X11) and on a Windows 11 PC (Direct3D 11); builds and passes its smoke test in CI on Windows and macOS. **Not yet used on a real Mac** ([guide](docs/studio.md)) |
 | Kinematic collision: solid tiles/boxes, triggers | Implemented, unit tested |
 | Platformer movement (coyote time, jump buffer, variable jump) | Implemented, unit tested |
 | Versioned project/scene file format with validation | Implemented, unit tested |
@@ -30,7 +30,7 @@ scripting) and 3 (Studio foundation) are complete. See
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
 | Example platformer, loaded from project files | Playable; coins, win condition and a moving platform are Luau scripts; an automated run completes the level |
 | Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
-| Windows | Builds and passes all tests in CI with Visual Studio 2022; MinGW-w64 build runs the game under Wine 9 (Direct3D renderer). **Not yet played on a real Windows PC** |
+| Windows | Builds and passes all tests in CI (Visual Studio 2022) and on a Windows 11 PC (Build Tools 2026), where the example level was played to the end in Studio; MinGW-w64 build runs under Wine 9 |
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | **Experimental**: engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
@@ -40,10 +40,10 @@ scripting) and 3 (Studio foundation) are complete. See
 
 ### Prerequisites
 
-- CMake 3.24+ and a C++20 compiler: GCC 13+, Clang 16+, or Visual Studio 2022 17.8+
-  (Apple Clang from Xcode 15.3+, macOS 13.3+)
-- Ninja (recommended; Visual Studio generator also works on Windows)
-- Git, and internet access on the first configure (SDL3 and nlohmann/json are
+- CMake 3.25+ and a C++20 compiler: GCC 13+, Clang 16+, or Visual Studio /
+  Build Tools 2022 (17.8+) or 2026 (Apple Clang from Xcode 15.3+, macOS 13.3+)
+- Ninja on Linux and macOS (Windows uses Visual Studio's own build system)
+- Internet access on the first configure (SDL3 and nlohmann/json are
   downloaded and verified by SHA-256; see [docs/dependencies.md](docs/dependencies.md))
 - Python 3 with Pillow, only to regenerate the example art (`tools/`)
 
@@ -57,7 +57,31 @@ sudo apt install build-essential cmake ninja-build pkg-config \
   libasound2-dev libpulse-dev libdbus-1-dev libudev-dev
 ```
 
-### Build and test
+### Build and test on Windows
+
+1. Install **Build Tools for Visual Studio** (2022 or 2026) from
+   https://visualstudio.microsoft.com/visual-cpp-build-tools/ and tick the
+   **"Desktop development with C++"** workload. (A full Visual Studio with
+   that workload works too.)
+2. Install **CMake** from https://cmake.org/download/ (Windows x64 Installer)
+   and choose *"Add CMake to the system PATH"*. Restart any open terminals and
+   editors afterwards, including VS Code and GitHub Desktop if you start VS
+   Code from it; check with `cmake --version`.
+3. In PowerShell, in the repository folder:
+
+```powershell
+cmake --preset windows                    # configure into build\windows (newest Visual Studio found)
+cmake --build --preset windows-debug      # first build also compiles SDL3 (a few minutes)
+ctest --preset windows-debug              # 4 tests, about 20 seconds
+.\build\windows\apps\studio\Debug\px-studio.exe
+```
+
+The other programs are in `build\windows\apps\player\Debug\` and
+`build\windows\apps\headless\Debug\`. In VS Code, the **CMake Tools**
+extension offers the same presets (pick *Windows: newest installed Visual
+Studio...*).
+
+### Build and test on Linux and macOS
 
 ```sh
 cmake --preset dev            # configure (Debug, Ninja) into build/dev
@@ -69,8 +93,7 @@ ctest --preset dev            # unit tests, headless playthrough, player smoke t
 (`studio_smoke_headless_display`, about 15 seconds).
 
 Other presets: `release`, `asan` (AddressSanitizer + UBSan), `headless` (no
-SDL or graphics at all), and `vs2022` on Windows
-(`cmake --preset vs2022` then `cmake --build --preset vs2022-debug`).
+SDL or graphics at all), and `vs2022` on Windows to force Visual Studio 2022.
 
 Windows executables can also be cross-compiled from Linux with MinGW-w64:
 

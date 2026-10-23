@@ -14,10 +14,10 @@ creator feedback (see "Recommended adjustments" below).
 
 | Item | Impact | Resolution |
 |---|---|---|
-| Game not yet played interactively on real Windows or macOS hardware (CI passes on both) | Rendering/input on real GPUs unconfirmed | Founder to try the Windows package on a real PC; a Mac check when one is available |
+| Not yet run on real macOS hardware (CI passes) | Rendering/input on Macs unconfirmed | A Mac check when one is available. Windows: played on a Windows 11 PC (2026-10-23) |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 | Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
-| Studio not yet used by a creator other than its developers, nor on a real Windows or macOS desktop | Usability problems and platform issues (DPI, file dialogs, fonts) unknown | Founder to build a small level with Studio and report friction; the walkthrough in docs/studio.md is the script |
+| Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the tutorial in docs/studio.md is the script |
 
 ---
 
@@ -104,19 +104,19 @@ visual nodes, per-tick total CPU budget for servers, trigger broadphase.
       play mode ([ADR 0015](docs/adr/0015-studio-architecture.md))
 - [x] Studio (`px-studio`, Dear ImGui docking, [ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md)):
       project creation (empty or template) and opening, recent projects
-- [x] Hierarchy panel: tree, drag-and-drop parenting and reordering, rename,
+- [x] Explorer panel (entity tree): drag-and-drop parenting and reordering, rename,
       create presets, duplicate, copy/paste as text (also between projects that share assets), delete, search
 - [x] Scene viewport: real renderer, pan/zoom, grid and snapping, click and
       box selection, move with undo, tile paint/erase/pick, collider and
       camera overlays, drag-and-drop of images, scripts and scenes
-- [x] Inspector generated from descriptors; add/remove components with
+- [x] Properties panel generated from descriptors; add/remove components with
       requirements; scripts with typed properties and reset; live values while playing
 - [x] Asset browser: import (dialog, typed path or drop), new script/scene,
       rename, find uses, delete with usage check
 - [x] Script editor with live compile feedback; external changes detected
 - [x] Save/load with validation and canonical files; unsaved-changes prompts
 - [x] Play/pause/step/stop on a copy of the scene with the real `GameSession`
-- [x] Console (log sink) with filters, repeat folding, open-at-line for script errors
+- [x] Output panel (log sink) with filters, repeat folding, open-at-line for script errors
 - [x] Tests: 28 new test cases (103 total), a Studio smoke test in CTest;
       the editor model builds and plays a game from an empty project in a test
 - [x] Verified: a game built in Studio from an empty project (import, paint,
@@ -129,9 +129,26 @@ visual nodes, per-tick total CPU budget for servers, trigger broadphase.
 Deliverable met: a creator can build and save a simple game using the editor
 rather than manually editing project files ([walkthrough](docs/studio.md#tutorial-a-game-from-an-empty-project)).
 
-Known limitations: one entity at a time in the inspector, whole-scene undo
+Known limitations: one entity at a time in Properties, whole-scene undo
 snapshots, plain-text script editor, rotation/scale ignored by colliders and
 tilemaps ([details](docs/studio.md#limitations)).
+
+### Studio hardening (after Milestone 3, **in progress**)
+
+Driven by the founder's first session on Windows 11:
+
+- [x] Crash when clicking *Stop* fixed; play and project changes now happen
+      between frames
+- [x] Standard layout familiar to Roblox Studio users: Explorer above
+      Properties on the right, Assets on the left, Output below the scene;
+      the previous arrangement remains as *View > Layout > Classic*
+- [x] `windows` CMake preset that uses the newest installed Visual Studio or
+      Build Tools (2022 or 2026); Windows build steps in the README
+- [ ] A toolbar with large Move/Rotate/Scale, Insert and Play buttons;
+      rotate and scale handles in the Scene view
+- [ ] Editing several selected entities at once in Properties
+- [ ] Animation frame picker for sprite sheets
+- [ ] Feedback from two or three more creators
 
 ## Milestone 4: Multiplayer prototype (**Planned**)
 
@@ -170,7 +187,7 @@ monetization, advanced moderation, scalable hosting.
 1. **Next: a one-to-two-week Studio hardening pass, then Milestone 4
    (multiplayer prototype).** Have the founder (and ideally two or three
    creators) build a level with Studio on real Windows/macOS machines; fix
-   the friction they hit (multi-entity inspector editing and an animation
+   the friction they hit (multi-entity editing in Properties and an animation
    frame picker are likely first). Then start multiplayer: the deterministic
    `GameSession`, input frames and the headless runner are ready for a
    server, and its transport choice must keep the browser path open.

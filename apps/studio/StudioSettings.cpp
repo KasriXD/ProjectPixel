@@ -3,6 +3,7 @@
 #include "Utf8.hpp"
 
 #include <algorithm>
+#include <charconv>
 #include <cmath>
 #include <fstream>
 #include <locale>
@@ -71,6 +72,12 @@ StudioSettings StudioSettings::load(const std::filesystem::path& file) {
             s.showColliders = value == "1";
         } else if (key == "clearConsoleOnPlay") {
             s.clearConsoleOnPlay = value == "1";
+        } else if (key == "layout") {
+            if (value == "standard" || value == "classic") s.layout = value;
+        } else if (key == "layoutVersion") {
+            int v = 0;
+            const auto [ptr, ec] = std::from_chars(value.data(), value.data() + value.size(), v);
+            if (ec == std::errc() && ptr == value.data() + value.size()) s.layoutVersion = v;
         }
     }
     return s;
@@ -87,6 +94,8 @@ bool StudioSettings::save(const std::filesystem::path& file) const {
     out << "showGrid=" << (showGrid ? 1 : 0) << '\n';
     out << "showColliders=" << (showColliders ? 1 : 0) << '\n';
     out << "clearConsoleOnPlay=" << (clearConsoleOnPlay ? 1 : 0) << '\n';
+    out << "layout=" << layout << '\n';
+    out << "layoutVersion=" << layoutVersion << '\n';
     return static_cast<bool>(out);
 }
 
