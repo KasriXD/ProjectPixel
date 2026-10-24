@@ -3,6 +3,10 @@
 
 add_subdirectory(headless)
 
+if(NOT EMSCRIPTEN)
+    add_subdirectory(server)
+endif()
+
 if(PX_BUILD_CLIENT)
     add_subdirectory(player)
 endif()

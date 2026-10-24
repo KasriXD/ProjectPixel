@@ -5,11 +5,16 @@
 //               [--expect-level-complete] [--expect-no-script-errors]
 //               [--log-events] [--trace-every N] [--verbose]
 //   px-headless <project-dir> --resave
+//   px-headless <project-dir> --connect ADDRESS [--name NAME] [--input-script FILE] [--ticks N]
+//   px-headless <project-dir> --net-test [--clients N] [--latency MS] [--jitter MS] [--loss PCT]
+//               [--udp] [--port N] [--input-script FILE] [--ticks N] [--expect-...]
 //   px-headless --print-api-reference
 //   px-headless --print-component-reference
 //
 // Exit codes: 0 success, 1 load/runtime error, 2 bad arguments,
 //             3 an --expect-* condition was not met.
+
+#include "NetTools.hpp"
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
@@ -44,6 +49,17 @@ struct Options {
     bool printComponentReference = false;
     bool resave = false;
     int traceEvery = 0; // print the player state every N ticks (0 = off)
+    // Multiplayer tools (NetTools.hpp).
+    std::string connectAddress;
+    std::string playerName;
+    bool netTest = false;
+    int clients = 2;
+    double latencyMs = 0.0;
+    double jitterMs = 0.0;
+    double lossPercent = 0.0;
+    bool udp = false;
+    int port = 0;
+    bool expectJoined = false;
 };
 
 void printUsage() {
@@ -54,6 +70,14 @@ void printUsage() {
                  "                   [--log-events] [--trace-every N] [--verbose]\n"
                  "       px-headless <project-dir> --resave   (rewrite project.json and scenes in the\n"
                  "                                             current format, as Studio saves them)\n"
+                 "       px-headless <project-dir> --connect ADDRESS[:PORT] [--name NAME]\n"
+                 "                   [--input-script FILE] [--ticks N] [--expect-joined]\n"
+                 "                                            (join a px-server as a scripted bot)\n"
+                 "       px-headless <project-dir> --net-test [--clients N] [--latency MS] [--jitter MS]\n"
+                 "                   [--loss PCT] [--udp] [--port N] [--input-script FILE] [--ticks N]\n"
+                 "                   [--expect-joined] [--expect-level-complete] [--expect-no-script-errors]\n"
+                 "                                            (server and clients in one process; client 1\n"
+                 "                                             plays the input script)\n"
                  "       px-headless --print-api-reference\n"
                  "       px-headless --print-component-reference\n",
                  version::productName, version::string);
@@ -64,6 +88,17 @@ bool parseInt(const char* v, int& out) {
     const std::string_view s(v);
     const auto [ptr, ec] = std::from_chars(s.data(), s.data() + s.size(), out);
     return ec == std::errc() && ptr == s.data() + s.size() && out >= 0;
+}
+
+bool parseDouble(const char* v, double& out) {
+    if (v == nullptr) return false;
+    try {
+        std::size_t used = 0;
+        out = std::stod(v, &used);
+        return used == std::string_view(v).size() && out >= 0.0;
+    } catch (...) {
+        return false;
+    }
 }
 
 std::optional<Options> parseArgs(int argc, char** argv) {
@@ -89,6 +124,30 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.logEvents = true;
         } else if (arg == "--resave") {
             o.resave = true;
+        } else if (arg == "--connect") {
+            const char* v = needValue();
+            if (v == nullptr) return std::nullopt;
+            o.connectAddress = v;
+        } else if (arg == "--name") {
+            const char* v = needValue();
+            if (v == nullptr) return std::nullopt;
+            o.playerName = v;
+        } else if (arg == "--net-test") {
+            o.netTest = true;
+        } else if (arg == "--clients") {
+            if (!parseInt(needValue(), o.clients) || o.clients < 1 || o.clients > 64) return std::nullopt;
+        } else if (arg == "--latency") {
+            if (!parseDouble(needValue(), o.latencyMs)) return std::nullopt;
+        } else if (arg == "--jitter") {
+            if (!parseDouble(needValue(), o.jitterMs)) return std::nullopt;
+        } else if (arg == "--loss") {
+            if (!parseDouble(needValue(), o.lossPercent) || o.lossPercent > 100.0) return std::nullopt;
+        } else if (arg == "--udp") {
+            o.udp = true;
+        } else if (arg == "--port") {
+            if (!parseInt(needValue(), o.port) || o.port < 1 || o.port > 65535) return std::nullopt;
+        } else if (arg == "--expect-joined") {
+            o.expectJoined = true;
         } else if (arg == "--verbose") {
             o.verbose = true;
         } else if (arg == "--print-api-reference") {
@@ -191,6 +250,39 @@ int main(int argc, char** argv) {
         return 1;
     }
     for (const auto& w : game->warnings) log::warn("{}", w);
+
+    if (!options->connectAddress.empty() || options->netTest) {
+        headless::NetToolOptions net;
+        net.connectAddress = options->connectAddress;
+        net.playerName = options->playerName;
+        net.clients = options->clients;
+        net.latencyMs = options->latencyMs;
+        net.jitterMs = options->jitterMs;
+        net.lossPercent = options->lossPercent;
+        net.udp = options->udp;
+        net.port = options->port;
+        net.ticks = options->ticks;
+        net.expectLevelComplete = options->expectLevelComplete;
+        net.expectNoScriptErrors = options->expectNoScriptErrors;
+        net.expectJoined = options->expectJoined;
+        if (!options->inputScriptPath.empty()) {
+            const std::filesystem::path scriptPath(options->inputScriptPath);
+            DirectoryFileSystem scriptDir(scriptPath.parent_path().empty() ? "." : scriptPath.parent_path());
+            auto text = scriptDir.readText(scriptPath.filename().generic_string());
+            if (!text) {
+                log::error("{}", text.error().message);
+                return 1;
+            }
+            auto parsed = runtime::InputScript::parse(text.value(), runtime::ActionSet(game->manifest.input));
+            if (!parsed) {
+                log::error("{}: {}", options->inputScriptPath, parsed.error().message);
+                return 1;
+            }
+            net.script = std::move(parsed.value());
+        }
+        return options->netTest ? headless::runNetTest(game.value(), net) : headless::runBot(game.value(), net);
+    }
+
     auto created = runtime::startSession(game.value());
     if (!created) {
         log::error("{}", created.error().message);

@@ -161,7 +161,7 @@ void GameServer::handleMessage(Client& client, const std::vector<std::uint8_t>& 
     } else if (type == MessageType::Goodbye) {
         const PeerId peer = client.peer;
         m_endpoint->disconnect(peer, static_cast<std::uint32_t>(DisconnectReason::Left));
-        dropClient(peer, "left the game");
+        dropClient(peer, "quit");
     } else {
         reject(client, DisconnectReason::BadMessage, "Unexpected message");
     }
@@ -282,7 +282,7 @@ void GameServer::restartLevel() {
     for (const Joined& p : players) {
         if (auto added = m_session->addPlayer(p.id, p.name); !added) log::error("{}", added.error().message);
     }
-    log::info("Level restarted ({} players)", players.size());
+    log::info("Level restarted ({} playing)", players.size());
 }
 
 NetGameState GameServer::gameState() const {

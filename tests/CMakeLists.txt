@@ -42,6 +42,25 @@ add_test(NAME example_topdown_playthrough
             --input-script "${PX_EXAMPLES_DIR}/topdown/tests/full_run.input"
             --expect-level-complete --expect-no-script-errors)
 
+# Multiplayer end-to-end: a server and three clients in one process over a
+# simulated network with latency, jitter and loss; client 1 plays the
+# top-down route and the server must see the level completed.
+add_test(NAME net_simulated_playthrough
+    COMMAND px_headless "${PX_EXAMPLES_DIR}/topdown" --net-test --clients 3
+            --latency 60 --jitter 15 --loss 5
+            --input-script "${PX_EXAMPLES_DIR}/topdown/tests/full_run.input"
+            --expect-joined --expect-level-complete --expect-no-script-errors)
+
+# The same over real UDP sockets on 127.0.0.1 (ENet), and the dedicated
+# server program starting and stopping.
+if(PX_ENABLE_ENET)
+    add_test(NAME net_udp_localhost
+        COMMAND px_headless "${PX_EXAMPLES_DIR}/platformer" --net-test --udp --port 27950
+                --clients 2 --ticks 300 --expect-joined)
+    add_test(NAME server_starts_and_stops
+        COMMAND px_server "${PX_EXAMPLES_DIR}/platformer" --port 27951 --ticks 120)
+endif()
+
 # Smoke test for the real client with no display: SDL's "dummy" video driver
 # and software renderer, 120 deterministic frames, then a screenshot.
 # (The "offscreen" driver is not used: on macOS SDL makes its windows OpenGL

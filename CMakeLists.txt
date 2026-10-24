@@ -28,6 +28,11 @@ option(PX_BUILD_STUDIO "Build Studio, the desktop editor (requires PX_BUILD_CLIE
 option(PX_BUILD_TESTS "Build the automated test suite" ON)
 option(PX_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" OFF)
 option(PX_ENABLE_SANITIZERS "Build with AddressSanitizer + UndefinedBehaviorSanitizer (GCC/Clang)" OFF)
+if(EMSCRIPTEN)
+    set(PX_ENABLE_ENET OFF CACHE BOOL "UDP multiplayer transport (ENet); browsers cannot use UDP" FORCE)
+else()
+    option(PX_ENABLE_ENET "UDP multiplayer transport (ENet)" ON)
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -60,4 +65,4 @@ if(PX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
+message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
