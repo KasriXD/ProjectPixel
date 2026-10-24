@@ -84,6 +84,7 @@ std::vector<ServerClientInfo> GameServer::clients() const {
         info.address = m_endpoint->describe(peer);
         info.stats = m_endpoint->stats(peer);
         info.queuedInputs = c.inputs.size();
+        info.inputBuffer = c.bufferTarget;
         info.inputStalls = c.stalls;
         out.push_back(std::move(info));
     }
@@ -235,17 +236,28 @@ void GameServer::handleInput(Client& client, const std::vector<std::uint8_t>& da
 }
 
 void GameServer::applyInputs() {
-    const std::size_t buffer = m_options.inputBufferFrames;
+    const std::size_t base = std::max<std::size_t>(1, m_options.inputBufferFrames);
+    const std::size_t most = std::max(base, m_options.maxInputBufferFrames);
+    const auto calm = static_cast<std::uint64_t>(5 * m_tickRate); // ticks without a stall before shrinking
     for (auto& [peer, c] : m_clients) {
         if (!c.joined) continue;
+        if (c.bufferTarget == 0) c.bufferTarget = base;
+        // A link that has been steady for a while gets a shorter buffer (less delay).
+        if (c.bufferTarget > base && m_ticksRun - c.lastStallTick > calm) {
+            --c.bufferTarget;
+            c.lastStallTick = m_ticksRun;
+        }
+        const std::size_t buffer = c.bufferTarget;
         runtime::InputFrame frame{c.lastFrame.held, 0};
-        if (!c.inputStarted && c.inputs.size() >= std::max<std::size_t>(1, buffer)) c.inputStarted = true;
+        if (!c.inputStarted && c.inputs.size() >= buffer) c.inputStarted = true;
         if (c.inputStarted) {
             if (c.inputs.empty()) {
                 // The input for this tick is late: keep holding what was held,
-                // and build the buffer up again before going on.
+                // and build a bigger buffer before going on.
                 ++c.stalls;
                 c.inputStarted = false;
+                c.bufferTarget = std::min(most, c.bufferTarget + 1);
+                c.lastStallTick = m_ticksRun;
             } else {
                 auto it = c.inputs.begin();
                 frame = it->second;

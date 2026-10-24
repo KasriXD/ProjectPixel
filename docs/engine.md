@@ -82,6 +82,15 @@ collecting coins and winning are scripts; the session keeps the
 authoritative `GameState` (score, objective, completion, script errors)
 and reports changes as `events()` of the last tick.
 
+In a multiplayer session (`SessionOptions::multiplayer`, used by the
+server) the scene's Player entities are removed as templates; `addPlayer`
+copies one per player (ids derived from the template and the player id,
+spread out when players share a spawn point), `setPlayerInput` gives each
+player's character its own `InputFrame`, and `tick()` delivers
+`PlayerJoined`/`PlayerLeft` to scripts after `Start`. Controllers on
+entities without a Player component, and `Input.isDown` without a player,
+read every player's input combined. See [multiplayer.md](multiplayer.md).
+
 The client converts real time to ticks with `FixedStepClock` (at most 8 ticks
 per frame; a longer stall drops time instead of freezing). Given the same
 build, starting scene and input frames, a session produces bit-identical
@@ -93,7 +102,7 @@ Gameplay sees **actions** (`jump`), never keys. The project lists actions and
 default keys. Each tick receives an `InputFrame` with two bitmasks: actions
 held, and actions pressed since the previous tick. The client sets "pressed"
 for keys tapped between two ticks, so very short taps are not lost. The same
-frames are what a client will send to a multiplayer server.
+frames are what a client sends to a multiplayer server.
 
 ## Collision
 

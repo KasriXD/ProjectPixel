@@ -26,6 +26,7 @@ struct ServerOptions {
     double restartDelaySeconds = 8.0;    // after the level is complete; negative: never restart
     double helloTimeoutSeconds = 5.0;    // a connection must introduce itself within this time
     std::size_t inputBufferFrames = 2;   // frames a client's input is kept ahead, to absorb jitter
+    std::size_t maxInputBufferFrames = 8; // the buffer grows up to this for clients with uneven links
     std::uint64_t seed = 1;              // session randomness (math.random)
 };
 
@@ -36,6 +37,7 @@ struct ServerClientInfo {
     std::string address;
     PeerStats stats;
     std::size_t queuedInputs = 0;
+    std::size_t inputBuffer = 0;   // frames currently kept ahead for this client
     std::uint64_t inputStalls = 0; // ticks the client's input had not arrived in time
 };
 
@@ -79,6 +81,8 @@ private:
         std::uint32_t ackEpoch = 0;
         std::uint32_t ackTick = 0;
         std::uint64_t stalls = 0;
+        std::size_t bufferTarget = 0;      // frames kept ahead; grows when input arrives unevenly
+        std::uint64_t lastStallTick = 0;
     };
 
     GameServer(const runtime::LoadedGame& game, std::unique_ptr<INetEndpoint> endpoint, const ServerOptions& options);

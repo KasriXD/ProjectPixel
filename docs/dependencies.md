@@ -13,6 +13,7 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | stb_image | 2.30 | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file with only PNG/JPEG/BMP/TGA enabled and no stdio | `assets` (private) |
 | Luau | 0.743 (`9d7748a4`) | MIT (`third_party/luau/LICENSE.txt`; Lua 5.1 parts: `lua_LICENSE.txt`) | Vendored subset in `third_party/luau` (Common, Ast, Bytecode, Compiler, VM), see [ADR 0009](adr/0009-luau-integration.md) | `scripting` (private) |
 | Dear ImGui | 1.92.9b, docking branch (`b48d1afb`) | MIT (`third_party/imgui/LICENSE.txt`) | Vendored in `third_party/imgui` (core, SDL3 platform backend, SDL_Renderer backend, `std::string` helpers), see [ADR 0013](adr/0013-studio-ui-dear-imgui.md) | Studio only (`apps/studio`) |
+| ENet | 1.3.18 (`2662c0de`) | MIT (`third_party/enet/LICENSE`) | Vendored unmodified in `third_party/enet` with our own CMake target; not built for WebAssembly (`PX_ENABLE_ENET`) | `net` (private): the UDP transport |
 | doctest | 2.5.3 | MIT | Vendored in `third_party/doctest` | tests only |
 
 ### SDL3
@@ -83,6 +84,31 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 3. Rebuild Studio, run the tests including `studio_smoke_headless_display`, and
    look at Studio (layout, fonts, docking, text input).
 4. Update the version in this file and `third_party/VERSIONS.md`, commit.
+
+### ENet
+- **Why:** the UDP transport for multiplayer ([ADR 0018](adr/0018-multiplayer-networking.md)):
+  connections, reliable ordered and unreliable messages on separate
+  channels, fragmentation (including unreliable fragments for large
+  snapshots), round-trip and loss estimates. Small (about 6000 lines of C),
+  no dependencies, used by many games for two decades; builds with MSVC,
+  MinGW, GCC, Clang and Apple Clang. It sits behind `INetEndpoint`, so it
+  can be replaced without touching the protocol.
+- **Version:** 1.3.18 (April 2024), the latest release; the project changes
+  slowly and the release is stable.
+- **Alternatives:** GameNetworkingSockets (encryption and NAT traversal, but
+  protobuf and OpenSSL/libsodium dependencies and heavy builds),
+  yojimbo/netcode.io (connect tokens and encryption, libsodium and mbedtls),
+  SDL_net (no reliability layer), raw sockets (reliability and
+  fragmentation by hand). None of them work in browsers either; a browser
+  client will use a WebSocket/WebTransport endpoint.
+- **Not provided:** encryption and authentication; they come with the
+  platform's connect tokens (Milestone 6, see [security.md](security.md)).
+- **Vendoring:** the sources are copied unmodified; as for the other
+  vendored libraries, the build file (`third_party/enet/CMakeLists.txt`) is
+  ours: one static target, the platform checks ENet's own build performs
+  (`poll`, `getaddrinfo`, ...), Winsock on Windows. Update by copying the `.c` files, `include/enet/` and
+  `LICENSE` of a new tag, then run the networking tests on every platform.
+- **Build impact:** a few seconds.
 
 ## Evaluated, planned
 

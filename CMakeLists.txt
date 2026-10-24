@@ -10,7 +10,7 @@ set(PX_PRODUCT_NAME "Project Pixel" CACHE STRING "User-facing product name (temp
 set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS version")
 
 project(px
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "2D user-generated game platform: engine, runtime and tools"
     LANGUAGES C CXX)
 

@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.3.0). Planned parts are
+This describes the system **as it exists now** (v0.4.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -17,14 +17,14 @@ marked as such. Decisions and their alternatives are recorded in
   └──────────────────────────┘
 
             ┌───────────────────────────┐        ┌─────────────────────────┐
-            │  apps/player (px-player)  │        │ apps/headless           │
-            │  desktop client           │        │ (px-headless)           │
+            │  apps/player (px-player)  │        │ apps/server (px-server) │
+            │  desktop client           │        │ apps/headless           │
             └──┬──────────┬─────────┬───┘        └──────┬──────────────────┘
                │          │         │                   │
-     ┌─────────▼───┐ ┌────▼──────┐  │                   │
-     │platform_sdl │ │  render   │  │                   │
-     │ SDL3 window,│ │ interface,│  │                   │
-     │ input, GPU  │─▶ camera,   │  │                   │
+     ┌─────────▼───┐ ┌────▼──────┐  │   ┌───────────────▼───────────────┐
+     │platform_sdl │ │  render   │  ├──▶│ net: GameServer, GameClient,  │  ENet (UDP),
+     │ SDL3 window,│ │ interface,│  │   │ protocol, snapshots, loopback │  vendored
+     │ input, GPU  │─▶ camera,   │  │   └───────────────┬───────────────┘
      │ backend     │ │ scene draw│  │                   │
      └─────────────┘ └────┬──────┘  │                   │
                           │   ┌─────▼───────────────────▼─────┐
@@ -64,9 +64,10 @@ not link SDL.
 | `physics` | `CollisionWorld`: solid grids and boxes, swept per-axis AABB movement with contact flags | core |
 | `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
 | `scripting` | `ScriptLibrary` (compiles Luau at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference | core, assets, scene, Luau (private) |
-| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning) | core, scene, physics, project, scripting |
+| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
 | `platform_sdl` | SDL3 window, keyboard events, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
+| `net` | Multiplayer: `INetEndpoint` transports (UDP via ENet, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional) |
 | `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, script buffers), `SceneDocument` (operations, selection, snapshot undo), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
 Applications compose modules:
@@ -74,8 +75,12 @@ Applications compose modules:
 - **px-player** = project + runtime + render + platform_sdl. Uses SDL3's main
   callbacks (`SDL_AppInit/Iterate/Event/Quit`) instead of owning a blocking
   loop, which is what browser and iOS builds require.
-- **px-headless** = project + runtime only. Proves that games run with no
-  graphics; it is the starting point of the dedicated server (Milestone 4).
+- **px-headless** = project + runtime + net. Runs games with no graphics
+  (automated playthroughs), joins servers as a scripted bot (`--connect`),
+  and runs a server with several clients in one process over a simulated
+  network (`--net-test`).
+- **px-server** = project + runtime + net: the dedicated multiplayer server.
+  No graphics, no window; builds in the headless configuration too.
 - **px-studio** = editor + render + platform_sdl + Dear ImGui. Panels draw
   and call `px_editor`; they hold only UI state, so the UI toolkit can be
   replaced without touching editing logic ([ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md),
@@ -104,9 +109,13 @@ members do not exist in client VMs (ADR 0011).
 in fixed ticks from `InputFrame`s. Rendering reads the scene after ticks and
 never changes it. This is what lets the same simulation run on a server.
 
-**Client vs server (planned).** Clients will send `InputFrame`s; the server
-runs the authoritative `GameSession` and replicates state. Simulation is
-already deterministic for identical input on the same build (tested).
+**Client vs server.** Clients send only `InputFrame`s; the server runs the
+one authoritative `GameSession` (all scripts) and sends delta snapshots of
+the replicated components. Clients draw other entities interpolated and
+predict their own character with the same movement functions the server
+uses ([multiplayer.md](docs/multiplayer.md), [ADR 0018](docs/adr/0018-multiplayer-networking.md)).
+The protocol only needs reliable and unreliable messages, so the transport
+(UDP today) can be swapped for a browser-friendly one.
 
 **Content vs code.** Games are data: a project folder with a manifest,
 scenes and assets. Assets are referenced by GUID, never by path; paths appear
@@ -136,6 +145,13 @@ loading talks to `IFileSystem`.
 4. Render: `cameraForScene` → `renderScene` (layer-sorted, culled, pixel-
    snapped draw calls) → HUD (objective and messages set by scripts, script
    errors) → `SdlRenderer2D` → SDL scales the virtual resolution to the window.
+
+Online (`--connect`/`--host`), step 3 becomes: `GameClient::receive` (new
+snapshots, reconciliation), then per tick `GameClient::tick` (send the input
+frame, predict the own character), then `GameClient::updateView` (interpolate
+the other entities into the view scene, place the own character, camera);
+the view scene is rendered the same way. With `--host` a `GameServer` ticks
+in the same loop.
 
 Loading: `runtime::loadGame` reads `project.json`, the start scene and every
 script (compiling them, so syntax errors surface before play), producing an

@@ -19,6 +19,19 @@ testing. This page states what is verified and what work remains.
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
 | Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
 
+Multiplayer (`px-server`, `px-player --connect/--host`, UDP via ENet):
+
+| Platform | Builds | Runs | Verified how |
+|---|---|---|---|
+| Linux x64 | Yes | Server and two or three player windows as separate processes over UDP on one computer; Studio's *Test Multiplayer* | Used interactively on Xvfb; CTest `net_simulated_playthrough`, `net_udp_localhost`, `server_starts_and_stops` (also under ASan) |
+| Headless (no SDL) | Yes (`px-server`) | Network tests pass | `headless` preset in CI |
+| Windows x64 (MSVC 2022) | Yes | Network tests pass, including real UDP on localhost | GitHub Actions. Not yet played across computers |
+| macOS arm64 | Yes | Network tests pass, including real UDP on localhost | GitHub Actions |
+| Browser | No UDP | Cannot join games | A WebSocket/WebTransport transport is planned ([ADR 0018](adr/0018-multiplayer-networking.md)) |
+
+Not verified yet: play between different computers (home network,
+internet, Wi-Fi), firewalls and NAT.
+
 Studio (`px-studio`) is desktop-only:
 
 | Platform | Builds | Runs | Verified how |
@@ -113,8 +126,10 @@ arguments: `px-player.html?arg=--debug`.
 - Download size: compression, `-Oz`, excluding unused SDL subsystems.
 - Graphics: SDL_Renderer's WebGL path today; WebGL2/WebGPU when a custom
   GPU renderer exists.
-- Networking via WebSockets or WebTransport only (no raw UDP), which the
-  Milestone 4 transport choice must respect.
+- Networking via WebSockets or WebTransport only (no raw UDP): the
+  multiplayer transport is an interface with reliable and unreliable
+  messages, so a browser endpoint can be added beside the UDP one
+  ([ADR 0018](adr/0018-multiplayer-networking.md)).
 - Threads only with cross-origin isolation (`SharedArrayBuffer`); the
   engine is single-threaded today.
 - Page integration: loading screen, fullscreen, audio unlock on first input.

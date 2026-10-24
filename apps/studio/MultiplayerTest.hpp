@@ -23,7 +23,7 @@ struct MultiplayerTestOptions {
 
 // "Test Multiplayer" in Studio: starts px-server and several px-player
 // windows that join it on this computer, shows their output in the Output
-// panel, and stops them all again (docs/multiplayer.md#testing-in-studio).
+// panel, and stops them all again (docs/studio.md#testing-multiplayer).
 class MultiplayerTest {
 public:
     MultiplayerTest() = default;

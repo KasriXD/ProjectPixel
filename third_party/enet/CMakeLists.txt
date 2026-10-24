@@ -1,7 +1,7 @@
 # ENet 1.3.18: reliable and unreliable messages over UDP, used by px_net for
 # desktop (and later mobile) multiplayer. Not built for the browser, which
-# cannot open UDP sockets. Sources are vendored unmodified; this file is ours
-# (ENet's own CMakeLists.txt needs an older CMake than we allow).
+# cannot open UDP sockets. Sources are vendored unmodified; this file is ours,
+# as for the other vendored libraries.
 add_library(px_enet STATIC
     callbacks.c compress.c host.c list.c packet.c peer.c protocol.c unix.c win32.c)
 target_include_directories(px_enet SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")

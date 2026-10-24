@@ -5,10 +5,13 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-3 are done. CI builds and tests on Linux, Windows (MSVC),
-macOS and (experimentally) WebAssembly. Recommended next: Milestone 4, the
-multiplayer prototype, after a short Studio hardening pass driven by first
-creator feedback (see "Recommended adjustments" below).
+Milestones 0-4 are done: the multiplayer prototype (dedicated server, UDP
+transport, players joining and leaving, snapshot replication with
+interpolation and prediction, Studio's local multiplayer test) works and is
+tested end to end. CI builds and tests on Linux, Windows (MSVC), macOS and
+(experimentally) WebAssembly. Recommended next: two or three people play a
+multiplayer test over a real network and creators build small levels in
+Studio; then Milestone 5 (see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -17,6 +20,7 @@ creator feedback (see "Recommended adjustments" below).
 | Not yet run on real macOS hardware (CI passes) | Rendering/input on Macs unconfirmed | A Mac check when one is available. Windows: played on a Windows 11 PC (2026-10-23) |
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 | Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
+| Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
@@ -165,13 +169,45 @@ Driven by the founder's first session on Windows 11:
       later the marketplace of Milestone 8)
 - [ ] Feedback from two or three more creators
 
-## Milestone 4: Multiplayer prototype (**Planned**)
+## Milestone 4: Multiplayer prototype (**Done**)
 
-Dedicated server built from `px-headless`; client/server transport (to be
-evaluated: GameNetworkingSockets, ENet, or WebTransport/WebSocket for browser
-compatibility); session lifecycle; player spawning; server-authoritative
-`GameSession` consuming client `InputFrame`s; snapshot replication; disconnect
-handling; local multi-client test tool.
+Verified on Linux (server and player windows as separate processes over
+UDP, on one computer) and by end-to-end tests in CI on Linux, Windows and
+macOS. Guide: [docs/multiplayer.md](docs/multiplayer.md); design:
+[ADR 0018](docs/adr/0018-multiplayer-networking.md).
+
+- [x] Transport chosen and behind an interface: UDP via ENet 1.3.18
+      (vendored), plus an in-process loopback network with simulated
+      latency, jitter, loss and duplication; WebSocket/WebTransport for
+      browsers fits the same interface later
+- [x] Wire protocol v1 (hello/welcome/reject, input, snapshots, goodbye)
+      with strict decoders, fuzzed under AddressSanitizer
+- [x] Dedicated server `px-server` built on the headless runtime; listen
+      server in `px-player --host`
+- [x] Session lifecycle: version and game-copy checks, player limit, hello
+      timeout, leaving and disconnects, level restart after completion
+- [x] Player spawning: the scene's Player entities are templates and spawn
+      points; deterministic ids; players sharing a spawn stand side by side
+- [x] Server-authoritative `GameSession` with per-player input buffers
+      (jitter absorption, catch-up)
+- [x] Snapshot replication: generic over the component descriptors,
+      per-field deltas against each client's acknowledged state
+- [x] Clients: interpolation of other entities; prediction and smoothed
+      reconciliation of the own character with the server's movement code
+- [x] Scripting API for players: `PlayerJoined`/`PlayerLeft`, `Players`,
+      `entity.playerName/playerId`, per-player `Input`
+- [x] Local multi-client test tools: Studio's *Test Multiplayer* (server +
+      1-4 windows, output in Studio), `px-headless --net-test` (N clients,
+      simulated network, report) and `--connect` (bots)
+
+Next for multiplayer (not part of the prototype):
+
+- [ ] Client-side behaviours (presentation) and client-to-server requests
+      validated by server scripts (like Roblox RemoteEvents)
+- [ ] Per-player state in the API (score, inventory) and team support
+- [ ] Connect tokens from the platform, encryption, rate limits (Milestone 6)
+- [ ] Interest management for large worlds; lag compensation for shooting
+- [ ] A browser transport (WebSocket or WebTransport) for web clients
 
 ## Milestone 5: Visual scripting and expanded engine (**Planned**)
 
@@ -199,16 +235,16 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: a one-to-two-week Studio hardening pass, then Milestone 4
-   (multiplayer prototype).** Have the founder (and ideally two or three
-   creators) build a level with Studio on real Windows/macOS machines; fix
-   the friction they hit (multi-entity editing in Properties and an animation
-   frame picker are likely first). Then start multiplayer: the deterministic
-   `GameSession`, input frames and the headless runner are ready for a
-   server, and its transport choice must keep the browser path open.
-2. **Prefabs with spawning in Milestone 5**, not earlier: both need the same
-   "instantiate a saved entity template" mechanism, and spawning must be
-   designed with server authority and replication in mind (Milestone 4).
+1. **Next: real-world multiplayer tests, then Milestone 5.** Play a
+   multiplayer test on two or three computers over a home network and over
+   the internet, and let creators build small co-op levels; fix what they
+   hit (likely: per-player score, client-to-server requests, the multi-entity
+   Properties panel and an animation frame picker). Prefabs and spawning
+   from scripts (Milestone 5) should replicate through the same snapshot
+   path, which already sends entities created at run time.
+2. **Prefabs with spawning in Milestone 5**: both need the same
+   "instantiate a saved entity template" mechanism, which player templates
+   now use; spawned entities replicate like characters do.
 3. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
    (ADR 0012): it already builds and runs, so regressions are caught for
    free; productising it (loading projects over the network, asset

@@ -185,7 +185,7 @@ def main():
     (OUT / "scenes" / "garden.scene.json").write_text(example.dump_pretty(scene) + "\n")
     project = {
         "format": "px.project", "formatVersion": 2, "id": gid("project"), "name": "Example Top-down",
-        "engineVersion": "0.3.0", "startScene": scene_id,
+        "engineVersion": "0.4.0", "startScene": scene_id,
         "settings": {"gameType": "topdown", "tickRate": 60,
                      "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3},
                      "scripting": {"apiVersion": 1}},

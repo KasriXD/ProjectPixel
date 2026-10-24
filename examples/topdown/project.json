@@ -3,7 +3,7 @@
   "formatVersion": 2,
   "id": "8d84fb05-499b-53f3-84b6-f87e60b72457",
   "name": "Example Top-down",
-  "engineVersion": "0.3.0",
+  "engineVersion": "0.4.0",
   "startScene": "b9f8e06c-3d0c-5b71-ba7e-438fe1ef1ccc",
   "settings": {
     "gameType": "topdown",

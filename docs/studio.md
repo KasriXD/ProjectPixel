@@ -232,6 +232,19 @@ view to give the game keyboard input. *Game camera* switches between what
 the player sees and a free editor camera. Script errors appear in Output
 and stop only the failing behaviour, as in `px-player`.
 
+### Testing multiplayer
+
+*Play > Test Multiplayer > Server + N Players* (1 to 4) saves the project
+and starts, on this computer, a server (`px-server`) and N game windows
+(`px-player`) that join it, tiled along the bottom of the screen. Click a
+window to play as that player (they are named P1, P2, ...). The server's
+and the windows' messages, including script errors (scripts run on the
+server), appear in *Output* prefixed with `[server]`, `[P1]`, ... The
+toolbar shows the running test; *Stop Multiplayer* (or closing the project
+or Studio) closes everything. The test plays the project's start scene as
+saved, not unsaved edits. See [multiplayer.md](multiplayer.md) for what
+changes when a game is played by several people.
+
 ## Saving
 
 - **Ctrl+S** (File > Save All) saves the scene, all changed scripts and the
@@ -319,6 +332,8 @@ These are known and planned, not bugs:
 - Studio has been used by its developers and the founder only, and not yet
   on a real Mac.
 - Studio is not available in the browser build.
+- The multiplayer test runs on this computer only, on UDP port 7777; if
+  another server already uses the port, the test reports it in Output.
 
 Design and rationale: [ADR 0013](adr/0013-studio-ui-dear-imgui.md) (UI
 toolkit), [ADR 0015](adr/0015-studio-architecture.md) (editor architecture

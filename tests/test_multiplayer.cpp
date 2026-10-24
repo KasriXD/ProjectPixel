@@ -6,9 +6,12 @@
 #include "px/runtime/GameSession.hpp"
 #include "px/scripting/ScriptLibrary.hpp"
 
+#include <fstream>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace px;
 using namespace px::scene;
@@ -239,5 +242,70 @@ TEST_CASE("Playing alone: PlayerJoined runs once at the start, input needs no pl
     CHECK(s.state().score == 1);
     s.tick(holding(s, "move_right"));
     CHECK(s.state().score == 2);
+    CHECK(s.state().scriptErrors == 0);
+}
+
+namespace {
+
+// The Lua blocks of docs/multiplayer.md, in order.
+std::vector<std::string> guideScripts() {
+    std::ifstream in(std::string(PX_DOCS_DIR) + "/multiplayer.md");
+    std::stringstream text;
+    text << in.rdbuf();
+    const std::string doc = text.str();
+    std::vector<std::string> blocks;
+    for (std::size_t at = doc.find("```lua\n"); at != std::string::npos; at = doc.find("```lua\n", at)) {
+        const std::size_t begin = at + 7;
+        const std::size_t end = doc.find("```", begin);
+        blocks.push_back(doc.substr(begin, end - begin));
+        at = end;
+    }
+    return blocks;
+}
+
+} // namespace
+
+TEST_CASE("Multiplayer: the examples in docs/multiplayer.md work") {
+    const auto scripts = guideScripts();
+    REQUIRE(scripts.size() == 2);
+    auto library = std::make_shared<scripting::ScriptLibrary>();
+    const assets::AssetId lobbyId{Guid(9, 1)};
+    const assets::AssetId chestId{Guid(9, 2)};
+    REQUIRE(library->add(lobbyId, "scripts/lobby.luau", scripts[0]));
+    REQUIRE(library->add(chestId, "scripts/chest.luau", scripts[1]));
+
+    Scene scene = mpScene();
+    const Entity lobby = scene.createEntity("Lobby");
+    Scripts lobbyScripts;
+    lobbyScripts.items.push_back({lobbyId, {}});
+    scene.set(lobby, lobbyScripts);
+    const Entity chest = scene.createEntity("Chest");
+    scene.set(chest, Transform{{100, 150}}); // where the first player spawns
+    scene.set(chest, BoxCollider{{8, 8}, {0, 0}, true});
+    Scripts chestScripts;
+    chestScripts.items.push_back({chestId, {}});
+    scene.set(chest, chestScripts);
+
+    auto session = makeServerSession(std::move(scene), library);
+    GameSession& s = *session;
+    (void)s.addPlayer(1, "Ada");
+    (void)s.addPlayer(2, "Bo"); // spawns next to Ada, away from the chest
+    for (int i = 0; i < 3; ++i) s.tick();
+    CHECK(s.state().objective == "Bo JOINED - 2 PLAYING");
+
+    // Bo is not at the chest: nothing happens. Ada is: it opens.
+    s.setPlayerInput(2, holding(s, "use", true));
+    s.tick();
+    s.setPlayerInput(2, {});
+    CHECK(s.state().score == 0);
+    CHECK(s.scene().isAlive(s.scene().findByName("Chest")));
+    s.setPlayerInput(1, holding(s, "use", true));
+    s.tick();
+    CHECK(s.state().score == 10);
+    CHECK(s.scene().findByName("Chest").isNull());
+
+    s.removePlayer(2);
+    s.tick();
+    CHECK(s.state().objective == "Bo LEFT");
     CHECK(s.state().scriptErrors == 0);
 }

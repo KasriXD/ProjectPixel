@@ -471,7 +471,7 @@ def main():
         "formatVersion": 2,
         "id": gid("project/example-platformer"),
         "name": "Example Platformer",
-        "engineVersion": "0.3.0",
+        "engineVersion": "0.4.0",
         "startScene": scene_id,
         "settings": {"gameType": "platformer", "tickRate": 60,
                      "display": {"virtualResolution": [320, 180], "scaling": "integer", "windowScale": 3},

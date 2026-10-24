@@ -10,11 +10,11 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.3.0)
+## Current status (version 0.4.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
-scripting) and 3 (Studio foundation) are complete. See
-[ROADMAP.md](ROADMAP.md) for detail.
+scripting), 3 (Studio foundation) and 4 (multiplayer prototype) are
+complete. See [ROADMAP.md](ROADMAP.md) for detail.
 
 | Area | Status |
 |---|---|
@@ -28,7 +28,9 @@ scripting) and 3 (Studio foundation) are complete. See
 | Kinematic collision: solid tiles/boxes, triggers | Implemented, unit tested |
 | Platformer movement (coyote time, jump buffer, variable jump), top-down movement (8 directions) | Implemented, unit tested |
 | Versioned project/scene file format with validation | Implemented, unit tested |
-| Headless simulation (no graphics) | Implemented; basis of the future dedicated server |
+| Headless simulation (no graphics) | Implemented; used by the dedicated server and automated tests |
+| Multiplayer: dedicated server (`px-server`), joining with `px-player --connect` or hosting with `--host`, UDP transport (ENet), delta snapshots, interpolation, prediction of the own character | Prototype; server and player windows played on one Linux computer over real UDP; three-player level completed through a simulated lossy network in CI on Linux, Windows and macOS. **Not yet played across a real network** ([guide](docs/multiplayer.md)) |
+| Studio *Test Multiplayer*: a local server and 1-4 player windows | Implemented, used on Linux |
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
 | Example games, loaded from project files | A platformer and a top-down game, both playable; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
 | Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
@@ -36,7 +38,7 @@ scripting) and 3 (Studio foundation) are complete. See
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | **Experimental**: engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
-| Prefabs, gamepad, touch, audio, text/fonts in games, visual scripting, multiplayer, platform services | Planned (Milestones 4-8) |
+| Prefabs, gamepad, touch, audio, text/fonts in games, visual scripting, platform services (accounts, matchmaking, secure connections) | Planned (Milestones 5-8) |
 
 ## Building
 
@@ -75,7 +77,7 @@ sudo apt install build-essential cmake ninja-build pkg-config \
 ```powershell
 cmake --preset windows                    # configure into build\windows (newest Visual Studio found)
 cmake --build --preset windows-debug      # first build also compiles SDL3 (a few minutes)
-ctest --preset windows-debug              # 5 tests, about 20 seconds
+ctest --preset windows-debug              # 8 tests, about 30 seconds
 .\build\windows\apps\studio\Debug\px-studio.exe
 ```
 
@@ -107,7 +109,7 @@ cmake -S . -B build/mingw -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build/mingw
 ```
 
-The resulting `px-player.exe` and `px-studio.exe` need no extra DLLs. Copy
+The resulting `px-player.exe`, `px-server.exe` and `px-studio.exe` need no extra DLLs. Copy
 `examples/` and `library/` next to them: `px-player.exe` then starts the
 example with no arguments, and Studio uses the examples for new projects and
 the library for its Toolbox.
@@ -147,6 +149,20 @@ deterministic frames and saves the last one; `--input-script FILE` plays
 recorded input (see [docs/input-scripts.md](docs/input-scripts.md)). Run with
 `--help` for the full list.
 
+### Play together
+
+```sh
+./build/dev/apps/server/px-server examples/topdown                     # a server (Ctrl+C stops it)
+./build/dev/apps/player/px-player examples/topdown --connect localhost # join it (once per player)
+./build/dev/apps/player/px-player examples/platformer --host            # or: play and host in one window
+```
+
+Players on other computers use `--connect <address of the server>`; the
+server listens on UDP port 7777. In Studio, *Play > Test Multiplayer*
+starts a server and player windows for you. The
+[multiplayer guide](docs/multiplayer.md) explains how games behave online,
+the scripting API for players, and how it works inside.
+
 ### Try scripting
 
 The example's coins, moving platform and win condition are Luau scripts in
@@ -177,16 +193,18 @@ engine/            engine modules (static libraries), one folder per module
   runtime/         headless fixed-tick game simulation and gameplay systems
   render/          renderer interface, camera, scene-to-draw-call extraction
   platform_sdl/    SDL3 window, input and renderer backend
+  net/             multiplayer: transports (UDP, loopback), protocol, snapshots, game server and client
   editor/          editor model without UI: projects, scene documents, undo, play mode
 apps/player/       px-player, the desktop client
-apps/headless/     px-headless, graphics-free runner (seed of the dedicated server)
+apps/headless/     px-headless, graphics-free runner, multiplayer bots and network tests
+apps/server/       px-server, the dedicated multiplayer server
 apps/studio/       px-studio, the desktop editor (Dear ImGui)
 examples/          example game projects (content only, no code): platformer, topdown
 library/           starter library behind Studio's Toolbox (generated by tools/)
 tests/             automated tests
 tools/             developer tools (example and library generators, dependency updates)
 docs/              detailed documentation and architecture decision records
-third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImGui)
+third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImGui, ENet)
 ```
 
 ## Documentation
@@ -195,6 +213,7 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [ROADMAP.md](ROADMAP.md): milestones, progress, next steps
 - [CONTRIBUTING.md](CONTRIBUTING.md): coding standards and workflow
 - [docs/studio.md](docs/studio.md): Studio guide and tutorial
+- [docs/multiplayer.md](docs/multiplayer.md): playing together, multiplayer scripting, how the networking works
 - [docs/project-format.md](docs/project-format.md): `project.json` and scene files
 - [docs/library-format.md](docs/library-format.md): the starter library behind the Toolbox
 - [docs/components.md](docs/components.md): generated reference of every component and field

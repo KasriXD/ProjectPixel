@@ -119,6 +119,25 @@ Scripts are untrusted and the API is versioned, so API changes get extra care:
 7. Additive changes keep API version 1. Renames, removals and semantic
    changes need a new API version (docs/scripting.md#api-versioning).
 
+## Changing multiplayer
+
+The networking code is in `engine/net` ([multiplayer.md](docs/multiplayer.md),
+[ADR 0018](docs/adr/0018-multiplayer-networking.md)).
+
+- A new component or field replicates automatically when its component is
+  in the replication table in `net/src/Replication.cpp`; decide whether it
+  should (state clients must see) or not (server-only or per-client state).
+  The table changes the game hash, so old clients are refused.
+- Changing a message means raising `kProtocolVersion` in `net/Protocol.hpp`
+  and keeping decoders strict: check every length and count against the
+  bytes that remain, and add the malformed cases to the fuzz test in
+  `tests/test_net.cpp`.
+- Movement that clients predict must stay in `runtime/Movement.hpp` and be
+  called by `GameSession`, so server and client run exactly the same code.
+- Check changes with `px-headless <project> --net-test` under bad
+  conditions (`--latency 150 --jitter 40 --loss 10`) and look at the
+  corrections and bandwidth it reports.
+
 ## Adding a dependency
 
 Evaluate and record in `docs/dependencies.md` (and an ADR if significant):
@@ -137,6 +156,13 @@ single header in `third_party/` and record it in `third_party/VERSIONS.md`.
   script errors. If you change the level, scripts or movement tuning,
   re-tune the route (see comments in the file). `example_topdown_playthrough`
   does the same for `examples/topdown` (key, gate, stairs).
+- `net_simulated_playthrough` runs a server and three clients in one
+  process over a simulated network with latency, jitter and loss; client 1
+  plays the top-down route and the level must be completed.
+  `net_udp_localhost` does the same over real UDP sockets, and
+  `server_starts_and_stops` runs `px-server` briefly.
+- `tests/test_net.cpp` and `tests/test_netgame.cpp` cover encoding, deltas,
+  fuzzed decoders and server/client behaviour over the loopback network.
 - `player_smoke_headless_display` runs the real client for 120 frames with
   SDL's dummy video driver and software renderer, no display needed.
 - `studio_smoke_headless_display` runs Studio the same way through a scripted

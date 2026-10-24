@@ -99,6 +99,8 @@ This strictness is deliberate: it is also what a future property inspector
 | `TriggerEnter(other)` | a moving body (`KinematicBody`) begins to overlap a trigger collider; **both** entities receive it | the other Entity |
 | `TriggerExit(other)` | the overlap ends, or the other entity is destroyed | the other Entity |
 | `Destroy()` | just before the entity is removed (it is still readable) | |
+| `PlayerJoined(player)` | a player joined (alone: once, at the start); every started instance receives it | the player's character |
+| `PlayerLeft(player)` | a player left; their character is removed right after | the player's character |
 
 Behaviours only pay for what they define: an instance without `Tick` costs
 nothing per tick.
@@ -110,15 +112,19 @@ Within one tick (`GameSession::tick`):
 1. `Start` for every instance that has not started, in **hierarchy order**
    (the order of Studio's Explorer panel: parents before children), and for
    an entity's several scripts in attachment order.
-2. `Tick` for every started instance, in the same order.
-3. Moving solids carry the bodies standing on them.
-4. Platformer controllers, then kinematic movement and collision.
-5. Trigger overlaps are compared with the previous tick: exits first, then
+2. `PlayerLeft` and `PlayerJoined` for players who left or joined since
+   the last tick (multiplayer; the characters of new players have had their
+   own `Start` in step 1).
+3. `Tick` for every started instance, in the same order.
+4. Moving solids carry the bodies standing on them.
+5. Platformer and top-down controllers (each character with its own
+   player's input), then kinematic movement and collision.
+6. Trigger overlaps are compared with the previous tick: exits first, then
    enters, each in a stable order; each pair is delivered to the trigger's
    script, then to the other entity's script.
-6. Kill plane, sprite animation, cameras.
+7. Kill plane, sprite animation, cameras.
 
-After phases 1, 2 and 5 the engine **flushes**: entities destroyed during
+After phases 1, 2, 3 and 6 the engine **flushes**: entities destroyed during
 the phase are removed together with their children (partners get
 `TriggerExit`; the entity and then each descendant get `Destroy`), then
 queued custom events are delivered. Flushing repeats until nothing is left
@@ -220,10 +226,12 @@ also ends at the same position on Linux and Windows builds.
 
 Scripts run in a **realm**:
 
-- **Authority**: where game state is decided. Today that is the
-  single-player session; in multiplayer it will be the dedicated server.
-- **Client**: a player's machine (planned, Milestone 4), for presentation
-  and prediction only.
+- **Authority**: where game state is decided: the session when playing
+  alone, the server (`px-server`, or a player's `--host` window) in
+  multiplayer. Every behaviour of a game runs here.
+- **Client**: a player's machine, for presentation only. Clients run no
+  behaviours yet; they send input and show what the server replicates
+  ([multiplayer.md](multiplayer.md)).
 
 Every API member is marked *all* or *authority* in
 [scripting-api.md](scripting-api.md). Authority-only functions are **not
@@ -239,13 +247,19 @@ client-side authority.
 | queries (`World.find`, `entity.position`, `Game.getScore`, `Game.getObjective`, `Input.isDown`) | all | reading is safe; on clients they read replicated state |
 | `Events.emit/on/off` | all | each VM has its own event bus; events never cross the network implicitly |
 
-Planned for Milestone 4 (not implemented): a per-script setting
-for where a behaviour runs (`server`, `client`, `both`), explicit network
-messages (client-to-server *requests* that the server validates, like
-Roblox RemoteEvents), per-player input on the server (`Input` becomes
-per-player), and client-local presentation entities. Event values are
-already restricted to serializable types so that events can later cross
-the network without changing the API.
+Players: each player's character is an entity with a `Player` component.
+`Players.getAll()` lists them, `entity.playerName` and `entity.playerId`
+say who controls one, `Input.isDown(action, player)` reads one player's
+input (without `player`: any player's), and `PlayerJoined`/`PlayerLeft`
+announce arrivals. Playing alone, the same calls see the one local player.
+See [multiplayer.md](multiplayer.md#making-games-for-several-players).
+
+Planned (not implemented): a per-script setting for where a behaviour runs
+(`server`, `client`, `both`), explicit network messages (client-to-server
+*requests* that the server validates, like Roblox RemoteEvents), and
+client-local presentation entities. Event values are already restricted to
+serializable types so that events can later cross the network without
+changing the API.
 
 ## API versioning
 
