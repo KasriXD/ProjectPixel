@@ -7,6 +7,8 @@ px_add_module(net
         src/Loopback.cpp
         src/Protocol.cpp
         src/Replication.cpp
+        src/GameServer.cpp
+        src/GameClient.cpp
     DEPS
         px::core
         px::scene

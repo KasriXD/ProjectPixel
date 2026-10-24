@@ -10,7 +10,8 @@ add_executable(px_tests
     test_scripting.cpp
     test_editor.cpp
     test_multiplayer.cpp
-    test_net.cpp)
+    test_net.cpp
+    test_netgame.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
