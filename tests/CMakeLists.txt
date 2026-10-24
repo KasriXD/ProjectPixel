@@ -9,11 +9,12 @@ add_executable(px_tests
     test_render.cpp
     test_scripting.cpp
     test_editor.cpp
-    test_multiplayer.cpp)
+    test_multiplayer.cpp
+    test_net.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
-    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::render px::editor)
+    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::render px::editor)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"

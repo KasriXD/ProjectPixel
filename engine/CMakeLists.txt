@@ -8,6 +8,7 @@
 #   project   - versioned project/scene file formats (JSON)
 #   scripting - Luau sandbox, limits, gameplay API, Script lifecycle
 #   runtime   - headless game simulation (fixed tick, input actions, gameplay systems)
+#   net       - multiplayer: transports, protocol, snapshot replication, game server and client
 #   render    - renderer interface, camera, scene-to-draw-call extraction (no backend)
 #   editor    - Studio's editor model: projects, scene documents, undo, play mode (no UI)
 #   platform_sdl - SDL3 window/input/renderer backend (client only)
@@ -19,6 +20,7 @@ add_subdirectory(physics)
 add_subdirectory(project)
 add_subdirectory(scripting)
 add_subdirectory(runtime)
+add_subdirectory(net)
 add_subdirectory(render)
 add_subdirectory(editor)
 
