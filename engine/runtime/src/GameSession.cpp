@@ -176,17 +176,39 @@ Result<Entity> GameSession::addPlayer(PlayerId id, std::string name) {
             remap.emplace_back(m_templates.scene.get<EntityInfo>(original[i]).id, m_scene.get<EntityInfo>(copies[i]).id);
         }
         remapEntityReferences(m_scene, copies, remap);
-        m_scene.setWorldPosition(c, entry.spawn);
+        const Vec2 spawn = freeSpawnPoint(c, entry.spawn);
+        m_scene.setWorldPosition(c, spawn);
         Player& player = m_scene.get<Player>(c);
         player.owner = id;
         player.name = slot.name;
-        player.spawnPoint = entry.spawn;
+        player.spawnPoint = spawn;
         m_scripts->entityCreated(c);
         m_pendingJoins.push_back(c);
         slot.character = c;
     }
     m_players.push_back(std::move(slot));
     return m_players.back().character;
+}
+
+Vec2 GameSession::freeSpawnPoint(Entity character, Vec2 wanted) const {
+    // Players sharing a spawn point stand side by side instead of on top of
+    // each other: the nearest spot, a tile at a time, that is free of walls
+    // and of other characters.
+    const auto* box = m_scene.tryGet<BoxCollider>(character);
+    const float step = box != nullptr ? std::max(16.0f, box->size.x + 4.0f) : 16.0f;
+    for (int i = 0; i < 9; ++i) {
+        const float offset = static_cast<float>((i + 1) / 2) * step * (i % 2 == 1 ? 1.0f : -1.0f);
+        const Vec2 p{wanted.x + offset, wanted.y};
+        if (box != nullptr && m_collision.overlapsSolid(box->worldRect(p))) continue;
+        bool crowded = false;
+        for (const PlayerSlot& other : m_players) {
+            if (!m_scene.isAlive(other.character)) continue;
+            const Vec2 q = m_scene.worldPosition(other.character);
+            if (std::abs(q.x - p.x) < step * 0.5f && std::abs(q.y - p.y) < step * 0.5f) crowded = true;
+        }
+        if (!crowded) return p;
+    }
+    return wanted;
 }
 
 void GameSession::removePlayer(PlayerId id) {

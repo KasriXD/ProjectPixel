@@ -173,6 +173,7 @@ TEST_CASE("Netgame: a networked player completes the top-down level over a lossy
     link.lossPercent = 3;
     link.duplicatePercent = 1;
     GameClient& hero = h.addClient("Hero", link);
+    h.runUntilPlaying(); // the hero takes the spawn point the route starts from
     GameClient& watcher = h.addClient("Watcher");
     h.runUntilPlaying();
     DirectoryFileSystem files(std::string(PX_EXAMPLES_DIR) + "/topdown/tests");

@@ -148,6 +148,7 @@ private:
 
     void buildStaticCollision();
     void deliverPlayerChanges();
+    [[nodiscard]] Vec2 freeSpawnPoint(scene::Entity character, Vec2 wanted) const;
     [[nodiscard]] const InputFrame& inputFor(scene::Entity entity) const;
     void flushPhase();
     void flushDestroyed();

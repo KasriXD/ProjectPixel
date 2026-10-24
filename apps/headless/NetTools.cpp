@@ -146,7 +146,6 @@ int runNetTest(const runtime::LoadedGame& game, const NetToolOptions& options) {
                 options.jitterMs, options.lossPercent, ticks);
 
     double time = 0.0;
-    int scriptTicks = 0;
     std::vector<bool> joined(clients.size(), false);
     for (int t = 0; t < ticks; ++t) {
         time += 1.0 / rate;
@@ -158,10 +157,7 @@ int runNetTest(const runtime::LoadedGame& game, const NetToolOptions& options) {
             runtime::InputFrame frame;
             if (c.status() == net::GameClient::Status::Playing) {
                 joined[i] = true;
-                if (i == 0 && script) {
-                    frame = script->next();
-                    ++scriptTicks;
-                }
+                if (i == 0 && script) frame = script->next();
             }
             c.tick(frame);
             c.updateView(time);

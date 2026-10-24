@@ -140,7 +140,9 @@ TEST_CASE("Multiplayer: several Player entities are several spawn points") {
     const Entity c = s.addPlayer(3, "C").value();
     CHECK(xOf(s, a) == doctest::Approx(100));
     CHECK(xOf(s, b) == doctest::Approx(300));
-    CHECK(xOf(s, c) == doctest::Approx(100));
+    // The third shares the first spawn point and stands next to the first player.
+    CHECK(xOf(s, c) == doctest::Approx(116));
+    CHECK(s.scene().get<Player>(c).spawnPoint.x == doctest::Approx(116));
 }
 
 TEST_CASE("Multiplayer: scripts see players join and leave, and per-player input") {
