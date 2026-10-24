@@ -7,6 +7,7 @@
 #include "px/scene/Registry.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <optional>
 #include <span>
 #include <string>
@@ -111,6 +112,11 @@ public:
     // ids; names, components and the subtree's internal structure are kept.
     // Returns the copy of root, or kNullEntity if root is not alive in source.
     Entity copySubtree(const Scene& source, Entity root, Entity parent = kNullEntity, Entity before = kNullEntity);
+    // The same, with the id of each copy chosen by `makeId(original id)`
+    // (e.g. derived deterministically). Fails (kNullEntity, nothing copied)
+    // if a chosen id is nil or already in use.
+    Entity copySubtree(const Scene& source, Entity root, const std::function<Guid(const Guid&)>& makeId,
+                       Entity parent = kNullEntity);
 
     // Convenience accessors.
     template <class T>

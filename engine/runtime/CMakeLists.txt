@@ -6,6 +6,7 @@ px_add_module(runtime
         src/GameSession.cpp
         src/Input.cpp
         src/InputScript.cpp
+        src/Movement.cpp
     DEPS
         px::core
         px::scene

@@ -25,6 +25,14 @@ public:
     [[nodiscard]] virtual std::vector<std::string> actionNames() const = 0;
     [[nodiscard]] virtual bool actionHeld(int action) const = 0;
     [[nodiscard]] virtual bool actionPressed(int action) const = 0;
+    // The same for one player's character (an entity with a Player component).
+    // Playing alone every character reads the local input.
+    [[nodiscard]] virtual bool actionHeldBy(scene::Entity /*character*/, int action) const {
+        return actionHeld(action);
+    }
+    [[nodiscard]] virtual bool actionPressedBy(scene::Entity /*character*/, int action) const {
+        return actionPressed(action);
+    }
 
     // --- Authoritative game state (authority realm only) ----------------------
     virtual void addScore(int amount) = 0;

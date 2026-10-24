@@ -332,4 +332,39 @@ Entity Scene::copySubtree(const Scene& source, Entity root, Entity parentEntity,
     return newRoot;
 }
 
+Entity Scene::copySubtree(const Scene& source, Entity root, const std::function<Guid(const Guid&)>& makeId,
+                          Entity parentEntity) {
+    if (!source.isAlive(root)) return kNullEntity;
+    if (!parentEntity.isNull() &&
+        (!isAlive(parentEntity) || depth(parentEntity) + 1 + source.subtreeHeight(root) > kMaxHierarchyDepth)) {
+        return kNullEntity;
+    }
+    const std::vector<Entity> nodes = source.subtree(root); // copied first: source may be this scene
+    // Choose every id first so a clash leaves the scene unchanged.
+    std::vector<Guid> ids;
+    ids.reserve(nodes.size());
+    for (const Entity original : nodes) {
+        const auto* info = source.tryGet<EntityInfo>(original);
+        const Guid id = makeId(info != nullptr ? info->id : Guid{});
+        if (id.isNil() || m_byId.contains(id) || std::find(ids.begin(), ids.end(), id) != ids.end()) return kNullEntity;
+        ids.push_back(id);
+    }
+    std::unordered_map<std::uint32_t, Entity> copies;
+    Entity newRoot = kNullEntity;
+    for (std::size_t i = 0; i < nodes.size(); ++i) {
+        const Entity original = nodes[i];
+        const Entity copyParent = original == root ? parentEntity : copies.at(source.parent(original).index);
+        const auto* info = source.tryGet<EntityInfo>(original);
+        auto created = createEntityWithId(ids[i], info != nullptr ? info->name : std::string(), copyParent);
+        if (!created) return kNullEntity; // cannot happen: ids were checked above
+        const Entity copy = created.value();
+        const EntityInfo identity = get<EntityInfo>(copy);
+        m_registry.copyComponents(source.m_registry, original, copy);
+        set<EntityInfo>(copy, identity); // keep the chosen id
+        copies.emplace(original.index, copy);
+        if (original == root) newRoot = copy;
+    }
+    return newRoot;
+}
+
 } // namespace px::scene

@@ -215,6 +215,10 @@ struct Tables {
     std::vector<FieldInfo> player{
         field<&Player::spawnPoint>("spawnPoint", "Where the player respawns (its position when the game started).")
             .withFlags(kFieldRuntime),
+        field<&Player::owner>("owner", "In multiplayer, the id of the player controlling this character (0 when "
+                                       "playing alone).")
+            .withFlags(kFieldRuntime),
+        field<&Player::name>("name", "In multiplayer, the controlling player's name.").withFlags(kFieldRuntime),
     };
     std::vector<FieldInfo> camera{
         field<&Camera::follow>("follow", "Entity to keep in the centre of the view (none: the camera's own "
@@ -269,7 +273,8 @@ struct Tables {
                                          "move_right, move_up and move_down input actions.",
                                          topDown, characterRequires),
             component<Player>("Player", "Gameplay", "Marks the player character; it respawns at its start "
-                                                    "position after falling below the kill plane.",
+                                                    "position after falling below the kill plane. In multiplayer "
+                                                    "every player who joins gets a copy of it.",
                               player),
             component<Camera>("Camera", "Rendering", "The view of the game. The first camera in the scene is used.",
                               camera),

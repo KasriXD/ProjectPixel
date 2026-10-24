@@ -18,10 +18,19 @@
 namespace px::scripting {
 
 // Lifecycle events a behaviour can handle. Order matches kEventNames.
-enum class LifecycleEvent : std::uint8_t { Start, Tick, TriggerEnter, TriggerExit, Destroy, Count };
+enum class LifecycleEvent : std::uint8_t {
+    Start,
+    Tick,
+    TriggerEnter,
+    TriggerExit,
+    Destroy,
+    PlayerJoined,
+    PlayerLeft,
+    Count
+};
 inline constexpr std::size_t kLifecycleEventCount = static_cast<std::size_t>(LifecycleEvent::Count);
 inline constexpr std::array<const char*, kLifecycleEventCount> kLifecycleEventNames = {
-    "Start", "Tick", "TriggerEnter", "TriggerExit", "Destroy"};
+    "Start", "Tick", "TriggerEnter", "TriggerExit", "Destroy", "PlayerJoined", "PlayerLeft"};
 
 struct ScriptSystemOptions {
     Realm realm = Realm::Authority;
@@ -54,6 +63,9 @@ struct ScriptStats {
 //  * tick(dt): Tick(dt) runs for instances whose behaviour defines it.
 //  * triggerEnter/Exit: delivered by the runtime's trigger detection.
 //  * entityDestroyed(): Destroy() runs, then the instance is released.
+//  * entityCreated(): instances for an entity added while the game runs
+//    (a player's character); their Start runs in the next start().
+//  * playerJoined/playerLeft: delivered to every started instance.
 // A runtime error disables only the failing instance; the game continues.
 class ScriptSystem {
 public:
@@ -79,6 +91,13 @@ public:
     void triggerExit(scene::Entity self, scene::Entity other);
     // Called before the entity is removed from the scene (it is still alive).
     void entityDestroyed(scene::Entity entity);
+    // Creates instances for the Scripts of `root` and its descendants, added to
+    // the scene after the system was created. Content errors (unknown
+    // properties) are reported through the host and skip that script.
+    void entityCreated(scene::Entity root);
+    // PlayerJoined(character) / PlayerLeft(character) for every started instance.
+    void playerJoined(scene::Entity character);
+    void playerLeft(scene::Entity character);
     // Delivers queued custom events (Events.emit). Returns true if any were delivered.
     bool deliverEvents();
 

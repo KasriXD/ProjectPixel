@@ -175,9 +175,13 @@ struct Scripts {
     std::vector<AttachedScript> items;
 };
 
-// Marks the locally or remotely controlled player character.
+// Marks the locally or remotely controlled player character. In
+// multiplayer, entities with a Player component in the scene are templates:
+// each player who joins gets a copy, placed where the template was.
 struct Player {
     Vec2 spawnPoint{};             // runtime: captured from Transform at session start
+    int owner = 0;                 // runtime: id of the controlling player in multiplayer (0: the local player)
+    std::string name;              // runtime: that player's display name
 };
 
 // Scene camera. Follows an entity (by stable id) if `follow` is set.

@@ -17,6 +17,8 @@ Functions a behaviour table may define. The engine calls them; see the lifecycle
 | `function Behaviour:TriggerEnter(other: Entity)` | event | all | A moving body (KinematicBody) started overlapping a trigger collider. Both entities receive it. |
 | `function Behaviour:TriggerExit(other: Entity)` | event | all | The overlap ended, or the other entity was destroyed. |
 | `function Behaviour:Destroy()` | event | all | The entity is about to be removed. It is still readable here. Not called when the whole session ends. |
+| `function Behaviour:PlayerJoined(player: Entity)` | event | all | A player joined; `player` is their character. Every behaviour receives it, after the character's own Start. Playing alone, it runs once for the player at the start. |
+| `function Behaviour:PlayerLeft(player: Entity)` | event | all | A player left the game. Their character is still readable here and is removed right after. |
 
 ## Globals
 
@@ -58,8 +60,17 @@ Input actions defined in the project's `input.actions`.
 
 | Member | Kind | Available in | Description |
 |---|---|---|---|
-| `Input.isDown(action: string): boolean` | function, pure | all | True while the action is held this tick. Unknown action names are errors. |
-| `Input.wasPressed(action: string): boolean` | function, pure | all | True on the tick the action went down. |
+| `Input.isDown(action: string, player: Entity?): boolean` | function, pure | all | True while the action is held this tick: by `player` (a character) if given, otherwise by any player. Unknown action names are errors. |
+| `Input.wasPressed(action: string, player: Entity?): boolean` | function, pure | all | True on the tick the action went down (for `player`, or for any player). |
+
+## Players
+
+The people playing. Each has a character: a copy of the scene's Player entity in multiplayer, the scene's Player entity when playing alone.
+
+| Member | Kind | Available in | Description |
+|---|---|---|---|
+| `Players.getAll(): {Entity}` | function, pure | all | Every player character (entities with a Player component), in the order they joined. |
+| `Players.count(): number` | function, pure | all | How many player characters there are. |
 
 ## Events
 
@@ -90,6 +101,8 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity.visible: boolean` | property (read/write), pure | all | Whether the Sprite is drawn. |
 | `entity.flipX: boolean` | property (read/write), pure | all | Mirrors the Sprite horizontally. |
 | `entity.spawnPoint: vector` | property (read/write), pure | all | Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player come back there. |
+| `entity.playerName: string` | property (read-only), pure | all | The name of the player controlling this character (playing alone: the character's name). |
+| `entity.playerId: number` | property (read-only), pure | all | The id of the player controlling this character in multiplayer (1, 2, ...; 0 when playing alone). |
 | `entity:isValid(): boolean` | method, pure | all | False once the entity has been destroyed. Other members raise an error on destroyed entities. |
 | `entity:destroy()` | method | authority | Removes the entity and its children at the end of the current phase (after the running handlers). |
 | `entity:respawn()` | method | authority | Sends a Player back to its spawn point and stops it, as when it falls off the level (counts as a respawn). Use it for hazards and enemies. Errors for entities without a Player component. |

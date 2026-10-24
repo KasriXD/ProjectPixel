@@ -374,7 +374,9 @@ void ScriptSystem::call(std::size_t index, LifecycleEvent event, Entity other, f
         switch (event) {
             case LifecycleEvent::Tick: lua_pushnumber(L, dt); return 2;
             case LifecycleEvent::TriggerEnter:
-            case LifecycleEvent::TriggerExit: pushEntity(L, other); return 2;
+            case LifecycleEvent::TriggerExit:
+            case LifecycleEvent::PlayerJoined:
+            case LifecycleEvent::PlayerLeft: pushEntity(L, other); return 2;
             default: return 1;
         }
     });
@@ -433,6 +435,42 @@ void ScriptSystem::entityDestroyed(Entity entity) {
         it != m_entityHandles.end() && it->second.generation == entity.generation) {
         m_vm->releaseRef(it->second.ref);
         m_entityHandles.erase(it);
+    }
+}
+
+void ScriptSystem::entityCreated(Entity root) {
+    if (!m_scene.isAlive(root)) return;
+    for (const Entity e : m_scene.subtree(root)) {
+        const auto* scripts = m_scene.tryGet<scene::Scripts>(e);
+        if (scripts == nullptr || !instancesOf(e).empty()) continue;
+        const std::vector<scene::AttachedScript> items = scripts->items; // module code may run
+        for (const auto& attached : items) {
+            if (auto status = createInstance(e, attached); !status) {
+                ++m_errorCount;
+                ScriptError error;
+                const auto* info = m_scene.tryGet<scene::EntityInfo>(e);
+                error.entity = info != nullptr ? info->name : std::string("?");
+                const CompiledScript* script = m_library->find(attached.script);
+                error.script = script != nullptr ? script->name : attached.script.toString();
+                error.phase = "create";
+                error.message = status.error().message;
+                m_host.scriptError(error);
+            }
+        }
+    }
+}
+
+void ScriptSystem::playerJoined(Entity character) {
+    const std::size_t count = m_instances.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        if (m_instances[i].started) call(i, LifecycleEvent::PlayerJoined, character);
+    }
+}
+
+void ScriptSystem::playerLeft(Entity character) {
+    const std::size_t count = m_instances.size();
+    for (std::size_t i = 0; i < count; ++i) {
+        if (m_instances[i].started) call(i, LifecycleEvent::PlayerLeft, character);
     }
 }
 

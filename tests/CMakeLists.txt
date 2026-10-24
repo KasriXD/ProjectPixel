@@ -8,7 +8,8 @@ add_executable(px_tests
     test_runtime.cpp
     test_render.cpp
     test_scripting.cpp
-    test_editor.cpp)
+    test_editor.cpp
+    test_multiplayer.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest

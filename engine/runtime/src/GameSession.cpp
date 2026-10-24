@@ -1,6 +1,7 @@
 #include "px/runtime/GameSession.hpp"
 
 #include "px/core/Log.hpp"
+#include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -22,6 +23,22 @@ bool pairLess(const Entity& a1, const Entity& b1, const Entity& a2, const Entity
 // Solid owners in the collision world are entity index + 1 (0 = tiles).
 physics::SolidOwner ownerOf(Entity e) { return e.index + 1; }
 
+// Ids of a player's character (and its children): derived from the
+// template's ids and the player id, so they are the same on every run.
+std::uint64_t mix64(std::uint64_t x) {
+    x += 0x9e3779b97f4a7c15ULL;
+    x = (x ^ (x >> 30)) * 0xbf58476d1ce4e5b9ULL;
+    x = (x ^ (x >> 27)) * 0x94d049bb133111ebULL;
+    return x ^ (x >> 31);
+}
+
+Guid characterId(const Guid& templateId, PlayerId player) {
+    return Guid(mix64(templateId.high() ^ (static_cast<std::uint64_t>(player) << 48)),
+                mix64(templateId.low() + player));
+}
+
+const InputFrame kNoInput{};
+
 // Moves an entity by a world-space offset. Root entities (the common case)
 // are moved exactly; children are moved through their parent's transform.
 void moveWorld(Scene& scene, Entity e, Transform& t, Vec2 delta) {
@@ -34,18 +51,31 @@ void moveWorld(Scene& scene, Entity e, Transform& t, Vec2 delta) {
 
 } // namespace
 
+PlayerTemplates extractPlayerTemplates(Scene& scene) {
+    PlayerTemplates out;
+    std::vector<Entity> roots;
+    for (const Entity e : scene.entities()) {
+        if (scene.tryGet<Player>(e) == nullptr) continue;
+        const bool nested = std::any_of(roots.begin(), roots.end(), [&](Entity r) { return scene.isAncestor(r, e); });
+        if (!nested) roots.push_back(e);
+    }
+    for (const Entity root : roots) {
+        const Vec2 spawn = scene.worldPosition(root);
+        // Templates keep their ids; each player's copy derives its ids from them.
+        const Entity copy = out.scene.copySubtree(scene, root, [](const Guid& id) { return id; });
+        if (!copy.isNull()) out.entries.push_back({copy, spawn});
+    }
+    for (const Entity root : roots) scene.destroyEntity(root);
+    return out;
+}
+
 GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
     : m_scene(std::move(scene)),
       m_actions(project.input),
+      m_characterActions(CharacterActions::from(m_actions)),
       m_viewSize(static_cast<float>(project.settings.display.virtualResolution.x),
                  static_cast<float>(project.settings.display.virtualResolution.y)),
-      m_dt(1.0f / static_cast<float>(std::max(1, project.settings.tickRate))) {
-    m_moveLeft = m_actions.find(actions::kMoveLeft);
-    m_moveRight = m_actions.find(actions::kMoveRight);
-    m_jump = m_actions.find(actions::kJump);
-    m_moveUp = m_actions.find(actions::kMoveUp);
-    m_moveDown = m_actions.find(actions::kMoveDown);
-}
+      m_dt(1.0f / static_cast<float>(std::max(1, project.settings.tickRate))) {}
 
 GameSession::~GameSession() {
     // Scripts reference the scene; release them first.
@@ -57,20 +87,29 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
                                                          const SessionOptions& options) {
     std::unique_ptr<GameSession> session(new GameSession(project, std::move(scene)));
     auto& reg = session->m_scene.registry();
+    const CharacterActions& a = session->m_characterActions;
     if (reg.count<PlatformerController>() > 0 &&
-        (session->m_moveLeft == kInvalidAction || session->m_moveRight == kInvalidAction ||
-         session->m_jump == kInvalidAction)) {
+        (a.left == kInvalidAction || a.right == kInvalidAction || a.jump == kInvalidAction)) {
         log::warn("Scene uses PlatformerController but the project does not define all of the "
                   "'move_left', 'move_right' and 'jump' input actions");
     }
-    if (reg.count<TopDownController>() > 0 &&
-        (session->m_moveLeft == kInvalidAction || session->m_moveRight == kInvalidAction ||
-         session->m_moveUp == kInvalidAction || session->m_moveDown == kInvalidAction)) {
+    if (reg.count<TopDownController>() > 0 && (a.left == kInvalidAction || a.right == kInvalidAction ||
+                                               a.up == kInvalidAction || a.down == kInvalidAction)) {
         log::warn("Scene uses TopDownController but the project does not define all of the "
                   "'move_left', 'move_right', 'move_up' and 'move_down' input actions");
     }
     Scene& sc = session->m_scene;
+    if (options.multiplayer) {
+        session->m_multiplayer = true;
+        session->m_templates = extractPlayerTemplates(sc);
+    }
     reg.each<Player, Transform>([&sc](Entity e, Player& player, Transform&) { player.spawnPoint = sc.worldPosition(e); });
+    if (!options.multiplayer) {
+        // Playing alone, PlayerJoined runs once for each character at the start.
+        for (const Entity e : sc.entities()) {
+            if (sc.tryGet<Player>(e) != nullptr) session->m_pendingJoins.push_back(e);
+        }
+    }
 
     scripting::ScriptSystemOptions scriptOptions;
     scriptOptions.realm = scripting::Realm::Authority;
@@ -95,34 +134,120 @@ Entity GameSession::player() const {
 
 void GameSession::buildStaticCollision() {
     m_collision.clear();
-    bool haveBounds = false;
-    // Tilemaps use their world position; rotation and scale do not apply to them.
-    m_scene.registry().each<Tilemap, Transform>([&](Entity e, Tilemap& map, Transform&) {
-        const Vec2 origin = m_scene.worldPosition(e);
-        const Rect bounds = map.worldBounds(origin);
-        m_worldBounds = haveBounds ? unite(m_worldBounds, bounds) : bounds;
-        haveBounds = true;
-        if (!map.solid) return;
-        physics::SolidGrid grid;
-        grid.origin = origin;
-        grid.cellSize = map.tileSize;
-        grid.width = map.width;
-        grid.height = map.height;
-        grid.solid.reserve(map.tiles.size());
-        for (const int tile : map.tiles) grid.solid.push_back(tile >= 0 ? 1 : 0);
-        m_collision.addGrid(std::move(grid));
-    });
+    addTilemapCollision(m_scene, m_collision);
+    m_worldBounds = tilemapBounds(m_scene);
+}
+
+// --- players -------------------------------------------------------------------------------
+
+const PlayerSlot* GameSession::findPlayer(PlayerId id) const {
+    for (const PlayerSlot& p : m_players) {
+        if (p.id == id) return &p;
+    }
+    return nullptr;
+}
+
+Entity GameSession::characterOf(PlayerId id) const {
+    const PlayerSlot* slot = findPlayer(id);
+    return slot != nullptr && m_scene.isAlive(slot->character) ? slot->character : kNullEntity;
+}
+
+Result<Entity> GameSession::addPlayer(PlayerId id, std::string name) {
+    if (!m_multiplayer) return makeError(ErrorCode::InvalidArgument, "Players can only be added in multiplayer");
+    if (id == kNoPlayer || findPlayer(id) != nullptr) {
+        return makeError(ErrorCode::InvalidArgument, "Player id {} is not free", id);
+    }
+    if (m_players.size() >= kMaxPlayers) return makeError(ErrorCode::LimitExceeded, "The game is full");
+    PlayerSlot slot;
+    slot.id = id;
+    slot.name = std::move(name);
+    if (!m_templates.entries.empty()) {
+        // Players take turns over the templates, so several Player entities
+        // in a scene are several spawn points.
+        const auto& entry = m_templates.entries[static_cast<std::size_t>(id - 1) % m_templates.entries.size()];
+        const Entity c =
+            m_scene.copySubtree(m_templates.scene, entry.root, [id](const Guid& g) { return characterId(g, id); });
+        if (c.isNull()) return makeError(ErrorCode::InvalidData, "Could not create a character for player {}", id);
+        // References inside the character (a child following another) point to the copies.
+        std::vector<std::pair<Guid, Guid>> remap;
+        const std::vector<Entity> original = m_templates.scene.subtree(entry.root);
+        const std::vector<Entity> copies = m_scene.subtree(c);
+        for (std::size_t i = 0; i < original.size() && i < copies.size(); ++i) {
+            remap.emplace_back(m_templates.scene.get<EntityInfo>(original[i]).id, m_scene.get<EntityInfo>(copies[i]).id);
+        }
+        remapEntityReferences(m_scene, copies, remap);
+        m_scene.setWorldPosition(c, entry.spawn);
+        Player& player = m_scene.get<Player>(c);
+        player.owner = id;
+        player.name = slot.name;
+        player.spawnPoint = entry.spawn;
+        m_scripts->entityCreated(c);
+        m_pendingJoins.push_back(c);
+        slot.character = c;
+    }
+    m_players.push_back(std::move(slot));
+    return m_players.back().character;
+}
+
+void GameSession::removePlayer(PlayerId id) {
+    const auto it = std::find_if(m_players.begin(), m_players.end(), [id](const PlayerSlot& p) { return p.id == id; });
+    if (it == m_players.end()) return;
+    if (m_scene.isAlive(it->character)) m_pendingLeaves.push_back(it->character);
+    m_players.erase(it);
+}
+
+void GameSession::setPlayerInput(PlayerId id, const InputFrame& input) {
+    for (PlayerSlot& p : m_players) {
+        if (p.id == id) p.input = input;
+    }
+}
+
+void GameSession::deliverPlayerChanges() {
+    const std::vector<Entity> leaves = std::move(m_pendingLeaves);
+    const std::vector<Entity> joins = std::move(m_pendingJoins);
+    m_pendingLeaves.clear();
+    m_pendingJoins.clear();
+    for (const Entity c : leaves) {
+        if (!m_scene.isAlive(c)) continue;
+        m_scripts->playerLeft(c);
+        requestDestroy(c);
+    }
+    for (const Entity c : joins) {
+        if (!m_scene.isAlive(c) || std::find(leaves.begin(), leaves.end(), c) != leaves.end()) continue;
+        m_scripts->playerJoined(c);
+    }
+}
+
+const InputFrame& GameSession::inputFor(Entity entity) const {
+    if (!m_multiplayer) return m_input;
+    const auto* player = m_scene.tryGet<Player>(entity);
+    if (player == nullptr) return m_input; // other controllers follow any player's input
+    const PlayerSlot* slot = findPlayer(static_cast<PlayerId>(player->owner));
+    return slot != nullptr ? slot->input : kNoInput;
 }
 
 // --- tick --------------------------------------------------------------------------------
 
 void GameSession::tick(const InputFrame& input) {
     m_events.clear();
-    m_input = input;
+    if (m_multiplayer) {
+        // Without a player argument, input means "any player".
+        m_input = {};
+        for (const PlayerSlot& p : m_players) {
+            m_input.held |= p.input.held;
+            m_input.pressed |= p.input.pressed;
+        }
+    } else {
+        m_input = input;
+    }
     m_scripts->beginTick();
 
     m_scripts->start();
     flushPhase();
+    if (!m_pendingJoins.empty() || !m_pendingLeaves.empty()) {
+        deliverPlayerChanges();
+        flushPhase();
+    }
     m_scripts->tick(m_dt);
     flushPhase();
 
@@ -212,87 +337,24 @@ void GameSession::updateMovingSolids() {
 }
 
 void GameSession::updatePlatformers() {
-    const float dt = m_dt;
-    const InputFrame& input = m_input;
     auto& reg = m_scene.registry();
     reg.each<PlatformerController, KinematicBody>([&](Entity e, PlatformerController& c, KinematicBody& body) {
-        const float dir = (input.isHeld(m_moveRight) ? 1.0f : 0.0f) - (input.isHeld(m_moveLeft) ? 1.0f : 0.0f);
-
-        // Horizontal movement.
-        const float target = dir * c.maxSpeed;
-        float accel = c.airAcceleration;
-        if (body.onGround) accel = dir != 0.0f ? c.acceleration : c.deceleration;
-        body.velocity.x = approach(body.velocity.x, target, accel * dt);
-
-        // Coyote time and jump buffering make jumps forgiving.
-        if (body.onGround) {
-            c.coyoteTimer = c.coyoteTime;
-            c.jumping = false;
-        } else {
-            c.coyoteTimer = std::max(0.0f, c.coyoteTimer - dt);
-        }
-        if (input.wasPressed(m_jump)) {
-            c.jumpBufferTimer = c.jumpBufferTime;
-        } else {
-            c.jumpBufferTimer = std::max(0.0f, c.jumpBufferTimer - dt);
-        }
-        if (c.jumpBufferTimer > 0.0f && (body.onGround || c.coyoteTimer > 0.0f)) {
-            body.velocity.y = -c.jumpSpeed;
-            c.jumping = true;
-            c.jumpBufferTimer = 0.0f;
-            c.coyoteTimer = 0.0f;
-            body.onGround = false;
-        }
-        // Releasing jump early cuts the jump short.
-        if (c.jumping && !input.isHeld(m_jump) && body.velocity.y < 0.0f) {
-            body.velocity.y *= c.jumpCutMultiplier;
-            c.jumping = false;
-        }
-
-        body.velocity.y = std::min(body.velocity.y + c.gravity * dt, c.maxFallSpeed);
-
-        if (dir != 0.0f) {
-            if (auto* sprite = reg.tryGet<Sprite>(e)) sprite->flipX = dir < 0.0f;
-        }
+        stepPlatformerControl(c, body, reg.tryGet<Sprite>(e), inputFor(e), m_characterActions, m_dt);
     });
 }
 
 void GameSession::updateTopDown() {
-    const float dt = m_dt;
-    const InputFrame& input = m_input;
     auto& reg = m_scene.registry();
     reg.each<TopDownController, KinematicBody>([&](Entity e, TopDownController& c, KinematicBody& body) {
-        Vec2 dir{(input.isHeld(m_moveRight) ? 1.0f : 0.0f) - (input.isHeld(m_moveLeft) ? 1.0f : 0.0f),
-                 (input.isHeld(m_moveDown) ? 1.0f : 0.0f) - (input.isHeld(m_moveUp) ? 1.0f : 0.0f)};
-        // Diagonals are as fast as straight lines (a constant, not a square
-        // root, keeps the result identical everywhere).
-        if (dir.x != 0.0f && dir.y != 0.0f) dir = dir * 0.70710678f;
-        const bool moving = dir.x != 0.0f || dir.y != 0.0f;
-        const Vec2 target = dir * c.maxSpeed;
-        const float maxDelta = (moving ? c.acceleration : c.deceleration) * dt;
-        // Each axis approaches its target, so starting and stopping feel the
-        // same in every direction.
-        body.velocity.x = approach(body.velocity.x, target.x, maxDelta);
-        body.velocity.y = approach(body.velocity.y, target.y, maxDelta);
-        if (moving) {
-            c.facing = dir;
-            if (dir.x != 0.0f) {
-                if (auto* sprite = reg.tryGet<Sprite>(e)) sprite->flipX = dir.x < 0.0f;
-            }
-        }
+        stepTopDownControl(c, body, reg.tryGet<Sprite>(e), inputFor(e), m_characterActions, m_dt);
     });
 }
 
 void GameSession::moveKinematicBodies() {
-    const float dt = m_dt;
     m_scene.registry().each<KinematicBody, BoxCollider, Transform>(
         [&](Entity e, KinematicBody& body, BoxCollider& c, Transform& t) {
-            const Rect box = c.worldRect(m_scene.worldPosition(e));
-            const physics::MoveResult r = m_collision.moveBox(box, body.velocity * dt);
+            const physics::MoveResult r = moveBody(m_collision, body, c.worldRect(m_scene.worldPosition(e)), m_dt);
             moveWorld(m_scene, e, t, r.moved);
-            body.onGround = r.hitBottom;
-            body.hitCeiling = r.hitTop;
-            body.hitWall = r.hitLeft || r.hitRight;
             body.ground = kNullEntity;
             if (r.hitBottom && r.groundOwner != physics::kNoOwner) {
                 for (const SolidState& s : m_solids) {
@@ -301,11 +363,6 @@ void GameSession::moveKinematicBodies() {
                         break;
                     }
                 }
-            }
-            if (r.hitBottom && body.velocity.y > 0.0f) body.velocity.y = 0.0f;
-            if (r.hitTop && body.velocity.y < 0.0f) body.velocity.y = 0.0f;
-            if ((r.hitLeft && body.velocity.x < 0.0f) || (r.hitRight && body.velocity.x > 0.0f)) {
-                body.velocity.x = 0.0f;
             }
         });
 }
@@ -380,12 +437,7 @@ bool GameSession::respawnPlayer(Entity e) {
     auto* player = reg.tryGet<Player>(e);
     if (player == nullptr || reg.tryGet<Transform>(e) == nullptr) return false;
     m_scene.setWorldPosition(e, player->spawnPoint);
-    if (auto* body = reg.tryGet<KinematicBody>(e)) *body = KinematicBody{};
-    if (auto* c = reg.tryGet<PlatformerController>(e)) {
-        c->coyoteTimer = 0.0f;
-        c->jumpBufferTimer = 0.0f;
-        c->jumping = false;
-    }
+    resetMotion(reg.tryGet<KinematicBody>(e), reg.tryGet<PlatformerController>(e));
     ++m_state.respawns;
     const auto* info = reg.tryGet<EntityInfo>(e);
     m_events.push_back({GameEvent::Type::PlayerRespawned, info ? info->id : Guid{}, {}, 0});
@@ -409,27 +461,7 @@ void GameSession::updateAnimations() {
     });
 }
 
-void GameSession::updateCameras() {
-    auto& reg = m_scene.registry();
-    reg.each<Camera>([&](Entity e, Camera& cam) {
-        Vec2 target = cam.position;
-        if (reg.tryGet<Transform>(e) != nullptr) target = m_scene.worldPosition(e);
-        if (!cam.follow.isNil()) {
-            const Entity followed = m_scene.findById(cam.follow);
-            if (reg.tryGet<Transform>(followed) != nullptr) target = m_scene.worldPosition(followed);
-        }
-        if (cam.clampToBounds && !m_worldBounds.empty()) {
-            const Vec2 half = m_viewSize * (0.5f / cam.zoom);
-            const auto clampAxis = [](float v, float lo, float hi, float halfExtent) {
-                if (hi - lo <= 2.0f * halfExtent) return (lo + hi) * 0.5f; // world smaller than view: centre
-                return std::clamp(v, lo + halfExtent, hi - halfExtent);
-            };
-            target.x = clampAxis(target.x, m_worldBounds.left(), m_worldBounds.right(), half.x);
-            target.y = clampAxis(target.y, m_worldBounds.top(), m_worldBounds.bottom(), half.y);
-        }
-        cam.position = target;
-    });
-}
+void GameSession::updateCameras() { runtime::updateCameras(m_scene, m_worldBounds, m_viewSize); }
 
 // --- IScriptHost -----------------------------------------------------------------------------
 
@@ -446,6 +478,12 @@ std::vector<std::string> GameSession::actionNames() const {
 
 bool GameSession::actionHeld(int action) const { return m_input.isHeld(static_cast<ActionId>(action)); }
 bool GameSession::actionPressed(int action) const { return m_input.wasPressed(static_cast<ActionId>(action)); }
+bool GameSession::actionHeldBy(Entity character, int action) const {
+    return inputFor(character).isHeld(static_cast<ActionId>(action));
+}
+bool GameSession::actionPressedBy(Entity character, int action) const {
+    return inputFor(character).wasPressed(static_cast<ActionId>(action));
+}
 
 void GameSession::addScore(int amount) {
     if (amount == 0) return;

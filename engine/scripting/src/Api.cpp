@@ -264,14 +264,51 @@ struct Bindings {
 
     // --- Input ----------------------------------------------------------------------
 
+    // A player character: a live entity with a Player component.
+    static scene::Entity checkPlayer(lua_State* L, int idx) {
+        const scene::Entity e = checkLiveEntity(L, idx);
+        if (system(L).m_scene.tryGet<scene::Player>(e) == nullptr) {
+            luaL_argerrorL(L, idx, "expected a player character (an entity with a Player component)");
+        }
+        return e;
+    }
+
     static int inputIsDown(lua_State* L) {
         const int action = checkAction(L, 1);
-        lua_pushboolean(L, system(L).m_host.actionHeld(action));
+        ScriptSystem& s = system(L);
+        if (lua_isnoneornil(L, 2)) {
+            lua_pushboolean(L, s.m_host.actionHeld(action));
+        } else {
+            lua_pushboolean(L, s.m_host.actionHeldBy(checkPlayer(L, 2), action));
+        }
         return 1;
     }
     static int inputWasPressed(lua_State* L) {
         const int action = checkAction(L, 1);
-        lua_pushboolean(L, system(L).m_host.actionPressed(action));
+        ScriptSystem& s = system(L);
+        if (lua_isnoneornil(L, 2)) {
+            lua_pushboolean(L, s.m_host.actionPressed(action));
+        } else {
+            lua_pushboolean(L, s.m_host.actionPressedBy(checkPlayer(L, 2), action));
+        }
+        return 1;
+    }
+
+    // --- Players --------------------------------------------------------------------
+
+    static int playersGetAll(lua_State* L) {
+        ScriptSystem& s = system(L);
+        lua_createtable(L, 0, 0);
+        int n = 0;
+        for (const scene::Entity e : s.m_scene.entities()) {
+            if (s.m_scene.tryGet<scene::Player>(e) == nullptr) continue;
+            s.pushEntity(L, e);
+            lua_rawseti(L, -2, ++n);
+        }
+        return 1;
+    }
+    static int playersCount(lua_State* L) {
+        lua_pushnumber(L, static_cast<double>(system(L).m_scene.registry().count<scene::Player>()));
         return 1;
     }
 
@@ -431,6 +468,15 @@ struct Bindings {
     }
     static void setSpawnPoint(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
         need<scene::Player>(L, s, e, "Player").spawnPoint = checkVec2(L, idx);
+    }
+    static void getPlayerName(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const std::string& name = need<scene::Player>(L, s, e, "Player").name;
+        // Playing alone there is no player name; the character's name stands in.
+        const std::string& shown = name.empty() ? need<scene::EntityInfo>(L, s, e, "EntityInfo").name : name;
+        lua_pushlstring(L, shown.data(), shown.size());
+    }
+    static void getPlayerId(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        lua_pushnumber(L, need<scene::Player>(L, s, e, "Player").owner);
     }
     static void getFlipX(lua_State* L, ScriptSystem& s, scene::Entity e) {
         lua_pushboolean(L, need<scene::Sprite>(L, s, e, "Sprite").flipX);
@@ -592,6 +638,11 @@ const Binding kBindings[] = {
       "The overlap ended, or the other entity was destroyed."}},
     {{"Lifecycle", "Destroy", K::Event, A::Everywhere, "function Behaviour:Destroy()",
       "The entity is about to be removed. It is still readable here. Not called when the whole session ends."}},
+    {{"Lifecycle", "PlayerJoined", K::Event, A::Everywhere, "function Behaviour:PlayerJoined(player: Entity)",
+      "A player joined; `player` is their character. Every behaviour receives it, after the character's own "
+      "Start. Playing alone, it runs once for the player at the start."}},
+    {{"Lifecycle", "PlayerLeft", K::Event, A::Everywhere, "function Behaviour:PlayerLeft(player: Entity)",
+      "A player left the game. Their character is still readable here and is removed right after."}},
 
     // Globals
     {{"Globals", "Vec2", K::Global, A::Everywhere, "Vec2(x: number, y: number): vector",
@@ -637,12 +688,21 @@ const Binding kBindings[] = {
      &Bindings::worldFindWithTag},
 
     // Input: named actions from the project's input settings.
-    {{"Input", "isDown", K::Function, A::Everywhere, "Input.isDown(action: string): boolean",
-      "True while the action is held this tick. Unknown action names are errors.", false, true},
+    {{"Input", "isDown", K::Function, A::Everywhere, "Input.isDown(action: string, player: Entity?): boolean",
+      "True while the action is held this tick: by `player` (a character) if given, otherwise by any player. "
+      "Unknown action names are errors.", false, true},
      &Bindings::inputIsDown},
-    {{"Input", "wasPressed", K::Function, A::Everywhere, "Input.wasPressed(action: string): boolean",
-      "True on the tick the action went down.", false, true},
+    {{"Input", "wasPressed", K::Function, A::Everywhere, "Input.wasPressed(action: string, player: Entity?): boolean",
+      "True on the tick the action went down (for `player`, or for any player).", false, true},
      &Bindings::inputWasPressed},
+
+    // Players: the characters of the people playing.
+    {{"Players", "getAll", K::Function, A::Everywhere, "Players.getAll(): {Entity}",
+      "Every player character (entities with a Player component), in the order they joined.", false, true},
+     &Bindings::playersGetAll},
+    {{"Players", "count", K::Function, A::Everywhere, "Players.count(): number",
+      "How many player characters there are.", false, true},
+     &Bindings::playersCount},
 
     // Events: messages between scripts.
     {{"Events", "emit", K::Function, A::Everywhere, "Events.emit(name: string, value: any?)",
@@ -696,6 +756,13 @@ const Binding kBindings[] = {
       "Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player "
       "come back there.", true, true},
      nullptr, &Bindings::getSpawnPoint, &Bindings::setSpawnPoint},
+    {{"Entity", "playerName", K::Property, A::Everywhere, "entity.playerName: string",
+      "The name of the player controlling this character (playing alone: the character's name).", false, true},
+     nullptr, &Bindings::getPlayerName, nullptr},
+    {{"Entity", "playerId", K::Property, A::Everywhere, "entity.playerId: number",
+      "The id of the player controlling this character in multiplayer (1, 2, ...; 0 when playing alone).",
+      false, true},
+     nullptr, &Bindings::getPlayerId, nullptr},
     {{"Entity", "isValid", K::Method, A::Everywhere, "entity:isValid(): boolean",
       "False once the entity has been destroyed. Other members raise an error on destroyed entities.", false,
       true}, &Bindings::entityIsValid},
@@ -751,7 +818,7 @@ void Bindings::registerApi(lua_State* L, ScriptSystem& s) {
     };
 
     // Globals and library tables.
-    for (const char* group : {"Game", "World", "Input", "Events"}) {
+    for (const char* group : {"Game", "World", "Input", "Players", "Events"}) {
         lua_createtable(L, 0, 8);
         for (const Binding& b : kBindings) {
             if (b.info.group != group || b.function == nullptr || !available(b)) continue;
@@ -874,13 +941,15 @@ std::string generateApiReferenceMarkdown() {
     md += "Guide and examples: [scripting.md](scripting.md). *Available in*: **all** means authority and "
           "client scripts; **authority** means only where game state is decided (single-player session, "
           "server). *Pure* members have no side effects (data nodes in visual scripting).\n";
-    const char* groups[] = {"Lifecycle", "Globals", "Game", "World", "Input", "Events", "Entity"};
+    const char* groups[] = {"Lifecycle", "Globals", "Game", "World", "Input", "Players", "Events", "Entity"};
     const char* intro[] = {
         "Functions a behaviour table may define. The engine calls them; see the lifecycle rules in scripting.md.",
         "Global functions.",
         "Game state. Changes are authoritative and, in multiplayer, will be replicated to clients.",
         "Finding entities in the running scene.",
         "Input actions defined in the project's `input.actions`.",
+        "The people playing. Each has a character: a copy of the scene's Player entity in multiplayer, the "
+        "scene's Player entity when playing alone.",
         "Custom events between scripts. Values must be serializable.",
         "An `Entity` is a handle to a scene entity. Properties need the named component; accessing a "
         "destroyed entity is an error except `isValid()`. Writable properties can only be assigned by "
