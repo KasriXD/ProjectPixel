@@ -25,6 +25,7 @@ Result<std::unique_ptr<SdlPlatform>> SdlPlatform::create(const WindowSettings& s
                                      &platform->m_renderer)) {
         return makeError(ErrorCode::Unsupported, "Could not create a window and renderer: {}", SDL_GetError());
     }
+    if (settings.position) SDL_SetWindowPosition(platform->m_window, settings.position->x, settings.position->y);
     // The game draws at the virtual resolution; SDL scales it to the window.
     const SDL_RendererLogicalPresentation mode = settings.presentation == Presentation::IntegerScale
                                                      ? SDL_LOGICAL_PRESENTATION_INTEGER_SCALE

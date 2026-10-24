@@ -374,6 +374,7 @@ void StudioApp::requestCloseProject() {
 }
 
 void StudioApp::closeProjectNow() {
+    m_multiplayer.stop();
     m_play.reset();
     m_document.reset();
     m_textures.reset();
@@ -823,6 +824,7 @@ StudioApp::Status StudioApp::iterate() {
         if (m_project->checkScriptsChangedOnDisk()) log::info("Scripts changed on disk; recompiled");
     }
     advancePlay(elapsed);
+    m_multiplayer.update();
 
     ImGui_ImplSDLRenderer3_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -1022,6 +1024,18 @@ void StudioApp::drawMenuBar() {
         if (ImGui::MenuItem("Pause", "F6", m_play && m_play->paused(), m_play != nullptr)) togglePause();
         if (ImGui::MenuItem("Step One Tick", "F7", false, m_play != nullptr)) stepOnce();
         ImGui::Separator();
+        if (ImGui::BeginMenu("Test Multiplayer", !m_play)) {
+            for (int n = 1; n <= 4; ++n) {
+                const std::string label = std::format("Server + {} Player{}", n, n == 1 ? "" : "s");
+                if (ImGui::MenuItem(label.c_str())) startMultiplayerTest(n);
+                ui::tooltip("Saves the project, then runs a server and player windows on this computer. Each "
+                            "window is one player; the start scene is played. Their output appears in Output.");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Stop Multiplayer Test", nullptr, false, m_multiplayer.active())) m_multiplayer.stop();
+            ImGui::EndMenu();
+        }
+        ImGui::Separator();
         ImGui::MenuItem("Game Camera While Playing", nullptr, &gameCameraInPlay);
         ImGui::MenuItem("Clear Output On Play", nullptr, &m_settings.clearConsoleOnPlay);
         ImGui::EndMenu();
@@ -1094,6 +1108,36 @@ void StudioApp::drawToolbar() {
     } else {
         if (ImGui::Button(" Play ")) requestStartPlay();
         ui::tooltip("Play the scene as it is now, unsaved changes included (F5)");
+    }
+    if (m_multiplayer.active()) {
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ui::kPlayColor);
+        if (ImGui::Button("Stop Multiplayer")) m_multiplayer.stop();
+        ImGui::PopStyleColor();
+        ui::tooltip("Close the test server and its player windows");
+        ImGui::TextColored(ui::kPlayColor, "%s %d PLAYER%s", m_multiplayer.serverRunning() ? "SERVER +" : "NO SERVER,",
+                           m_multiplayer.playersOpen(), m_multiplayer.playersOpen() == 1 ? "" : "S");
+    }
+}
+
+void StudioApp::startMultiplayerTest(int players) {
+    if (!m_project) return;
+    // The server and the windows load the project from disk.
+    if (!saveAll()) {
+        notify("Save the project first: the multiplayer test runs what is on disk");
+        return;
+    }
+    if (m_document && m_document->assetId() != m_project->manifest().startScene) {
+        log::warn("The multiplayer test plays the start scene, not the scene open here");
+    }
+    MultiplayerTestOptions options;
+    options.project = m_project->root();
+    options.players = players;
+    options.resolution = m_project->manifest().settings.display.virtualResolution;
+    options.windowScale = options.resolution.x <= 400 ? 2 : 1;
+    if (auto started = m_multiplayer.start(options); !started) {
+        log::error("{}", started.error().message);
+        notify(started.error().message);
     }
 }
 

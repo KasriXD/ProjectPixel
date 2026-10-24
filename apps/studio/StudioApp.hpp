@@ -1,6 +1,7 @@
 #pragma once
 
 #include "FileDialogs.hpp"
+#include "MultiplayerTest.hpp"
 #include "StudioSettings.hpp"
 
 #include "px/core/Keys.hpp"
@@ -118,6 +119,8 @@ public:
     void requestQuit();
     // Saves the scene, unsaved scripts and project settings. Returns false on failure.
     bool saveAll();
+    // Saves, then starts px-server and `players` px-player windows on this computer.
+    void startMultiplayerTest(int players);
     [[nodiscard]] bool hasUnsavedChanges() const;
     [[nodiscard]] std::string unsavedSummary() const;
 
@@ -210,6 +213,7 @@ private:
     std::unique_ptr<editor::SceneDocument> m_document;
     std::unique_ptr<render::TextureCache> m_textures;
     std::unique_ptr<editor::PlayMode> m_play;
+    MultiplayerTest m_multiplayer;
     FixedStepClock m_playClock{1.0 / 60.0};
     runtime::KeyBindings m_bindings;
     KeyStates m_keysDown{};

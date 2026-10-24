@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 union SDL_Event;
@@ -26,6 +27,7 @@ struct WindowSettings {
     Presentation presentation = Presentation::IntegerScale;
     int windowScale = 3;
     bool vsync = true;
+    std::optional<Vec2i> position; // screen position of the window's top-left corner (default: centred)
 };
 
 // Owns the SDL window and renderer and tracks keyboard state.

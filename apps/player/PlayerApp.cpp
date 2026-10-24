@@ -55,6 +55,7 @@ const char* playerUsage() {
            "  --host              start a server in this window and play on it; others --connect\n"
            "  --port N            with --host: the UDP port to use (default 7777)\n"
            "  --name NAME         your name in multiplayer (default: your login name)\n"
+           "  --window-pos X,Y    place the window at this screen position\n"
            "  --frames N          run exactly N frames, one simulation tick per frame, then exit\n"
            "  --screenshot FILE   with --frames: save the last frame as a PNG\n"
            "  --input-script FILE play scripted input (see docs/input-scripts.md)\n"
@@ -107,6 +108,18 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
             o.connectAddress = v;
         } else if (arg == "--host") {
             o.host = true;
+        } else if (arg == "--window-pos") {
+            const char* v = value();
+            const std::string_view text = v != nullptr ? v : "";
+            const auto comma = text.find(',');
+            Vec2i position;
+            if (comma == std::string_view::npos ||
+                std::from_chars(text.data(), text.data() + comma, position.x).ec != std::errc() ||
+                std::from_chars(text.data() + comma + 1, text.data() + text.size(), position.y).ec != std::errc()) {
+                error = "--window-pos needs X,Y";
+                return std::nullopt;
+            }
+            o.windowPosition = position;
         } else if (arg == "--port") {
             const char* v = value();
             if (v == nullptr || !parseInt(v, o.port) || o.port < 1 || o.port > 65535) {
@@ -177,6 +190,13 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     const auto& display = app->m_game.manifest.settings.display;
     platform::WindowSettings window;
     window.title = std::format("{} - {}", app->m_game.manifest.name, version::productName);
+    if (app->m_options.host || !app->m_options.connectAddress.empty()) {
+        // Online, several windows of the same game are told apart by name.
+        window.title = std::format("{} - {} - {}", app->m_game.manifest.name,
+                                   app->m_options.playerName.empty() ? defaultPlayerName() : app->m_options.playerName,
+                                   version::productName);
+    }
+    window.position = app->m_options.windowPosition;
     window.virtualResolution = display.virtualResolution;
     window.presentation = display.scaling == project::ScalingMode::Integer ? platform::Presentation::IntegerScale
                                                                            : platform::Presentation::Letterbox;
@@ -437,9 +457,10 @@ void PlayerApp::drawHud() {
     if (!state.objective.empty()) text({6, 6}, state.objective, kHudText);
     const std::string& error = !m_loadError.empty() ? m_loadError : state.lastScriptError;
     if (gameSeconds() < 6.0 && !m_scriptPlayer && error.empty()) {
-        const std::string hint = m_game.manifest.settings.gameType == project::GameType::TopDown
-                                     ? "ARROWS MOVE  R RESTART"
-                                     : "ARROWS MOVE  SPACE JUMP  R RESTART";
+        std::string hint = m_game.manifest.settings.gameType == project::GameType::TopDown
+                               ? "ARROWS MOVE  R RESTART"
+                               : "ARROWS MOVE  SPACE JUMP  R RESTART";
+        if (networked()) hint.resize(hint.size() - std::string_view("  R RESTART").size()); // the server restarts
         text({(width - g * static_cast<float>(hint.size())) * 0.5f, height - 14}, hint, colors::white);
     }
     if (state.levelComplete) {
@@ -464,7 +485,7 @@ void PlayerApp::drawHud() {
     if (networked() && m_net->status() == net::GameClient::Status::Playing) {
         const std::size_t n = m_net->game().players.size();
         const std::string line = n == 1 ? std::string("1 PLAYER") : std::format("{} PLAYERS", n);
-        text({width - 6 - g * static_cast<float>(line.size()), 6}, line, colors::white);
+        text({width - 6 - g * static_cast<float>(line.size()), 18}, line, colors::white); // below the objective
     }
 
     // Script and reload errors are shown on screen so creators notice them.

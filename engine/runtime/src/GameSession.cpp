@@ -195,7 +195,7 @@ Vec2 GameSession::freeSpawnPoint(Entity character, Vec2 wanted) const {
     // each other: the nearest spot, a tile at a time, that is free of walls
     // and of other characters.
     const auto* box = m_scene.tryGet<BoxCollider>(character);
-    const float step = box != nullptr ? std::max(16.0f, box->size.x + 4.0f) : 16.0f;
+    const float step = box != nullptr ? std::max(20.0f, box->size.x + 6.0f) : 20.0f;
     for (int i = 0; i < 9; ++i) {
         const float offset = static_cast<float>((i + 1) / 2) * step * (i % 2 == 1 ? 1.0f : -1.0f);
         const Vec2 p{wanted.x + offset, wanted.y};

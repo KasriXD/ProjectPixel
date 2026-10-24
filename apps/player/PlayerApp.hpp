@@ -36,6 +36,7 @@ struct PlayerOptions {
     bool host = false;                     // run a server in this window and join it
     int port = 0;                          // with --host: UDP port (0: the default)
     std::string playerName;                // shown to the other players
+    std::optional<Vec2i> windowPosition;   // --window-pos X,Y (Studio tiles multiplayer test windows)
 };
 
 // Parses command-line arguments. Returns nullopt and sets `error` on failure.
