@@ -25,6 +25,7 @@ Multiplayer (`px-server`, `px-player --connect/--host`, UDP via ENet):
 |---|---|---|---|
 | Linux x64 | Yes | Server and two or three player windows as separate processes over UDP on one computer; Studio's *Test Multiplayer* | Used interactively on Xvfb; CTest `net_simulated_playthrough`, `net_udp_localhost`, `server_starts_and_stops` (also under ASan) |
 | Headless (no SDL) | Yes (`px-server`) | Network tests pass | `headless` preset in CI |
+| Windows x64 (MinGW-w64) | Yes, `-O3 -Werror` | Under Wine 9: network tests pass; joined a Linux `px-server` as a bot (level completed, no prediction corrections) and as a game window next to a Linux window | Cross-compiled on Linux |
 | Windows x64 (MSVC 2022) | Yes | Network tests pass, including real UDP on localhost | GitHub Actions. Not yet played across computers |
 | macOS arm64 | Yes | Network tests pass, including real UDP on localhost | GitHub Actions |
 | Browser | No UDP | Cannot join games | A WebSocket/WebTransport transport is planned ([ADR 0018](adr/0018-multiplayer-networking.md)) |

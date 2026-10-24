@@ -172,8 +172,10 @@ Driven by the founder's first session on Windows 11:
 ## Milestone 4: Multiplayer prototype (**Done**)
 
 Verified on Linux (server and player windows as separate processes over
-UDP, on one computer) and by end-to-end tests in CI on Linux, Windows and
-macOS. Guide: [docs/multiplayer.md](docs/multiplayer.md); design:
+UDP, on one computer), with a Windows build (MinGW, under Wine) joining a
+Linux server (the top-down level played to the end through the network,
+with no prediction corrections; a Linux and a Windows window in one game),
+and by end-to-end tests in CI on Linux, Windows and macOS. Guide: [docs/multiplayer.md](docs/multiplayer.md); design:
 [ADR 0018](docs/adr/0018-multiplayer-networking.md).
 
 - [x] Transport chosen and behind an interface: UDP via ENet 1.3.18
