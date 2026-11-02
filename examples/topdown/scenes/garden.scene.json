@@ -302,10 +302,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 5
+              "value": 5,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "886e1788-fdfb-5889-bc3a-620e3eeb87a7"
+        }
       }
     },
     {
@@ -352,10 +356,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 5
+              "value": 5,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "886e1788-fdfb-5889-bc3a-620e3eeb87a7"
+        }
       }
     },
     {
@@ -402,10 +410,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 5
+              "value": 5,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "886e1788-fdfb-5889-bc3a-620e3eeb87a7"
+        }
       }
     },
     {
@@ -452,10 +464,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 5
+              "value": 5,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "886e1788-fdfb-5889-bc3a-620e3eeb87a7"
+        }
       }
     },
     {
@@ -502,10 +518,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 5
+              "value": 5,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "886e1788-fdfb-5889-bc3a-620e3eeb87a7"
+        }
       }
     },
     {

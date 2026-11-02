@@ -91,6 +91,13 @@ def main():
         file, name, _ = lib.SHARED_SCRIPTS.get(key) or lib.LIBRARY_SCRIPTS[key]
         shutil.copyfile(lib.LIB / "scripts" / file, OUT / "scripts" / file)
         assets.append({"id": lib.SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file})
+    # The sparkle effect comes from the platformer example; gems spawn it (prefabs below).
+    shutil.copyfile(ROOT / "examples" / "platformer" / "scripts" / "sparkle.luau", OUT / "scripts" / "sparkle.luau")
+    sparkle_script = gid("script/sparkle")
+    assets.append({"id": sparkle_script, "type": "script", "name": "Sparkle", "path": "scripts/sparkle.luau"})
+    prefab = {name: gid("asset/prefab/" + name) for name in ("gem", "sparkle")}
+    assets.append({"id": prefab["gem"], "type": "prefab", "name": "Gem", "path": "prefabs/gem.prefab.json"})
+    assets.append({"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"})
     scene_id = gid("asset/garden")
     assets.append({"id": scene_id, "type": "scene", "name": "Garden", "path": "scenes/garden.scene.json"})
 
@@ -141,13 +148,29 @@ def main():
                                                  "properties": {"message": "YOU ESCAPED THE GARDEN!"}}]}),
         e("gems", "Gems", {}),
     ]
+    def gem(position):
+        return {"Transform": {"position": position},
+                "Sprite": sprite("gem", [16, 16], [0, 0, 16, 16]),
+                "SpriteAnimation": {"frames": [[k * 16, 0, 16, 16] for k in range(4)], "framesPerSecond": 6},
+                "BoxCollider": trigger((10, 10)), "Tags": ["coin"],
+                "Scripts": [{"script": S["coin"], "properties": {"value": 5, "effect": "Sparkle"}}]}
+
+    # Every gem is a copy of the Gem prefab; collected gems spawn the Sparkle prefab.
     for i, (cx, cy) in enumerate([(2, 7), (7, 7), (17, 7), (22, 2), (9, 13)], start=1):
-        entities.append(e(f"gem/{i}", f"Gem {i}", {
-            "Transform": {"position": centre(cx, cy)},
-            "Sprite": sprite("gem", [16, 16], [0, 0, 16, 16]),
-            "SpriteAnimation": {"frames": [[k * 16, 0, 16, 16] for k in range(4)], "framesPerSecond": 6},
-            "BoxCollider": trigger((10, 10)), "Tags": ["coin"],
-            "Scripts": [{"script": S["coin"], "properties": {"value": 5}}]}, parent="gems"))
+        entities.append(e(f"gem/{i}", f"Gem {i}", {**gem(centre(cx, cy)), "PrefabInstance": {"prefab": prefab["gem"]}},
+                          parent="gems"))
+    (OUT / "prefabs").mkdir(parents=True, exist_ok=True)
+    prefabs = {
+        "gem": {"id": gid("prefab-entity/gem"), "name": "Gem", "components": gem([0, 0])},
+        "sparkle": {"id": gid("prefab-entity/sparkle"), "name": "Sparkle", "components": {
+            "Transform": {"position": [0, 0]},
+            "Sprite": {"texture": T["gem"], "source": [0, 0, 16, 16], "size": [10, 10], "tint": "#e0fff8",
+                       "layer": 20},
+            "Scripts": [{"script": sparkle_script, "properties": {"lifetime": 0.35, "rise": 30}}]}},
+    }
+    for name, root in prefabs.items():
+        doc = {"format": "px.prefab", "formatVersion": 1, "sceneFormatVersion": 3, "entities": [root]}
+        (OUT / "prefabs" / f"{name}.prefab.json").write_text(example.dump_pretty(doc) + "\n")
     entities.append(e("hazards", "Hazards", {}))
     for i, (cx, cy) in enumerate([(21, 2), (22, 3), (21, 3)], start=1):
         entities.append(e(f"trap/{i}", "Spike Trap", {

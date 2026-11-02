@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <format>
+#include <unordered_map>
 #include <utility>
 
 namespace px::scene {
@@ -235,6 +236,11 @@ struct Tables {
             .withCount(0, kMaxTags)
             .withLength(1, kMaxTagLength),
     };
+    std::vector<FieldInfo> prefabInstance{
+        field<&PrefabInstance::prefab>("prefab", "The prefab this entity and its children were made from.")
+            .ofAsset(assets::AssetType::Prefab)
+            .withFlags(kFieldRequired),
+    };
     std::vector<FieldInfo> scripts{
         wholeField("items", FieldKind::ScriptList, "Luau behaviours, each with its property values. They run in "
                                                    "this order.")
@@ -282,6 +288,10 @@ struct Tables {
                             {}, kComponentInlineField),
             component<Scripts>("Scripts", "Scripting", "Luau behaviours that run on this entity.", scripts, {},
                                kComponentInlineField),
+            component<PrefabInstance>("PrefabInstance", "General",
+                                      "Marks a copy of a prefab. Studio updates it when the prefab changes; "
+                                      "removing it unlinks the copy.",
+                                      prefabInstance),
         };
     }
 };
@@ -538,17 +548,16 @@ std::vector<const ComponentInfo*> dependents(const Scene& scene, Entity entity, 
 
 void remapEntityReferences(Scene& scene, std::span<const Entity> entities,
                            const std::vector<std::pair<Guid, Guid>>& remap) {
+    if (remap.empty()) return;
+    std::unordered_map<Guid, Guid> map;
+    map.reserve(remap.size());
+    for (const auto& [from, to] : remap) map.emplace(from, to); // the first mapping of an id wins
     for (const Entity e : entities) {
         forEachComponent(scene, e, [&](const ComponentInfo& c, void* data) {
             for (const FieldInfo& f : c.fields) {
                 if (f.kind != FieldKind::EntityRef) continue;
                 Guid& id = f.ref<Guid>(data);
-                for (const auto& [from, to] : remap) {
-                    if (id == from) {
-                        id = to;
-                        break;
-                    }
-                }
+                if (const auto it = map.find(id); it != map.end()) id = it->second;
             }
         });
     }

@@ -157,6 +157,16 @@ public:
     // The library's player object for the project's game type (-1 if none).
     [[nodiscard]] int libraryPlayerObject() const;
 
+    // --- Prefabs (docs/prefabs.md) -----------------------------------------------------------
+    // Places a copy at `at` (or the middle of the view), or under `parent`.
+    void placePrefab(const assets::AssetId& prefab, std::optional<Vec2> at,
+                     scene::Entity parent = scene::kNullEntity);
+    void selectPrefabInstances(const assets::AssetId& prefab);
+    // Asks for a name, then saves the entity and its children as a prefab.
+    void requestSaveAsPrefab(scene::Entity entity);
+    void applyToPrefab(scene::Entity instanceRoot);
+    void revertToPrefab(scene::Entity instanceRoot);
+
 private:
     explicit StudioApp(StudioOptions options);
     Status initWindowAndUi();
@@ -245,6 +255,9 @@ private:
     std::optional<PendingAction> m_pending;
     std::vector<std::function<void()>> m_deferred;
     bool m_openSaveModal = false;
+    Guid m_savePrefabEntity;       // entity waiting for a name in "Save As Prefab"
+    std::string m_savePrefabName;
+    bool m_openSavePrefab = false;
     std::string m_errorModal;
 
     // Welcome screen inputs.

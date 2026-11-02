@@ -10,7 +10,13 @@ Result<std::unique_ptr<PlayMode>> PlayMode::start(const EditorProject& project, 
     if (!scripts) return scripts.error();
     std::unique_ptr<PlayMode> play(new PlayMode());
     play->m_scripts = std::move(scripts.value());
-    auto session = runtime::GameSession::create(project.manifest(), scene, play->m_scripts, options);
+    runtime::SessionOptions withPrefabs = options;
+    if (withPrefabs.prefabs == nullptr) {
+        auto prefabs = project.buildPrefabLibrary();
+        if (!prefabs) return prefabs.error();
+        withPrefabs.prefabs = std::move(prefabs.value());
+    }
+    auto session = runtime::GameSession::create(project.manifest(), scene, play->m_scripts, withPrefabs);
     if (!session) return session.error();
     play->m_session = std::move(session.value());
     return play;

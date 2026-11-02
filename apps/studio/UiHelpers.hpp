@@ -21,6 +21,7 @@ inline constexpr ImVec4 kErrorColor{1.0f, 0.42f, 0.42f, 1.0f};
 inline constexpr ImVec4 kWarningColor{1.0f, 0.78f, 0.35f, 1.0f};
 inline constexpr ImVec4 kDimColor{0.6f, 0.62f, 0.66f, 1.0f};
 inline constexpr ImVec4 kAccentColor{0.45f, 0.75f, 1.0f, 1.0f};
+inline constexpr ImVec4 kPrefabColor{0.78f, 0.62f, 1.0f, 1.0f}; // prefab instances
 inline constexpr ImVec4 kPlayColor{1.0f, 0.6f, 0.2f, 1.0f};
 
 // Drag-and-drop payload types.

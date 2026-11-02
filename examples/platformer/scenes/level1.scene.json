@@ -480,10 +480,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -530,10 +534,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -580,10 +588,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -630,10 +642,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -680,10 +696,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -730,10 +750,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -780,10 +804,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -830,10 +858,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -880,10 +912,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -930,10 +966,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -980,10 +1020,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -1030,10 +1074,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -1080,10 +1128,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {
@@ -1130,10 +1182,14 @@
           {
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
-              "value": 1
+              "value": 1,
+              "effect": "Sparkle"
             }
           }
-        ]
+        ],
+        "PrefabInstance": {
+          "prefab": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5"
+        }
       }
     },
     {

@@ -1,0 +1,38 @@
+{
+  "format": "px.prefab",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "714b8799-efe4-5524-89cc-96eac79140dc",
+      "name": "Sparkle",
+      "components": {
+        "Transform": {
+          "position": [0, 0],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [10, 10],
+          "pivot": [0.5, 0.5],
+          "tint": "#e0fff8",
+          "layer": 20,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "Scripts": [
+          {
+            "script": "2cb435ea-f474-5122-8b13-1ceedb546227",
+            "properties": {
+              "lifetime": 0.35,
+              "rise": 30
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

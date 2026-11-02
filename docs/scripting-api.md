@@ -53,6 +53,7 @@ Finding entities in the running scene.
 | `World.find(name: string): Entity?` | function, pure | all | The first entity with this name (in hierarchy order), or nil. |
 | `World.findById(id: string): Entity?` | function, pure | all | The entity with this id, or nil. |
 | `World.findWithTag(tag: string): {Entity}` | function, pure | all | All entities with the tag, in hierarchy order. |
+| `World.spawn(prefab: string, position: vector?, parent: Entity?): Entity` | function | authority | Creates a copy of a prefab (by its name in the project) and returns its root. It is placed at `position` (world; default: the parent's position, or [0, 0]), under `parent` if given. The entities exist at once; their scripts start at the next tick. At most 1000 entities can be spawned per tick. |
 
 ## Input
 

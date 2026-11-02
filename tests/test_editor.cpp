@@ -338,8 +338,9 @@ TEST_CASE("Editor: importing, renaming and deleting assets") {
     const ScriptInfo* info = project->scriptInfo(script);
     REQUIRE(info != nullptr);
     CHECK(info->compiled);
-    REQUIRE(info->behaviour.properties.size() == 1);
-    CHECK(info->behaviour.properties[0].first == "value");
+    REQUIRE(info->behaviour.properties.size() == 2); // in name order
+    CHECK(info->behaviour.properties[0].first == "effect");
+    CHECK(info->behaviour.properties[1].first == "value");
     CHECK(info->behaviour.events == std::vector<std::string>{"TriggerEnter"});
 
     must(project->renameAsset(texture, "Gold Coin"));

@@ -2,6 +2,7 @@
 #include "StudioApp.hpp"
 
 #include "px/editor/Picking.hpp"
+#include "px/editor/Prefabs.hpp"
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -73,6 +74,25 @@ void HierarchyPanel::drawEntityMenu(StudioApp& app, Entity entity) {
         if (auto moved = doc->setParent(entity, kNullEntity); !moved) app.notify(moved.error().message, true);
     }
     ImGui::Separator();
+    if (ImGui::MenuItem("Save As Prefab...", nullptr, false, editable)) app.requestSaveAsPrefab(entity);
+    ui::tooltip("Saves this entity and its children as a prefab asset: copies can be placed in any scene and "
+                "spawned by scripts (World.spawn).");
+    const Entity instance = editor::instanceRootOf(scene, entity);
+    if (!instance.isNull()) {
+        const auto* entry = app.project()->asset(scene.get<PrefabInstance>(instance).prefab);
+        const std::string name = entry != nullptr ? entry->name : std::string("prefab");
+        if (ImGui::MenuItem(std::format("Apply To Prefab '{}'", name).c_str(), nullptr, false, editable)) {
+            app.applyToPrefab(instance);
+        }
+        ui::tooltip("Saves this copy as the prefab and updates every other copy (in all scenes). Their own "
+                    "changes are kept.");
+        if (ImGui::MenuItem("Revert To Prefab", nullptr, false, editable)) app.revertToPrefab(instance);
+        ui::tooltip("Throws away this copy's changes; only its position and name stay.");
+        if (ImGui::MenuItem("Select All Copies", nullptr, false, editable)) {
+            app.selectPrefabInstances(scene.get<PrefabInstance>(instance).prefab);
+        }
+    }
+    ImGui::Separator();
     if (ImGui::MenuItem("Frame In Scene View", "F")) app.frameSelection();
     ImGui::Separator();
     if (ImGui::MenuItem("Delete", "Del", false, editable)) doc->deleteSelection();
@@ -117,6 +137,7 @@ void HierarchyPanel::draw(StudioApp& app) {
                                  : (io.KeyShift ? editor::SelectMode::Add : editor::SelectMode::Replace));
     };
     std::optional<std::pair<Guid, Entity>> dropRequest; // dragged entity id -> new parent
+    std::optional<std::pair<assets::AssetId, Guid>> placeUnder; // prefab dropped on an entity
     bool dropBefore = false;
 
     ImGui::BeginChild("tree", {0, 0}, ImGuiChildFlags_None);
@@ -155,13 +176,24 @@ void HierarchyPanel::draw(StudioApp& app) {
             if (isSelected(e)) flags |= ImGuiTreeNodeFlags_Selected;
             ImGui::PushID(static_cast<int>(e.index));
             const bool group = isGroup(*scene, e);
-            // Entities that would stop the scene from saving are shown in red.
+            const auto* instance = scene->tryGet<PrefabInstance>(e);
+            // Entities that would stop the scene from saving are shown in red, prefab copies in purple.
             const bool broken = editable && !validateEntity(*scene, e, &app.project()->assets()).empty();
-            if (broken || group) ImGui::PushStyleColor(ImGuiCol_Text, broken ? ui::kErrorColor : ui::kDimColor);
+            const bool colored = broken || group || instance != nullptr;
+            if (colored) {
+                ImGui::PushStyleColor(ImGuiCol_Text, broken     ? ui::kErrorColor
+                                                     : instance ? ui::kPrefabColor
+                                                                : ui::kDimColor);
+            }
             const bool open =
                 ImGui::TreeNodeEx("##node", flags, "%s", info->name.empty() ? "(unnamed)" : info->name.c_str());
-            if (broken || group) ImGui::PopStyleColor();
-            if (broken) ui::tooltip("This entity has problems; select it to see them in Properties.");
+            if (colored) ImGui::PopStyleColor();
+            if (broken) {
+                ui::tooltip("This entity has problems; select it to see them in Properties.");
+            } else if (instance != nullptr) {
+                const auto* entry = app.project()->asset(instance->prefab);
+                ui::tooltip(std::format("A copy of the prefab '{}'", entry != nullptr ? entry->name : "?"));
+            }
             if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen()) clickSelect(e);
             if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) app.frameSelection();
             if (ImGui::IsItemClicked(ImGuiMouseButton_Right) && !isSelected(e)) app.select(e);
@@ -203,6 +235,8 @@ void HierarchyPanel::draw(StudioApp& app) {
                             app.select(e);
                             app.notify(std::format("Attached {} to {}", entry->name, info->name));
                         }
+                    } else if (entry != nullptr && entry->type == assets::AssetType::Prefab) {
+                        placeUnder = std::make_pair(asset, info->id);
                     } else if (entry != nullptr) {
                         app.notify("Only scripts can be dropped onto entities here; drop images into the Scene view", true);
                     }
@@ -235,6 +269,12 @@ void HierarchyPanel::draw(StudioApp& app) {
             std::memcpy(&dragged, payload->Data, sizeof(Guid));
             dropRequest = std::make_pair(dragged, kNullEntity);
         }
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
+            assets::AssetId asset;
+            std::memcpy(&asset, payload->Data, sizeof(asset));
+            const auto* entry = app.project()->asset(asset);
+            if (entry != nullptr && entry->type == assets::AssetType::Prefab) placeUnder = std::make_pair(asset, Guid{});
+        }
         ImGui::EndDragDropTarget();
     }
     if (editable && ImGui::BeginPopupContextItem("empty-context")) {
@@ -261,6 +301,10 @@ void HierarchyPanel::draw(StudioApp& app) {
             moved = doc->setParent(dragged, target);
         }
         if (!moved) app.notify(moved.error().message, true);
+    }
+    if (placeUnder) {
+        const Entity parent = placeUnder->second.isNil() ? kNullEntity : doc->scene().findById(placeUnder->second);
+        app.placePrefab(placeUnder->first, std::nullopt, parent);
     }
 
     // F2: rename the selected entity.

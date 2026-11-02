@@ -4,6 +4,7 @@
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
 #include "px/project/Library.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/scene/Scene.hpp"
 #include "px/scripting/ScriptLibrary.hpp"
@@ -25,9 +26,10 @@ namespace px::editor {
 
 // Where an asset is used, for "find references" and safe deletion.
 struct AssetUse {
-    assets::AssetId scene; // the scene that uses it
+    assets::AssetId scene; // the scene (or prefab) that uses it
     std::string sceneName;
     std::string entityName;
+    bool inPrefab = false; // `scene` is a prefab
 };
 
 // A script's compile result and what it declares (for the inspector).
@@ -85,8 +87,9 @@ public:
 
     // Copies a file from outside the project into it and registers it.
     // The type comes from the extension: .png .jpg .jpeg .bmp .tga (texture),
-    // .luau (script), .scene.json (scene). Images are decoded first, so a
-    // broken image is refused.
+    // .luau (script), .scene.json (scene), .prefab.json (prefab). Files are
+    // checked first (images decoded, scenes and prefabs parsed), so a broken
+    // file is refused.
     [[nodiscard]] Result<assets::AssetId> importFile(const std::filesystem::path& source);
     // Copies an asset from the starter library (see Library.hpp) into the
     // project, keeping its id, unless the project already has that id.
@@ -101,14 +104,25 @@ public:
     // Refused while scenes use it (see findUses) or for the start scene.
     [[nodiscard]] Status deleteAsset(assets::AssetId id, const std::vector<std::pair<assets::AssetId, const scene::Scene*>>&
                                                              openScenes = {});
-    // Scenes and entities that use the asset. Scenes are read from disk
-    // unless given in `openScenes` (unsaved editor state).
+    // Scenes, prefabs and entities that use the asset. Files are read from
+    // disk unless given in `openScenes` (unsaved editor state).
     [[nodiscard]] std::vector<AssetUse> findUses(
         assets::AssetId id, const std::vector<std::pair<assets::AssetId, const scene::Scene*>>& openScenes = {}) const;
     [[nodiscard]] Status setStartScene(assets::AssetId id);
 
     // Full path of an asset's file on disk (for "open in external editor").
     [[nodiscard]] std::filesystem::path absolutePath(assets::AssetId id) const;
+
+    // --- Prefabs ---------------------------------------------------------------------------
+    // Creates prefabs/<name>.prefab.json with `content` (one root entity; see
+    // project::prefabFromEntities). Prefab files are written at once: they
+    // have no unsaved state.
+    [[nodiscard]] Result<assets::AssetId> createPrefab(std::string_view name, const scene::Scene& content);
+    [[nodiscard]] Result<project::Prefab> loadPrefab(assets::AssetId id) const;
+    // Validates and writes a prefab file.
+    [[nodiscard]] Status savePrefab(assets::AssetId id, const scene::Scene& content);
+    // Every prefab as saved, for play mode.
+    [[nodiscard]] Result<std::shared_ptr<const project::PrefabLibrary>> buildPrefabLibrary() const;
 
     // --- Scenes ----------------------------------------------------------------------------
     [[nodiscard]] Result<scene::Scene> loadScene(assets::AssetId id, std::vector<std::string>* warnings = nullptr) const;

@@ -181,11 +181,17 @@ TEST_CASE("Netgame: a networked player completes the top-down level over a lossy
     REQUIRE(route);
     h.play(0, route.value());
     bool complete = false;
+    int sparklesSeen = 0; // collected gems spawn a Sparkle prefab on the server (World.spawn)
+    bool sparkleVisible = false;
     for (int i = 0; i < 1200 && !complete; ++i) {
         h.step();
         complete = h.server->session().state().levelComplete;
+        const bool visible = !watcher.view().findByName("Sparkle").isNull();
+        if (visible && !sparkleVisible) ++sparklesSeen;
+        sparkleVisible = visible;
     }
     CHECK(complete);
+    CHECK(sparklesSeen >= 3); // spawned entities reach the other client, and go away again
     CHECK(h.server->session().state().scriptErrors == 0);
     h.run(30);
     // Both clients were told; gems the hero took are gone from the watcher's view too.

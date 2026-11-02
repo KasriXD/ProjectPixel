@@ -1,7 +1,7 @@
 # Project format
 
-Current versions: project manifest **2**, scene **3**. Starter library
-manifests and `px.entities` objects are described in
+Current versions: project manifest **2**, scene **3**, prefab **1**.
+Starter library manifests and `px.entities` objects are described in
 [library-format.md](library-format.md).
 
 A game project is a folder:
@@ -10,6 +10,7 @@ A game project is a folder:
 my-game/
   project.json            manifest (required, this exact name)
   scenes/*.scene.json     scenes
+  prefabs/*.prefab.json   prefabs (docs/prefabs.md)
   scripts/*.luau          Luau scripts (docs/scripting.md)
   assets/...              textures and other assets
 ```
@@ -91,7 +92,7 @@ type, each on the arrow keys and WASD (plus Space and Z for jumping).
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | asset GUID, unique |
-| `type` | yes | `"texture"`, `"scene"` or `"script"` |
+| `type` | yes | `"texture"`, `"scene"`, `"script"` or `"prefab"` |
 | `path` | yes | file path inside the project |
 | `name` | no | label for tools (defaults to the path) |
 | `filter` | no (`"nearest"`) | textures only: `"nearest"` for pixel art, `"linear"` for smooth art |
@@ -179,6 +180,7 @@ table that the loader, the writer and Studio's Properties panel use. In short:
 | `Camera` | the view; can follow an entity |
 | `Tags` | an array of labels, e.g. `["coin"]` |
 | `Scripts` | an array of Luau behaviours, each `{ "script": <script asset id>, "properties": {...} }` |
+| `PrefabInstance` | marks the root of a copy of a prefab: `{ "prefab": <prefab asset id> }` ([prefabs.md](prefabs.md)) |
 
 Script properties override defaults declared in the script's `properties`
 table and must have the same type: number, `true`/`false`, string, or vector
@@ -195,7 +197,36 @@ on them are carried along.
 
 Studio copies entities to the clipboard as a `px.entities` document: the same
 entity objects as a scene, plus `"sceneFormatVersion"`. Pasting gives every
-entity a new id and rewires references between the pasted entities.
+entity a new id and rewires references between the pasted entities. Copies
+of prefabs stay copies: their ids are re-keyed, not random (see below).
+
+## Prefab files
+
+A prefab is a tree of entities saved on its own, placed in scenes and
+spawned by scripts ([prefabs.md](prefabs.md)):
+
+```json
+{
+  "format": "px.prefab",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    { "id": "7fc0ad0c-...", "name": "Coin", "components": { "Transform": { "position": [0, 0] }, "...": {} } },
+    { "id": "1b2e9f00-...", "name": "Glow", "parent": "7fc0ad0c-...", "components": { "...": {} } }
+  ]
+}
+```
+
+`entities` are written exactly like a scene's (and migrated from older
+`sceneFormatVersion`s the same way). There is exactly one root entity, the
+first; every other entity has a `parent` inside the prefab, and references
+may only point inside it. At most 10 000 entities.
+
+In a scene, a copy's root has a `PrefabInstance` component naming the
+prefab. Its other entities have the prefab's entity ids XOR the copy's key,
+where the key is the copy's root id XOR the prefab's root id. That is how
+Studio finds which prefab entity each entity of a copy came from, with
+nothing else stored in the scene.
 
 ## Format history
 
@@ -204,6 +235,10 @@ entity a new id and rewires references between the pasted entities.
 | 1 | 0.1 | Initial format | |
 | 2 | 0.2 | Added `Script` and `Tags`. Removed `Collectible`: collecting is now scripted | `Collectible { kind }` becomes a `kind` tag; `value` is dropped. A warning tells the creator to add a script (see the example's `coin.luau`) |
 | 3 | 0.3 | Entity `parent` (hierarchy). `Script` replaced by `Scripts`, a list, so an entity can have several behaviours | `"Script": {...}` becomes `"Scripts": [{...}]`; behaviour is unchanged |
+
+| Prefab format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.5 | Initial format; `prefab` assets and the `PrefabInstance` component were added compatibly | |
 
 | Project format | Engine | Change | Migration |
 |---|---|---|---|

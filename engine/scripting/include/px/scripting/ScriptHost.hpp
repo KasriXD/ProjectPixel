@@ -1,6 +1,8 @@
 #pragma once
 
 #include "px/core/Log.hpp"
+#include "px/core/Math.hpp"
+#include "px/core/Result.hpp"
 #include "px/scene/Registry.hpp"
 #include "px/scripting/ScriptTypes.hpp"
 
@@ -52,6 +54,16 @@ public:
     // --- Entities --------------------------------------------------------------
     // Destruction is deferred until the current phase ends.
     virtual void requestDestroy(scene::Entity entity) = 0;
+    // Creates an instance of the prefab named `prefab` with its root at world
+    // `position`, under `parent` (kNullEntity: a root entity). The entities
+    // exist at once; their scripts start at the next tick. The error message
+    // is shown to the script author.
+    [[nodiscard]] virtual Result<scene::Entity> spawnPrefab(std::string_view /*prefab*/, Vec2 /*position*/,
+                                                            scene::Entity /*parent*/) {
+        return makeError(ErrorCode::Unsupported, "spawning is not available here");
+    }
+    // Names of the prefabs that can be spawned (for "did you mean" hints).
+    [[nodiscard]] virtual std::vector<std::string> prefabNames() const { return {}; }
 
     // --- Reporting --------------------------------------------------------------
     virtual void scriptLog(log::Level level, std::string_view script, std::string_view message) = 0;

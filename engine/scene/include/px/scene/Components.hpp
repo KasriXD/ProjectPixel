@@ -192,4 +192,12 @@ struct Camera {
     Vec2 position{};            // runtime: world point at the centre of the view
 };
 
+// The root of an entity tree made from a prefab: placed in Studio or
+// spawned by a script (World.spawn). Studio uses it to update instances when
+// the prefab changes (docs/prefabs.md). The ids of the other entities of an
+// instance are derived from the root's id (project::prefabEntityId).
+struct PrefabInstance {
+    assets::AssetId prefab;
+};
+
 } // namespace px::scene

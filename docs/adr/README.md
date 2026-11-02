@@ -20,5 +20,6 @@
 | [0016](0016-scene-hierarchy.md) | Scene hierarchy: parent links in the scene, computed world transforms | Accepted |
 | [0017](0017-game-types-and-starter-library.md) | Game types and a starter library copied into projects | Accepted |
 | [0018](0018-multiplayer-networking.md) | Multiplayer: authoritative server, input-only clients, delta snapshots | Accepted |
+| [0019](0019-prefabs.md) | Prefabs: copies tracked by derived ids, updated by three-way merge | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

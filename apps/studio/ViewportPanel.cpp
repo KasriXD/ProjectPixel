@@ -359,6 +359,7 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                     break;
                 }
                 case assets::AssetType::Scene: app.requestOpenScene(id); break;
+                case assets::AssetType::Prefab: app.placePrefab(id, world); break;
             }
         }
     }

@@ -8,6 +8,7 @@ px_add_module(editor
         src/LogBuffer.cpp
         src/Picking.cpp
         src/PlayMode.cpp
+        src/Prefabs.cpp
         src/SceneDocument.cpp
     DEPS
         px::core

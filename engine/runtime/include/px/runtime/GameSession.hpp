@@ -3,6 +3,7 @@
 #include "px/core/Guid.hpp"
 #include "px/core/Result.hpp"
 #include "px/physics/CollisionWorld.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/Input.hpp"
 #include "px/runtime/Movement.hpp"
@@ -52,7 +53,14 @@ struct SessionOptions {
     // Multiplayer (server) mode: the scene's Player entities become templates
     // (see extractPlayerTemplates) and players are added with addPlayer.
     bool multiplayer = false;
+    // Prefabs scripts can spawn (World.spawn). startSession passes the game's.
+    std::shared_ptr<const project::PrefabLibrary> prefabs;
 };
+
+// Entities scripts may create in one tick (World.spawn; a prefab's
+// descendants count too). The scene as a whole is limited to
+// project::kMaxEntitiesPerScene.
+inline constexpr std::size_t kMaxSpawnedEntitiesPerTick = 1000;
 
 // Identifies a player in a multiplayer session. 0 means "no player".
 using PlayerId = std::uint16_t;
@@ -125,6 +133,12 @@ public:
 
     [[nodiscard]] scene::Scene& scene() { return m_scene; }
     [[nodiscard]] const scene::Scene& scene() const { return m_scene; }
+    [[nodiscard]] const project::PrefabLibrary* prefabs() const { return m_prefabs.get(); }
+    // World.spawn, also for tools and tests. See IScriptHost::spawnPrefab.
+    [[nodiscard]] Result<scene::Entity> spawn(std::string_view prefab, Vec2 position,
+                                              scene::Entity parent = scene::kNullEntity) {
+        return spawnPrefab(prefab, position, parent);
+    }
     [[nodiscard]] const GameState& state() const { return m_state; }
     // Events raised during the most recent tick.
     [[nodiscard]] const std::vector<GameEvent>& events() const { return m_events; }
@@ -151,6 +165,7 @@ private:
     [[nodiscard]] Vec2 freeSpawnPoint(scene::Entity character, Vec2 wanted) const;
     [[nodiscard]] const InputFrame& inputFor(scene::Entity entity) const;
     void flushPhase();
+    void flushCreated();
     void flushDestroyed();
     void updateMovingSolids();
     void updatePlatformers();
@@ -176,6 +191,8 @@ private:
     bool respawnPlayer(scene::Entity entity) override;
     double timeSeconds() const override { return elapsedSeconds(); }
     void requestDestroy(scene::Entity entity) override;
+    Result<scene::Entity> spawnPrefab(std::string_view prefab, Vec2 position, scene::Entity parent) override;
+    std::vector<std::string> prefabNames() const override;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -208,6 +225,11 @@ private:
     std::vector<GameEvent> m_events;
     std::unique_ptr<scripting::ScriptSystem> m_scripts;
     std::vector<scene::Entity> m_pendingDestroy;
+    std::shared_ptr<const project::PrefabLibrary> m_prefabs;
+    std::vector<scene::Entity> m_pendingCreated; // spawned roots whose scripts are created after the phase
+    std::uint64_t m_spawnCount = 0;              // entities spawned so far (derives their ids)
+    std::size_t m_spawnedThisTick = 0;
+    bool m_staticCollisionDirty = false;         // a tilemap was spawned or destroyed
     std::vector<TriggerPair> m_triggerPairs;    // overlapping now, in a stable order
     std::vector<SolidState> m_solids;           // solid boxes and their positions last tick
 };

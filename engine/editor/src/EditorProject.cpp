@@ -2,6 +2,7 @@
 
 #include "px/assets/Image.hpp"
 #include "px/core/Log.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
@@ -289,6 +290,11 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         folder = "scenes";
         extension = ".scene.json";
         stem = fileName.substr(0, fileName.size() - extension.size());
+    } else if (endsWith(lowered, ".prefab.json")) {
+        type = assets::AssetType::Prefab;
+        folder = "prefabs";
+        extension = ".prefab.json";
+        stem = fileName.substr(0, fileName.size() - extension.size());
     } else {
         const std::string ext = lower(source.extension().string());
         stem = source.stem().string();
@@ -303,7 +309,7 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         } else {
             return makeError(ErrorCode::Unsupported,
                              "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), Luau scripts "
-                             "(.luau) and scenes (.scene.json)",
+                             "(.luau), scenes (.scene.json) and prefabs (.prefab.json)",
                              fileName);
         }
     }
@@ -317,6 +323,10 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         const std::string text(bytes->begin(), bytes->end());
         auto scene = project::parseScene(text, fileName, &m_manifest.assets);
         if (!scene) return makeError(scene.error().code, "Cannot import '{}': {}", fileName, scene.error().message);
+    } else if (type == assets::AssetType::Prefab) {
+        const std::string text(bytes->begin(), bytes->end());
+        auto prefab = project::parsePrefab(text, fileName, &m_manifest.assets);
+        if (!prefab) return makeError(prefab.error().code, "Cannot import '{}': {}", fileName, prefab.error().message);
     }
 
     // A file that is already inside the project is registered where it is.
@@ -458,23 +468,30 @@ std::vector<AssetUse> EditorProject::findUses(
     assets::AssetId id, const std::vector<std::pair<assets::AssetId, const scene::Scene*>>& openScenes) const {
     std::vector<AssetUse> uses;
     for (const auto& entry : m_manifest.assets.entries()) {
-        if (entry.type != assets::AssetType::Scene) continue;
+        if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab) continue;
         const scene::Scene* scene = nullptr;
         for (const auto& [openId, openScene] : openScenes) {
             if (openId == entry.id) scene = openScene;
         }
         std::optional<scene::Scene> loaded;
         if (scene == nullptr) {
-            auto result = loadScene(entry.id);
-            if (!result) continue; // a broken scene is reported when it is opened
-            loaded = std::move(result.value());
+            if (entry.type == assets::AssetType::Prefab) {
+                auto result = loadPrefab(entry.id);
+                if (!result) continue;
+                loaded = std::move(result.value().scene);
+            } else {
+                auto result = loadScene(entry.id);
+                if (!result) continue; // a broken scene is reported when it is opened
+                loaded = std::move(result.value());
+            }
             scene = &*loaded;
         }
         for (const scene::Entity e : scene->entities()) {
             const auto refs = scene::assetReferences(*scene, e);
             if (std::find(refs.begin(), refs.end(), id) == refs.end()) continue;
             const auto* info = scene->tryGet<scene::EntityInfo>(e);
-            uses.push_back({entry.id, entry.name, info != nullptr ? info->name : std::string()});
+            uses.push_back({entry.id, entry.name, info != nullptr ? info->name : std::string(),
+                            entry.type == assets::AssetType::Prefab});
         }
     }
     return uses;
@@ -533,6 +550,54 @@ Status EditorProject::setStartScene(assets::AssetId id) {
 std::filesystem::path EditorProject::absolutePath(assets::AssetId id) const {
     const auto* entry = m_manifest.assets.find(id);
     return entry == nullptr ? std::filesystem::path() : m_root / std::filesystem::path(entry->path);
+}
+
+// --- Prefabs ----------------------------------------------------------------------------------
+
+Result<assets::AssetId> EditorProject::createPrefab(std::string_view name, const scene::Scene& content) {
+    if (auto ok = checkName(name, "prefab"); !ok) return ok.error();
+    const std::string text = project::serializePrefab(content);
+    if (auto check = project::parsePrefab(text, name, &m_manifest.assets); !check) {
+        return makeError(ErrorCode::InvalidData, "The prefab was not created because it would not load: {}",
+                         check.error().message);
+    }
+    auto path = uniquePath("prefabs", toFileStem(name).empty() ? std::string("prefab") : toFileStem(name),
+                           ".prefab.json");
+    if (!path) return path.error();
+    if (auto written = m_files.writeText(path.value(), text); !written) return written.error();
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Prefab,
+                             uniqueAssetName(name, assets::AssetType::Prefab), path.value(),
+                             assets::TextureFilter::Nearest};
+    if (auto added = m_manifest.assets.add(entry); !added) return added.error();
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(entry.id);
+        std::error_code ec;
+        std::filesystem::remove(m_root / std::filesystem::path(entry.path), ec);
+        return saved.error();
+    }
+    log::info("Created prefab '{}' ({})", entry.name, entry.path);
+    return entry.id;
+}
+
+Result<project::Prefab> EditorProject::loadPrefab(assets::AssetId id) const {
+    return project::loadPrefab(m_files, m_manifest, id);
+}
+
+Status EditorProject::savePrefab(assets::AssetId id, const scene::Scene& content) {
+    const auto* entry = m_manifest.assets.find(id);
+    if (entry == nullptr || entry->type != assets::AssetType::Prefab) {
+        return makeError(ErrorCode::NotFound, "Prefab {} is not part of the project", id.toString());
+    }
+    const std::string text = project::serializePrefab(content);
+    if (auto check = project::parsePrefab(text, entry->path, &m_manifest.assets); !check) {
+        return makeError(ErrorCode::InvalidData, "'{}' was not saved because it would not load: {}", entry->name,
+                         check.error().message);
+    }
+    return m_files.writeText(entry->path, text);
+}
+
+Result<std::shared_ptr<const project::PrefabLibrary>> EditorProject::buildPrefabLibrary() const {
+    return project::loadPrefabLibrary(m_files, m_manifest);
 }
 
 // --- Scenes -----------------------------------------------------------------------------------

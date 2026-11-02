@@ -2,6 +2,7 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/GameSession.hpp"
 #include "px/scene/Scene.hpp"
@@ -19,14 +20,16 @@ struct LoadedGame {
     project::ProjectManifest manifest;
     scene::Scene startScene;
     std::shared_ptr<const scripting::ScriptLibrary> scripts;
+    std::shared_ptr<const project::PrefabLibrary> prefabs;
     std::vector<std::string> warnings; // e.g. format migration notes
 };
 
-// Loads the manifest, the start scene and all scripts (compiling them, so
-// syntax errors are reported here).
+// Loads the manifest, the start scene, all prefabs and all scripts
+// (compiling them, so syntax errors are reported here).
 [[nodiscard]] Result<LoadedGame> loadGame(const IFileSystem& files);
 
-// Starts a session of the loaded game's start scene.
+// Starts a session of the loaded game's start scene (with the game's
+// prefabs unless `options` names others).
 [[nodiscard]] Result<std::unique_ptr<GameSession>> startSession(const LoadedGame& game,
                                                                 const SessionOptions& options = {});
 

@@ -2,6 +2,7 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/project/Project.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
@@ -61,7 +62,7 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 9);
+    CHECK(manifest->assets.size() == 12); // 5 images, 4 scripts, 2 prefabs, 1 scene
     CHECK(manifest->settings.scripting.apiVersion == 1);
 }
 
@@ -321,6 +322,8 @@ TEST_CASE("Every component survives a save and load with its descriptor") {
     const assets::AssetId script{*Guid::parse("aaaaaaaa-0000-4000-8000-000000000003")};
     REQUIRE(registry.add({texture, assets::AssetType::Texture, "t", "t.png", assets::TextureFilter::Nearest}).ok());
     REQUIRE(registry.add({script, assets::AssetType::Script, "s", "s.luau", assets::TextureFilter::Nearest}).ok());
+    const assets::AssetId prefab{*Guid::parse("aaaaaaaa-0000-4000-8000-000000000004")};
+    REQUIRE(registry.add({prefab, assets::AssetType::Prefab, "p", "p.prefab.json", assets::TextureFilter::Nearest}).ok());
 
     Scene scene;
     const Entity e = scene.createEntity("Everything");
@@ -335,6 +338,7 @@ TEST_CASE("Every component survives a save and load with its descriptor") {
     scene.get<Tags>(e).values = {"a", "b"};
     scene.get<Scripts>(e).items = {AttachedScript{script, {{"n", 1.5}, {"v", Vec2{1, 2}}}}, AttachedScript{script, {}}};
     scene.get<Camera>(e).follow = scene.get<EntityInfo>(e).id;
+    scene.get<PrefabInstance>(e).prefab = prefab;
     CHECK(validateEntity(scene, e, &registry).empty());
 
     const std::string first = serializeScene(scene);
@@ -452,11 +456,18 @@ TEST_CASE("The example projects are stored exactly as Studio saves them") {
         REQUIRE(manifest.ok());
         CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
         for (const auto& entry : manifest->assets.entries()) {
-            if (entry.type != assets::AssetType::Scene) continue;
+            if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab) continue;
             auto text = fs.readText(entry.path);
             REQUIRE(text.ok());
             std::string onDisk = text.value();
             std::erase(onDisk, '\r');
+            if (entry.type == assets::AssetType::Prefab) {
+                auto prefab = parsePrefab(onDisk, entry.path, &manifest->assets);
+                REQUIRE_MESSAGE(prefab.ok(), (prefab.ok() ? "" : prefab.error().message));
+                CHECK_MESSAGE(serializePrefab(prefab.value()) == onDisk, entry.path,
+                              " is not in canonical form; run px-headless examples/<name> --resave");
+                continue;
+            }
             auto scene = parseScene(onDisk, entry.path, &manifest->assets);
             REQUIRE(scene.ok());
             CHECK_MESSAGE(serializeScene(scene.value()) == onDisk, entry.path, " is not in canonical form; run "

@@ -171,6 +171,24 @@
       "path": "scripts/sign.luau"
     },
     {
+      "id": "2cb435ea-f474-5122-8b13-1ceedb546227",
+      "type": "script",
+      "name": "Sparkle",
+      "path": "scripts/sparkle.luau"
+    },
+    {
+      "id": "886e1788-fdfb-5889-bc3a-620e3eeb87a7",
+      "type": "prefab",
+      "name": "Gem",
+      "path": "prefabs/gem.prefab.json"
+    },
+    {
+      "id": "56bf075d-ef23-5147-8738-749f743b0c05",
+      "type": "prefab",
+      "name": "Sparkle",
+      "path": "prefabs/sparkle.prefab.json"
+    },
+    {
       "id": "b9f8e06c-3d0c-5b71-ba7e-438fe1ef1ccc",
       "type": "scene",
       "name": "Garden",

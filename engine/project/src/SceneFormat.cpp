@@ -1,8 +1,10 @@
 #include "px/project/SceneFormat.hpp"
 
 #include "JsonUtil.hpp"
+#include "SceneJson.hpp"
 
 #include "px/core/Log.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
@@ -465,6 +467,39 @@ constexpr int kEntitiesFormatVersion = 1;
 
 } // namespace
 
+namespace detail {
+
+void readEntityArray(Scene& scene, const Json& entities, const assets::AssetRegistry* assets) {
+    readEntities(scene, entities, assets);
+}
+
+Json writeEntityJson(const Scene& scene, Entity entity, bool writeParent) { return writeEntity(scene, entity, writeParent); }
+
+void migrateEntities(Json& entities, int sceneVersion, std::vector<std::string>& warnings) {
+    Json wrapped;
+    wrapped["format"] = "px.scene";
+    wrapped["formatVersion"] = sceneVersion;
+    wrapped["entities"] = std::move(entities);
+    checkAndMigrate(wrapped, "px.scene", kSceneFormatVersion, kSceneMigrations, "scene", warnings);
+    entities = std::move(wrapped["entities"]);
+}
+
+Json componentToJson(const ComponentInfo& component, const void* data) { return writeComponent(component, data); }
+
+void componentFromJson(Scene& scene, Entity entity, const ComponentInfo& component, const Json& json,
+                       const std::string& path) {
+    if (component.has(scene, entity)) component.remove(scene, entity);
+    readComponent(scene, entity, component, json, path);
+}
+
+Json fieldToJson(const FieldInfo& field, const void* data) { return writeField(field, data); }
+
+void fieldFromJson(const FieldInfo& field, void* data, const Json& json, const std::string& path) {
+    readField(field, data, json, path);
+}
+
+} // namespace detail
+
 Result<Scene> parseScene(std::string_view json, std::string_view sourceName, const assets::AssetRegistry* assets,
                          std::vector<std::string>* warnings) {
     try {
@@ -606,10 +641,12 @@ Result<std::vector<Entity>> pasteEntities(Scene& scene, std::string_view json, c
         return makeError(ErrorCode::InvalidData, "Cannot paste: {}", e.what());
     }
 
+    // Copies get new ids; prefab instances are re-keyed so they stay
+    // instances (see Prefab.hpp).
     std::vector<Entity> pasted;
     std::vector<std::pair<Guid, Guid>> remap;
     for (const Entity original : clipboard.children(kNullEntity)) {
-        const Entity copy = scene.copySubtree(clipboard, original, parent);
+        const Entity copy = copyEntities(scene, clipboard, original, parent);
         if (copy.isNull()) return makeError(ErrorCode::LimitExceeded, "Cannot paste: the hierarchy would be too deep");
         const auto source = clipboard.subtree(original);
         const auto target = scene.subtree(copy);

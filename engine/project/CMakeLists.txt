@@ -2,6 +2,7 @@ px_add_module(project
     SOURCES
         src/JsonUtil.cpp
         src/LibraryFormat.cpp
+        src/Prefab.cpp
         src/ProjectFormat.cpp
         src/SceneFormat.cpp
     DEPS

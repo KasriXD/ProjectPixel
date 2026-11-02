@@ -98,6 +98,24 @@
       "path": "scripts/moving_platform.luau"
     },
     {
+      "id": "54c5dfdf-836d-54bf-95ae-a8fef1e80f91",
+      "type": "script",
+      "name": "Sparkle",
+      "path": "scripts/sparkle.luau"
+    },
+    {
+      "id": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5",
+      "type": "prefab",
+      "name": "Coin",
+      "path": "prefabs/coin.prefab.json"
+    },
+    {
+      "id": "c1765732-b038-50dd-8387-87bee4014802",
+      "type": "prefab",
+      "name": "Sparkle",
+      "path": "prefabs/sparkle.prefab.json"
+    },
+    {
       "id": "e0464a98-2756-52ff-8acd-37c81877ff1a",
       "type": "scene",
       "name": "Level 1",

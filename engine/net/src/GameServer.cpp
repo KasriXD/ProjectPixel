@@ -49,6 +49,7 @@ Status GameServer::startSession() {
     runtime::SessionOptions options;
     options.multiplayer = true;
     options.seed = m_options.seed;
+    options.prefabs = m_game.prefabs;
     auto session = runtime::GameSession::create(m_game.manifest, m_game.startScene, m_game.scripts, options);
     if (!session) return session.error();
     m_session = std::move(session.value());

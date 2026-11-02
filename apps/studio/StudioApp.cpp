@@ -5,6 +5,7 @@
 
 #include "px/core/Log.hpp"
 #include "px/editor/Picking.hpp"
+#include "px/editor/Prefabs.hpp"
 #include "px/core/Version.hpp"
 #include "px/platform_sdl/SdlKeys.hpp"
 #include "px/project/SceneFormat.hpp"
@@ -741,6 +742,53 @@ void StudioApp::attachLibraryScript(const assets::AssetId& script, scene::Entity
                        m_document->scene().get<scene::EntityInfo>(entity).name));
 }
 
+void StudioApp::placePrefab(const assets::AssetId& prefab, std::optional<Vec2> at, scene::Entity parent) {
+    if (!m_project || !m_document || m_play) return;
+    Vec2 position = at ? placeOnGrid(*at) : newEntityPosition();
+    if (!at && !parent.isNull()) position = m_document->scene().worldPosition(parent);
+    auto placed = editor::placePrefab(*m_project, *m_document, prefab, position, parent);
+    if (!placed) notify(placed.error().message, true);
+}
+
+void StudioApp::selectPrefabInstances(const assets::AssetId& prefab) {
+    if (!m_document) return;
+    const auto instances = project::findInstances(m_document->scene(), prefab);
+    m_document->setSelection(instances);
+    const auto* entry = m_project ? m_project->asset(prefab) : nullptr;
+    notify(std::format("{} cop{} of {} in this scene", instances.size(), instances.size() == 1 ? "y" : "ies",
+                       entry != nullptr ? entry->name : "the prefab"));
+}
+
+void StudioApp::requestSaveAsPrefab(scene::Entity entity) {
+    if (!m_document || m_play || !m_document->scene().isAlive(entity)) return;
+    m_savePrefabEntity = m_document->scene().get<scene::EntityInfo>(entity).id;
+    m_savePrefabName = m_document->scene().get<scene::EntityInfo>(entity).name;
+    m_openSavePrefab = true;
+}
+
+void StudioApp::applyToPrefab(scene::Entity instanceRoot) {
+    if (!m_project || !m_document || m_play) return;
+    auto applied = editor::applyToPrefab(*m_project, *m_document, instanceRoot);
+    if (!applied) {
+        notify(applied.error().message, true);
+        return;
+    }
+    const auto& report = applied.value();
+    std::string text = std::format("Prefab saved; {} other cop{} updated", report.instancesUpdated,
+                                   report.instancesUpdated == 1 ? "y" : "ies");
+    if (!report.filesUpdated.empty()) text += std::format(" ({} other file(s) saved)", report.filesUpdated.size());
+    if (!report.warnings.empty()) text += " - see Output for warnings";
+    notify(text, !report.warnings.empty());
+    assetsChanged();
+}
+
+void StudioApp::revertToPrefab(scene::Entity instanceRoot) {
+    if (!m_project || !m_document || m_play) return;
+    if (auto reverted = editor::revertToPrefab(*m_project, *m_document, instanceRoot); !reverted) {
+        notify(reverted.error().message, true);
+    }
+}
+
 void StudioApp::notify(std::string text, bool error) {
     const double now = static_cast<double>(SDL_GetTicksNS()) * 1.0e-9;
     m_toasts.push_back({std::move(text), error, now + (error ? 6.0 : 2.5)});
@@ -1183,6 +1231,35 @@ void StudioApp::handleShortcuts() {
 }
 
 void StudioApp::drawModals() {
+    if (m_openSavePrefab) {
+        ImGui::OpenPopup("Save As Prefab");
+        m_openSavePrefab = false;
+    }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, {0.5f, 0.5f});
+    if (ImGui::BeginPopupModal("Save As Prefab", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("Name of the prefab (scripts spawn it by this name):");
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        const bool enter = ImGui::InputText("##name", &m_savePrefabName, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::TextDisabled("Creates prefabs/%s.prefab.json; the entity becomes a copy of it.",
+                            editor::toFileStem(m_savePrefabName).c_str());
+        if (enter || ImGui::Button("Save")) {
+            const scene::Entity e = m_document ? m_document->scene().findById(m_savePrefabEntity) : scene::kNullEntity;
+            if (m_project && m_document && !e.isNull()) {
+                auto created = editor::createPrefabFromEntity(*m_project, *m_document, e, m_savePrefabName);
+                if (!created) {
+                    notify(created.error().message, true);
+                } else {
+                    notify(std::format("Saved prefab '{}'", m_project->asset(created.value())->name));
+                    assetsChanged();
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+
     if (m_openSaveModal) {
         ImGui::OpenPopup("Unsaved changes");
         m_openSaveModal = false;

@@ -1,0 +1,57 @@
+{
+  "format": "px.prefab",
+  "formatVersion": 1,
+  "sceneFormatVersion": 3,
+  "entities": [
+    {
+      "id": "dbfb85da-4e70-546e-b11c-b26ae68b9b4b",
+      "name": "Gem",
+      "components": {
+        "Transform": {
+          "position": [0, 0],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Sprite": {
+          "texture": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
+          "source": [0, 0, 16, 16],
+          "size": [16, 16],
+          "pivot": [0.5, 0.5],
+          "tint": "#ffffff",
+          "layer": 5,
+          "flipX": false,
+          "flipY": false,
+          "visible": true
+        },
+        "SpriteAnimation": {
+          "frames": [
+            [0, 0, 16, 16],
+            [16, 0, 16, 16],
+            [32, 0, 16, 16],
+            [48, 0, 16, 16]
+          ],
+          "framesPerSecond": 6,
+          "loop": true,
+          "playing": true
+        },
+        "BoxCollider": {
+          "size": [10, 10],
+          "offset": [0, 0],
+          "isTrigger": true
+        },
+        "Tags": [
+          "coin"
+        ],
+        "Scripts": [
+          {
+            "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
+            "properties": {
+              "value": 5,
+              "effect": "Sparkle"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

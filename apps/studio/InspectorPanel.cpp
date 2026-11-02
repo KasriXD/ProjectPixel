@@ -2,6 +2,7 @@
 #include "StudioApp.hpp"
 
 #include "px/editor/Picking.hpp"
+#include "px/editor/Prefabs.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <imgui.h>
@@ -236,6 +237,33 @@ void InspectorPanel::drawEntity(StudioApp& app, Scene& scene, Entity entity) {
     if (ImGui::SmallButton("Copy")) ImGui::SetClipboardText(info->id.toString().c_str());
     ui::tooltip("Copy the entity id (scripts can find it with World.findById)");
 
+    // Prefab copies: which prefab, and applying or throwing away this copy's changes.
+    if (!playing && app.project() != nullptr) {
+        const Entity instance = editor::instanceRootOf(scene, entity);
+        if (!instance.isNull()) {
+            const auto* entry = app.project()->asset(scene.get<PrefabInstance>(instance).prefab);
+            const char* prefabName = entry != nullptr ? entry->name.c_str() : "?";
+            ImGui::PushTextWrapPos(0.0f);
+            if (instance == entity) {
+                ImGui::TextColored(ui::kPrefabColor, "Copy of the prefab '%s'", prefabName);
+            } else {
+                ImGui::TextColored(ui::kPrefabColor, "Part of '%s', a copy of the prefab '%s'",
+                                   scene.get<EntityInfo>(instance).name.c_str(), prefabName);
+            }
+            ImGui::PopTextWrapPos();
+            if (ImGui::SmallButton("Apply To Prefab")) app.applyToPrefab(instance);
+            ui::tooltip("Saves this copy as the prefab and updates every other copy, in all scenes. Their own "
+                        "changes are kept.");
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Revert")) app.revertToPrefab(instance);
+            ui::tooltip("Throws away this copy's changes; only its position and name stay.");
+            if (instance != entity) {
+                ImGui::SameLine();
+                if (ImGui::SmallButton("Select Copy")) app.select(instance);
+            }
+        }
+    }
+
     if (!playing && app.project() != nullptr) {
         for (const auto& problem : validateEntity(scene, entity, &app.project()->assets())) {
             ImGui::PushTextWrapPos(0.0f);
@@ -365,6 +393,13 @@ void InspectorPanel::drawComponent(StudioApp& app, Scene& scene, Entity entity, 
     const bool playing = app.playing();
     if (info.name == "Scripts") {
         drawScripts(app, scene, entity);
+        return;
+    }
+    if (info.name == "PrefabInstance") {
+        const auto* entry = app.project() != nullptr ? app.project()->asset(static_cast<PrefabInstance*>(data)->prefab)
+                                                     : nullptr;
+        ImGui::Text("Prefab: %s", entry != nullptr ? entry->name.c_str() : "(missing)");
+        ImGui::TextDisabled("Remove this component to unlink the copy from its prefab.");
         return;
     }
     if (beginFields("fields")) {

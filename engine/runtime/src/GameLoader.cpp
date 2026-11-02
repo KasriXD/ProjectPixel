@@ -18,6 +18,10 @@ Result<LoadedGame> loadGame(const IFileSystem& files) {
     if (!scene) return scene.error();
     game.startScene = std::move(scene.value());
 
+    auto prefabs = project::loadPrefabLibrary(files, game.manifest, &game.warnings);
+    if (!prefabs) return prefabs.error();
+    game.prefabs = std::move(prefabs.value());
+
     auto scripts = scripting::loadScriptLibrary(files, game.manifest.assets);
     if (!scripts) return scripts.error();
     game.scripts = std::move(scripts.value());
@@ -25,7 +29,12 @@ Result<LoadedGame> loadGame(const IFileSystem& files) {
 }
 
 Result<std::unique_ptr<GameSession>> startSession(const LoadedGame& game, const SessionOptions& options) {
-    return GameSession::create(game.manifest, game.startScene, game.scripts, options);
+    if (options.prefabs != nullptr || game.prefabs == nullptr) {
+        return GameSession::create(game.manifest, game.startScene, game.scripts, options);
+    }
+    SessionOptions withPrefabs = options;
+    withPrefabs.prefabs = game.prefabs;
+    return GameSession::create(game.manifest, game.startScene, game.scripts, withPrefabs);
 }
 
 } // namespace px::runtime

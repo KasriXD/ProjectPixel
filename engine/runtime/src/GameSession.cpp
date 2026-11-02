@@ -1,6 +1,7 @@
 #include "px/runtime/GameSession.hpp"
 
 #include "px/core/Log.hpp"
+#include "px/project/SceneFormat.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
@@ -35,6 +36,11 @@ std::uint64_t mix64(std::uint64_t x) {
 Guid characterId(const Guid& templateId, PlayerId player) {
     return Guid(mix64(templateId.high() ^ (static_cast<std::uint64_t>(player) << 48)),
                 mix64(templateId.low() + player));
+}
+
+// Root ids of spawned prefab instances: the same on every run of a session.
+Guid spawnedRootId(std::uint64_t seed, std::uint64_t count) {
+    return Guid(mix64(0x7370617765640000ULL ^ seed ^ (count << 1)), mix64(count * 0x9e3779b97f4a7c15ULL + seed));
 }
 
 const InputFrame kNoInput{};
@@ -110,6 +116,9 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
             if (sc.tryGet<Player>(e) != nullptr) session->m_pendingJoins.push_back(e);
         }
     }
+
+    session->m_prefabs = options.prefabs;
+    session->m_spawnCount = options.seed;
 
     scripting::ScriptSystemOptions scriptOptions;
     scriptOptions.realm = scripting::Realm::Authority;
@@ -262,6 +271,7 @@ void GameSession::tick(const InputFrame& input) {
     } else {
         m_input = input;
     }
+    m_spawnedThisTick = 0;
     m_scripts->beginTick();
 
     m_scripts->start();
@@ -286,12 +296,62 @@ void GameSession::tick(const InputFrame& input) {
 
 void GameSession::flushPhase() {
     // Destroying entities can run Destroy handlers that emit events, and
-    // event handlers can destroy entities: repeat until both settle.
-    // Bounded by the per-tick event delivery limit.
+    // event handlers can destroy and spawn entities: repeat until all
+    // settle. Bounded by the per-tick event delivery and spawn limits.
     for (int round = 0; round < 64; ++round) {
+        flushCreated();
         flushDestroyed();
-        if (!m_scripts->deliverEvents() && m_pendingDestroy.empty()) return;
+        if (!m_scripts->deliverEvents() && m_pendingDestroy.empty() && m_pendingCreated.empty()) return;
     }
+}
+
+void GameSession::flushCreated() {
+    // Script instances of spawned entities are made here, outside the
+    // script that spawned them; they start at the next tick.
+    const std::vector<Entity> created = std::move(m_pendingCreated);
+    m_pendingCreated.clear();
+    for (const Entity root : created) m_scripts->entityCreated(root);
+}
+
+Result<Entity> GameSession::spawnPrefab(std::string_view name, Vec2 position, Entity parent) {
+    const project::Prefab* prefab = m_prefabs != nullptr ? m_prefabs->findByName(name) : nullptr;
+    if (prefab == nullptr) {
+        const std::vector<std::string> names = prefabNames();
+        if (names.empty()) return makeError(ErrorCode::NotFound, "no prefab named '{}' (this game has no prefabs)", name);
+        return makeError(ErrorCode::NotFound, "no prefab named '{}'{}", name, scripting::suggestName(name, names));
+    }
+    if (!parent.isNull() && !m_scene.isAlive(parent)) {
+        return makeError(ErrorCode::InvalidArgument, "the parent entity has been destroyed");
+    }
+    const std::size_t count = prefab->scene.entityCount();
+    if (m_spawnedThisTick + count > kMaxSpawnedEntitiesPerTick) {
+        return makeError(ErrorCode::LimitExceeded, "too many entities spawned in one tick (the limit is {})",
+                         kMaxSpawnedEntitiesPerTick);
+    }
+    if (m_scene.entityCount() + count > project::kMaxEntitiesPerScene) {
+        return makeError(ErrorCode::LimitExceeded, "the scene is full (the limit is {} entities)",
+                         project::kMaxEntitiesPerScene);
+    }
+    Result<Entity> created = makeError(ErrorCode::Unknown, "no free id");
+    for (int attempt = 0; attempt < 8; ++attempt) {
+        created = project::instantiatePrefab(m_scene, prefab->scene, prefab->id, spawnedRootId(0, ++m_spawnCount),
+                                             parent);
+        if (created) break;
+    }
+    if (!created) return created.error();
+    const Entity root = created.value();
+    m_scene.setWorldPosition(root, position);
+    m_spawnedThisTick += count;
+    for (const Entity e : m_scene.subtree(root)) {
+        if (m_scene.tryGet<Tilemap>(e) != nullptr) m_staticCollisionDirty = true;
+        if (auto* player = m_scene.tryGet<Player>(e)) player->spawnPoint = m_scene.worldPosition(e);
+    }
+    m_pendingCreated.push_back(root);
+    return root;
+}
+
+std::vector<std::string> GameSession::prefabNames() const {
+    return m_prefabs != nullptr ? m_prefabs->names() : std::vector<std::string>{};
 }
 
 void GameSession::requestDestroy(Entity entity) {
@@ -321,6 +381,7 @@ void GameSession::flushDestroyed() {
                 if (std::find(doomed.begin(), doomed.end(), partner) == doomed.end()) m_scripts->triggerExit(partner, e);
             }
             m_scripts->entityDestroyed(e); // runs Destroy(); the entity is still readable
+            if (m_scene.tryGet<Tilemap>(e) != nullptr) m_staticCollisionDirty = true;
         }
         m_scene.destroyEntity(root);
     }
@@ -328,6 +389,10 @@ void GameSession::flushDestroyed() {
 }
 
 void GameSession::updateMovingSolids() {
+    if (m_staticCollisionDirty) {
+        m_staticCollisionDirty = false;
+        buildStaticCollision();
+    }
     // Solid colliders without a KinematicBody are level geometry. They are
     // rebuilt every tick because scripts may move them (moving platforms).
     std::vector<SolidState> previous = std::move(m_solids);

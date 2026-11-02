@@ -3,6 +3,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace px::scripting {
 
@@ -16,6 +18,9 @@ namespace px::scripting {
 enum class Realm : std::uint8_t { Authority, Client };
 
 [[nodiscard]] const char* realmName(Realm realm) noexcept;
+
+// " (did you mean 'x'?)" when a candidate is a close spelling of `name`, else "".
+[[nodiscard]] std::string suggestName(std::string_view name, const std::vector<std::string>& candidates);
 
 // Resource limits for one script VM. Exceeding a limit raises a script
 // error in the offending callback; the game keeps running.

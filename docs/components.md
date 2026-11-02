@@ -146,3 +146,11 @@ Written as a list of text directly: `"Tags": [...]`. Labels scripts can search f
 *Scripting.* Luau behaviours that run on this entity.
 
 Written as a list of scripts directly: `"Scripts": [...]`. Luau behaviours, each with its property values. They run in this order.
+
+## PrefabInstance
+
+*General.* Marks a copy of a prefab. Studio updates it when the prefab changes; removing it unlinks the copy.
+
+| Field | Type | Default | Allowed values | Description |
+|---|---|---|---|---|
+| `prefab` | asset | required | a prefab asset | The prefab this entity and its children were made from. |

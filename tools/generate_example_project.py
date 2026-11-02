@@ -5,6 +5,7 @@ Produces:
   assets/tiles.png, assets/player.png, assets/coin.png, assets/scenery.png,
   assets/platform.png
   scenes/level1.scene.json
+  prefabs/coin.prefab.json, prefabs/sparkle.prefab.json
   project.json
 The Luau scripts in scripts/ are hand-written and not generated.
 
@@ -374,6 +375,16 @@ def dump_pretty(value, indent=0):
     return json.dumps(value)
 
 
+def coin_components(tex, script, position):
+    return {
+        "Transform": {"position": position},
+        "Sprite": {"texture": tex["coin"], "source": [0, 0, 16, 16], "size": [16, 16], "layer": 5},
+        "SpriteAnimation": {"frames": [[i * 16, 0, 16, 16] for i in range(4)], "framesPerSecond": 8},
+        "BoxCollider": {"size": [10, 12], "isTrigger": True},
+        "Tags": ["coin"],
+        "Scripts": [{"script": script["coin"], "properties": {"value": 1, "effect": "Sparkle"}}]}
+
+
 def main():
     (ROOT / "assets").mkdir(parents=True, exist_ok=True)
     (ROOT / "scenes").mkdir(parents=True, exist_ok=True)
@@ -384,7 +395,8 @@ def main():
     make_platform().save(ROOT / "assets" / "platform.png")
 
     tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery", "platform")}
-    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform")}
+    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle")}
+    prefab = {name: gid("asset/prefab/" + name) for name in ("coin", "sparkle")}
     scene_id = gid("asset/level1")
     player_id = gid("entity/player")
 
@@ -414,14 +426,11 @@ def main():
             cx, cy = x * 16 + 8, y * 16 + 8
             if ch == "o":
                 coin_count += 1
+                # Every coin is a copy of the Coin prefab (prefabs/coin.prefab.json).
                 coins.append({"id": gid(f"entity/coin/{coin_count}"), "name": f"Coin {coin_count}",
-                              "parent": coins_group, "components": {
-                    "Transform": {"position": [cx, cy]},
-                    "Sprite": {"texture": tex["coin"], "source": [0, 0, 16, 16], "size": [16, 16], "layer": 5},
-                    "SpriteAnimation": {"frames": [[i * 16, 0, 16, 16] for i in range(4)], "framesPerSecond": 8},
-                    "BoxCollider": {"size": [10, 12], "isTrigger": True},
-                    "Tags": ["coin"],
-                    "Scripts": [{"script": script["coin"], "properties": {"value": 1}}]}})
+                              "parent": coins_group,
+                              "components": {**coin_components(tex, script, [cx, cy]),
+                                             "PrefabInstance": {"prefab": prefab["coin"]}}})
             elif ch in scenery_sources:
                 source, size, layer = scenery_sources[ch]
                 name = {"c": "Cloud", "b": "Bush", "f": "Flowers", "s": "Sign"}[ch]
@@ -456,6 +465,20 @@ def main():
         "KinematicBody": {},
         "PlatformerController": {"maxSpeed": 110, "jumpSpeed": 300, "gravity": 900},
         "Player": {}}})
+
+    # Prefabs: the coin placed above, and the sparkle a collected coin spawns (World.spawn).
+    (ROOT / "prefabs").mkdir(parents=True, exist_ok=True)
+    prefabs = {
+        "coin": {"id": gid("prefab-entity/coin"), "name": "Coin", "components": coin_components(tex, script, [0, 0])},
+        "sparkle": {"id": gid("prefab-entity/sparkle"), "name": "Sparkle", "components": {
+            "Transform": {"position": [0, 0]},
+            "Sprite": {"texture": tex["coin"], "source": [0, 0, 16, 16], "size": [10, 10], "tint": "#fff6a0",
+                       "layer": 20},
+            "Scripts": [{"script": script["sparkle"], "properties": {"lifetime": 0.35, "rise": 30}}]}},
+    }
+    for name, root in prefabs.items():
+        doc = {"format": "px.prefab", "formatVersion": 1, "sceneFormatVersion": 3, "entities": [root]}
+        (ROOT / "prefabs" / f"{name}.prefab.json").write_text(dump_pretty(doc) + "\n")
 
     scene = {
         "format": "px.scene",
@@ -492,6 +515,9 @@ def main():
             {"id": script["level_rules"], "type": "script", "name": "Level Rules", "path": "scripts/level_rules.luau"},
             {"id": script["moving_platform"], "type": "script", "name": "Moving Platform",
              "path": "scripts/moving_platform.luau"},
+            {"id": script["sparkle"], "type": "script", "name": "Sparkle", "path": "scripts/sparkle.luau"},
+            {"id": prefab["coin"], "type": "prefab", "name": "Coin", "path": "prefabs/coin.prefab.json"},
+            {"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"},
             {"id": scene_id, "type": "scene", "name": "Level 1", "path": "scenes/level1.scene.json"},
         ],
     }

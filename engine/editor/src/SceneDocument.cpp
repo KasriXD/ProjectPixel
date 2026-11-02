@@ -1,6 +1,7 @@
 #include "px/editor/SceneDocument.hpp"
 
 #include "px/editor/EditorProject.hpp"
+#include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 
 #include <algorithm>
@@ -397,7 +398,8 @@ std::vector<Entity> SceneDocument::duplicateSelection() {
         if (after < m_scene.entityCount() && m_scene.parent(m_scene.entities()[after]) == parent) {
             before = m_scene.entities()[after];
         }
-        const Entity copy = m_scene.copySubtree(m_scene, root, parent, before);
+        // Prefab instances are re-keyed so the copy is an instance too.
+        const Entity copy = project::copyEntities(m_scene, m_scene, root, parent, before);
         if (copy.isNull()) continue;
         m_scene.get<EntityInfo>(copy).name = uniqueName(m_scene.get<EntityInfo>(root).name);
         const auto originals = m_scene.subtree(root);

@@ -262,6 +262,24 @@ struct Bindings {
         return 1;
     }
 
+    static int worldSpawn(lua_State* L) {
+        requireAuthority(L, "World.spawn");
+        size_t length = 0;
+        const char* name = luaL_checklstring(L, 1, &length);
+        ScriptSystem& s = system(L);
+        const scene::Entity parent = lua_isnoneornil(L, 3) ? scene::kNullEntity : checkLiveEntity(L, 3);
+        Vec2 position{};
+        if (!lua_isnoneornil(L, 2)) {
+            position = checkVec2(L, 2);
+        } else if (!parent.isNull()) {
+            position = s.m_scene.worldPosition(parent);
+        }
+        auto spawned = s.m_host.spawnPrefab(std::string_view(name, length), position, parent);
+        if (!spawned) luaL_errorL(L, "World.spawn: %s", spawned.error().message.c_str());
+        s.pushEntity(L, spawned.value());
+        return 1;
+    }
+
     // --- Input ----------------------------------------------------------------------
 
     // A player character: a live entity with a Player component.
@@ -686,6 +704,12 @@ const Binding kBindings[] = {
     {{"World", "findWithTag", K::Function, A::Everywhere, "World.findWithTag(tag: string): {Entity}",
       "All entities with the tag, in hierarchy order.", false, true},
      &Bindings::worldFindWithTag},
+    {{"World", "spawn", K::Function, A::AuthorityOnly,
+      "World.spawn(prefab: string, position: vector?, parent: Entity?): Entity",
+      "Creates a copy of a prefab (by its name in the project) and returns its root. It is placed at `position` "
+      "(world; default: the parent's position, or [0, 0]), under `parent` if given. The entities exist at once; "
+      "their scripts start at the next tick. At most 1000 entities can be spawned per tick."},
+     &Bindings::worldSpawn},
 
     // Input: named actions from the project's input settings.
     {{"Input", "isDown", K::Function, A::Everywhere, "Input.isDown(action: string, player: Entity?): boolean",

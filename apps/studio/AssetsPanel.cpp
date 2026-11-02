@@ -17,6 +17,7 @@ bool matches(const assets::AssetEntry& entry, int typeFilter, const std::string&
     if (typeFilter == 1 && entry.type != assets::AssetType::Texture) return false;
     if (typeFilter == 2 && entry.type != assets::AssetType::Script) return false;
     if (typeFilter == 3 && entry.type != assets::AssetType::Scene) return false;
+    if (typeFilter == 4 && entry.type != assets::AssetType::Prefab) return false;
     if (filter.empty()) return true;
     const auto lower = [](std::string s) {
         for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -31,6 +32,7 @@ const char* typeLabel(assets::AssetType type) {
         case assets::AssetType::Texture: return "image";
         case assets::AssetType::Script: return "script";
         case assets::AssetType::Scene: return "scene";
+        case assets::AssetType::Prefab: return "prefab";
     }
     return "?";
 }
@@ -47,6 +49,15 @@ void AssetsPanel::drawAssetMenu(StudioApp& app, const assets::AssetEntry& entry)
     }
     if (entry.type == assets::AssetType::Script) {
         if (ImGui::MenuItem("Edit Script")) app.openScript(entry.id);
+    }
+    if (entry.type == assets::AssetType::Prefab) {
+        if (ImGui::MenuItem("Place In Scene", nullptr, false, !app.playing() && app.document() != nullptr)) {
+            app.placePrefab(entry.id, std::nullopt);
+        }
+        ui::tooltip("Adds a copy at the centre of the Scene view. You can also drag the prefab there.");
+        if (ImGui::MenuItem("Select Copies In Scene", nullptr, false, !app.playing() && app.document() != nullptr)) {
+            app.selectPrefabInstances(entry.id);
+        }
     }
     if (ImGui::MenuItem("Open In System Editor")) app.openPath(project->absolutePath(entry.id));
     if (ImGui::MenuItem("Show In Folder")) app.openPath(project->absolutePath(entry.id).parent_path());
@@ -87,8 +98,8 @@ void AssetsPanel::draw(StudioApp& app) {
     };
     flow(buttonWidth("Import..."));
     if (ImGui::Button("Import...")) app.dialogs().pickImportFiles(app.window());
-    ui::tooltip("Copy images (.png .jpg .bmp .tga), Luau scripts or scenes into the project. You can also drop files "
-                "onto the Studio window.");
+    ui::tooltip("Copy images (.png .jpg .bmp .tga), Luau scripts, scenes or prefabs into the project. You can also "
+                "drop files onto the Studio window.");
     flow(buttonWidth("+ New"));
     if (ImGui::Button("+ New")) ImGui::OpenPopup("NewAsset");
     ui::tooltip("Create a script or a scene");
@@ -97,10 +108,10 @@ void AssetsPanel::draw(StudioApp& app) {
         if (ImGui::MenuItem("Scene...")) m_openNewScene = true;
         ImGui::EndPopup();
     }
-    const char* types[] = {"All", "Images", "Scripts", "Scenes"};
+    const char* types[] = {"All", "Images", "Scripts", "Scenes", "Prefabs"};
     flow(em * 6.0f);
     ImGui::SetNextItemWidth(em * 6.0f);
-    ImGui::Combo("##type", &m_typeFilter, types, 4);
+    ImGui::Combo("##type", &m_typeFilter, types, 5);
     flow(em * 8.0f);
     ImGui::SetNextItemWidth(std::min(em * 12.0f, lineEnd - ImGui::GetCursorScreenPos().x));
     ImGui::InputTextWithHint("##filter", "Search", &m_filter);
@@ -131,9 +142,16 @@ void AssetsPanel::draw(StudioApp& app) {
         } else {
             ImGui::InvisibleButton("thumb", {tile, tile * 0.75f});
             ImDrawList* dl = ImGui::GetWindowDrawList();
-            const ImU32 bg = entry.type == assets::AssetType::Script ? IM_COL32(48, 70, 110, 255) : IM_COL32(60, 95, 60, 255);
+            ImU32 bg = IM_COL32(60, 95, 60, 255);
+            const char* glyph = "SCENE";
+            if (entry.type == assets::AssetType::Script) {
+                bg = IM_COL32(48, 70, 110, 255);
+                glyph = "LUAU";
+            } else if (entry.type == assets::AssetType::Prefab) {
+                bg = IM_COL32(105, 70, 130, 255);
+                glyph = "PREFAB";
+            }
             dl->AddRectFilled({cursor.x + 6, cursor.y + 4}, {cursor.x + tile - 6, cursor.y + tile * 0.75f - 4}, bg, 6.0f);
-            const char* glyph = entry.type == assets::AssetType::Script ? "LUAU" : "SCENE";
             const ImVec2 ts = ImGui::CalcTextSize(glyph);
             dl->AddText({cursor.x + (tile - ts.x) * 0.5f, cursor.y + (tile * 0.75f - ts.y) * 0.5f},
                         IM_COL32(230, 235, 245, 255), glyph);
@@ -141,6 +159,7 @@ void AssetsPanel::draw(StudioApp& app) {
         const bool hovered = ImGui::IsItemHovered();
         if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             if (entry.type == assets::AssetType::Scene) openScene = entry.id;
+            if (entry.type == assets::AssetType::Prefab && !app.playing()) app.placePrefab(entry.id, std::nullopt);
             if (entry.type == assets::AssetType::Script) app.openScript(entry.id);
         }
         if (ImGui::BeginDragDropSource()) {
@@ -148,6 +167,7 @@ void AssetsPanel::draw(StudioApp& app) {
             ImGui::Text("%s (%s)", entry.name.c_str(), typeLabel(entry.type));
             if (entry.type == assets::AssetType::Texture) ImGui::TextDisabled("Drop in the Scene view to create a sprite");
             if (entry.type == assets::AssetType::Script) ImGui::TextDisabled("Drop on an entity to attach it");
+            if (entry.type == assets::AssetType::Prefab) ImGui::TextDisabled("Drop in the Scene view to place a copy");
             ImGui::EndDragDropSource();
         }
         if (ImGui::BeginPopupContextItem("menu")) {
@@ -205,7 +225,10 @@ void AssetsPanel::draw(StudioApp& app) {
         const auto* entry = project->asset(m_showUses);
         ImGui::Text("'%s' is used by %zu entit%s", entry != nullptr ? entry->name.c_str() : "?", uses.size(),
                     uses.size() == 1 ? "y" : "ies");
-        for (const auto& use : uses) ImGui::BulletText("%s  (scene %s)", use.entityName.c_str(), use.sceneName.c_str());
+        for (const auto& use : uses) {
+            ImGui::BulletText("%s  (%s %s)", use.entityName.c_str(), use.inPrefab ? "prefab" : "scene",
+                              use.sceneName.c_str());
+        }
         if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_showUses = {};
             ImGui::CloseCurrentPopup();
