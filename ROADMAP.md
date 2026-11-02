@@ -214,9 +214,10 @@ Next for multiplayer (not part of the prototype):
 
 ## Milestone 5: Visual scripting and expanded engine (**Done**)
 
-Verified on Linux (GCC, Clang) and in CI on Linux (GCC, Clang,
-AddressSanitizer + UBSan, headless), Windows (MSVC), macOS and WebAssembly;
-each tool was used in Studio on Linux.
+Verified on Linux (GCC, Clang), in CI on Linux (GCC, Clang, AddressSanitizer
++ UBSan, headless), Windows (MSVC), macOS and WebAssembly, and with the
+MinGW-w64 build under Wine 9 (unit tests, playthrough, network test); each
+tool was used in Studio on Linux.
 
 - [x] Prefabs ([docs/prefabs.md](docs/prefabs.md), ADR 0019): saved entity
       trees; copies in scenes with derived ids; *Apply To Prefab* updates every

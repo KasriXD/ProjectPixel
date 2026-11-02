@@ -280,11 +280,11 @@ TEST_CASE("Prefabs: script property values set on an instance survive updates") 
         }
         return nullptr;
     };
-    REQUIRE(value("points") != nullptr);
-    CHECK(std::get<double>(*value("points")) == 50.0); // this instance's value
-    REQUIRE(value("label") != nullptr);                 // set only here
-    REQUIRE(value("speed") != nullptr);                 // new in the prefab
-    CHECK(std::get<double>(*value("speed")) == 2.0);
+    // need() throws on a missing property (REQUIRE does not tell the optimizer, and
+    // GCC's -Wnull-dereference then flags the dereference).
+    CHECK(std::get<double>(need(value("points"))) == 50.0); // this instance's value
+    CHECK(value("label") != nullptr);                       // set only here
+    CHECK(std::get<double>(need(value("speed"))) == 2.0);   // new in the prefab
 }
 
 TEST_CASE("Prefabs: a nested instance stays consistent inside another prefab's instances") {
