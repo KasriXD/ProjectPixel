@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.4.0). Planned parts are
+This describes the system **as it exists now** (v0.5.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -61,14 +61,14 @@ not link SDL.
 | `core` | Logging with sinks, `Result`/`Error`, math (`Vec2`, `Rect`), `Color`, `Guid`, sandboxed file access (`IFileSystem`), `FixedStepClock`, platform-independent `Key` names | std only |
 | `assets` | `AssetId` (GUID), `AssetRegistry`, image decoding with size limits | core, stb_image |
 | `scene` | Generational entity handles, sparse-set component storage (`Registry`), built-in components, `Scene` (identity, lookup, parent/child hierarchy, world transforms), component descriptors (`ComponentInfo`: fields, ranges, requirements, validation) | core, assets |
-| `physics` | `CollisionWorld`: solid grids and boxes, swept per-axis AABB movement with contact flags | core |
-| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
-| `scripting` | `ScriptLibrary` (compiles Luau at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference | core, assets, scene, Luau (private) |
-| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
+| `physics` | `CollisionWorld`: solid grids and boxes with shapes (solid, one-way, slopes), swept per-axis AABB movement with contact flags and ground snapping | core |
+| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; prefabs (instantiating, copying, three-way update of copies), animation clips and tilesets; the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
+| `scripting` | `ScriptLibrary` (compiles Luau and visual scripts at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference, visual scripts (`Graph`: node catalog generated from the API reference, compiler to Luau) | core, assets, scene, Luau (private), nlohmann/json (private) |
+| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
 | `platform_sdl` | SDL3 window, keyboard events, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
 | `net` | Multiplayer: `INetEndpoint` transports (UDP via ENet, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional) |
-| `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, script buffers), `SceneDocument` (operations, selection, snapshot undo), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
+| `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
 Applications compose modules:
 
@@ -179,9 +179,10 @@ restart (R) starts a new session, reload (F5) loads a new `LoadedGame`.
 | Trigger detection is all triggers x all bodies each tick | Small scenes | Spatial broadphase before large worlds |
 | World transforms computed on demand (no cache) | Shallow hierarchies, small scenes | Cache with dirty flags when profiling shows deep hierarchies matter |
 | Studio undo stores whole-scene snapshots | Correct by construction; ~1.7 ms and 3.7 MB per step at 10,000 entities | Diff-based snapshots for large worlds (ADR 0015) |
-| Animation frames inline in components | Simple first version | Animation clips become assets, Milestone 5 |
+| `SpriteAnimation` (frames inline in the scene) kept next to `Animator` (clip assets) | Older content and simple loops keep working | Merge into `Animator` with a migration when the scene format next changes |
 | Debug text via SDL's 8x8 font | HUD only | Real text rendering (font assets) before Studio UI work in games |
 | Keyboard only | Desktop prototype | Gamepad and touch in Milestone 7 (gamepad may come earlier) |
 | Built-in component types only; scripts reach components through a fixed API | Keeps the API reviewable and versioned | Descriptors exist (ADR 0014); exposing them to scripts is an API decision for later |
-| No prefabs; no `require`; scripts cannot spawn entities | Copy/paste and duplicate cover reuse in one scene | Prefabs and spawning together (Milestone 5) |
+| No `require`; visual scripts have no functions or sub-graphs | Behaviours are small; several can sit on one entity and talk through `Events` | `require` of script assets by id, then graph functions |
+| Prefab copies are stored in full in scenes and updated from Studio | Scenes load without prefab files; copies keep their own changes (ADR 0019) | Nested prefab editing and per-copy override views when creators need them |
 | One script VM per session, limits per callback | Single-player | Per-tick total budgets and isolated server processes (Milestones 4/6) |

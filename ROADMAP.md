@@ -5,13 +5,14 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-4 are done: the multiplayer prototype (dedicated server, UDP
-transport, players joining and leaving, snapshot replication with
-interpolation and prediction, Studio's local multiplayer test) works and is
-tested end to end. CI builds and tests on Linux, Windows (MSVC), macOS and
-(experimentally) WebAssembly. Recommended next: two or three people play a
-multiplayer test over a real network and creators build small levels in
-Studio; then Milestone 5 (see "Recommended adjustments" below).
+Milestones 0-5 are done. Milestone 5 added prefabs (with spawning from
+scripts), animation clips with an editor, tilesets with one-way platforms and
+slopes, and visual scripting (node graphs compiled to Luau, with a graph
+editor). CI builds and tests on Linux, Windows (MSVC), macOS and
+(experimentally) WebAssembly. Recommended next: creators build small games
+in Studio with the new tools and two or three people play a multiplayer test
+over a real network, before Milestone 6 (see "Recommended adjustments"
+below).
 
 ## Blockers and open items
 
@@ -127,8 +128,8 @@ visual nodes, per-tick total CPU budget for servers, trigger broadphase.
       player, coins with a new script, save, play) runs unchanged in
       `px-player` and `px-headless`; Studio runs under Wine (Direct3D) and in
       CI on Windows (MSVC) and macOS
-- [ ] Prefabs: deferred to Milestone 5 together with spawning entities from
-      scripts (they need the same "instantiate an entity template" mechanism)
+- [x] Prefabs: done in Milestone 5 together with spawning entities from
+      scripts
 
 Deliverable met: a creator can build and save a simple game using the editor
 rather than manually editing project files ([walkthrough](docs/studio.md#tutorial-your-own-art-and-behaviour)).
@@ -211,12 +212,44 @@ Next for multiplayer (not part of the prototype):
 - [ ] Interest management for large worlds; lag compensation for shooting
 - [ ] A browser transport (WebSocket or WebTransport) for web clients
 
-## Milestone 5: Visual scripting and expanded engine (**Planned**)
+## Milestone 5: Visual scripting and expanded engine (**Done**)
 
-Typed node graphs compiled to the same gameplay API as Luau; graph editor;
-prefabs and spawning entities from scripts; tilemap and animation editors;
-animation clip assets; tileset assets with per-tile properties (one-way
-platforms, slopes).
+Verified on Linux (GCC, Clang) and in CI on Linux (GCC, Clang,
+AddressSanitizer + UBSan, headless), Windows (MSVC), macOS and WebAssembly;
+each tool was used in Studio on Linux.
+
+- [x] Prefabs ([docs/prefabs.md](docs/prefabs.md), ADR 0019): saved entity
+      trees; copies in scenes with derived ids; *Apply To Prefab* updates every
+      copy in every scene by a three-way merge, so each copy keeps its own
+      changes; revert; copies survive copy/paste, duplicate and undo
+- [x] Spawning: `World.spawn(prefab, position?, parent?)`, deterministic ids,
+      per-tick limits; spawned entities replicate to multiplayer clients
+- [x] Animation clips ([docs/animation.md](docs/animation.md)): clip assets
+      from sprite sheets, an `Animator` that picks idle/run/jump/fall from
+      the controller, `entity:playAnimation` from scripts, an animation editor
+      with a frame picker and preview
+- [x] Tilesets ([docs/tilesets.md](docs/tilesets.md)): per-tile collision
+      (solid, none, one-way, two slopes) and tags, `World.tileAt` /
+      `World.tileHasTag`; one-way `BoxCollider`s; ground snapping on slopes;
+      tileset editor; rectangle and bucket-fill tile tools
+- [x] Visual scripting ([docs/visual-scripting.md](docs/visual-scripting.md),
+      ADR 0020): graphs compiled to Luau, so they share the VM, sandbox,
+      limits and realms; the node catalog is generated from the API
+      reference; problems and runtime errors name the node; graph editor in
+      Studio with typed pins, filtered add menu, undo and a Luau view
+- [x] Examples use all of it: prefab coins and gems spawning a sparkle,
+      animated heroes, slopes and one-way planks in the platformer, water
+      tagged in the top-down tileset, clouds drifting by a visual script
+
+Next for these tools (not part of the milestone):
+
+- [ ] Graph functions/sub-graphs, comments and groups, execution
+      highlighting while playing; `require` for Luau modules
+- [ ] Nested prefab editing (open a prefab on its own canvas) and a view of a
+      copy's own changes
+- [ ] Animation events (a frame calls a script), blend of clips for
+      top-down directions
+- [ ] Auto-tiling rules in tilesets
 
 ## Milestone 6: Platform backend and publishing (**Planned**)
 
@@ -237,16 +270,16 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: real-world multiplayer tests, then Milestone 5.** Play a
-   multiplayer test on two or three computers over a home network and over
-   the internet, and let creators build small co-op levels; fix what they
-   hit (likely: per-player score, client-to-server requests, the multi-entity
-   Properties panel and an animation frame picker). Prefabs and spawning
-   from scripts (Milestone 5) should replicate through the same snapshot
-   path, which already sends entities created at run time.
-2. **Prefabs with spawning in Milestone 5**: both need the same
-   "instantiate a saved entity template" mechanism, which player templates
-   now use; spawned entities replicate like characters do.
+1. **Next: creators and real-world multiplayer tests, then Milestone 6.**
+   Let two or three creators build a small game with prefabs, animation,
+   tilesets and visual scripts, and play a multiplayer test on two or three
+   computers over a home network and over the internet; fix what they hit
+   (likely: per-player score, client-to-server requests, the multi-entity
+   Properties panel, graph functions).
+2. **Client-side behaviours before more visual effects**: decorative motion
+   (the drifting clouds) currently runs on the server and is replicated
+   (about 60 bytes per snapshot for 8 clouds). Client-realm behaviours
+   (ADR 0011) would run it locally for free.
 3. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
    (ADR 0012): it already builds and runs, so regressions are caught for
    free; productising it (loading projects over the network, asset

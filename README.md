@@ -10,10 +10,11 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.4.0)
+## Current status (version 0.5.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
-scripting), 3 (Studio foundation) and 4 (multiplayer prototype) are
+scripting), 3 (Studio foundation), 4 (multiplayer prototype) and 5 (visual
+scripting and expanded engine: prefabs, animation clips, tilesets) are
 complete. See [ROADMAP.md](ROADMAP.md) for detail.
 
 | Area | Status |
@@ -25,7 +26,11 @@ complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | Studio (desktop editor): projects, Explorer, Scene view, Properties, Assets, Output, script editor, undo, play/stop | Implemented; a game was built in it from an empty project and runs in `px-player`. Used on Linux (X11) and on a Windows 11 PC (Direct3D 11); builds and passes its smoke test in CI on Windows and macOS. **Not yet used on a real Mac** ([guide](docs/studio.md)) |
 | Game types: platformer and top-down, chosen when a project is created | Implemented; each has a controller, default input, an example and Toolbox items |
 | Toolbox: a starter library of art, behaviours and ready-made objects (28) usable in any project | Implemented; every object is inserted, saved and played in tests; a top-down game was built from an empty project with it in Studio |
-| Kinematic collision: solid tiles/boxes, triggers | Implemented, unit tested |
+| Kinematic collision: solid tiles/boxes, one-way platforms, slopes, triggers | Implemented, unit tested |
+| Prefabs: saved entity trees, copies in scenes that keep their own changes when the prefab is updated, `World.spawn` from scripts | Implemented; unit tested, used in Studio on Linux, spawned entities replicate in multiplayer tests ([guide](docs/prefabs.md)) |
+| Animation clips (assets) and an `Animator` that follows the character's movement; animation editor in Studio | Implemented; unit tested, used in Studio on Linux ([guide](docs/animation.md)) |
+| Tilesets with per-tile collision (solid, none, one-way, slopes) and tags; tile rectangle and bucket fill; tileset editor | Implemented; unit tested, used in Studio on Linux ([guide](docs/tilesets.md)) |
+| Visual scripting: node graphs compiled to Luau, graph editor in Studio | Implemented; every node type compiles in tests, used in Studio on Linux ([guide](docs/visual-scripting.md)) |
 | Platformer movement (coyote time, jump buffer, variable jump), top-down movement (8 directions) | Implemented, unit tested |
 | Versioned project/scene file format with validation | Implemented, unit tested |
 | Headless simulation (no graphics) | Implemented; used by the dedicated server and automated tests |
@@ -38,7 +43,7 @@ complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | **Experimental**: engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
-| Prefabs, gamepad, touch, audio, text/fonts in games, visual scripting, platform services (accounts, matchmaking, secure connections) | Planned (Milestones 5-8) |
+| Gamepad, touch, audio, text/fonts in games, platform services (accounts, matchmaking, secure connections, publishing) | Planned (Milestones 6-8) |
 
 ## Building
 
@@ -187,9 +192,9 @@ engine/            engine modules (static libraries), one folder per module
   core/            logging, errors, math, ids, sandboxed file access, timing, key names
   assets/          asset ids, asset registry, image decoding
   scene/           entities, components, scenes
-  physics/         kinematic AABB collision
-  project/         project and scene file formats
-  scripting/       Luau sandbox, resource limits, gameplay API, Script lifecycle
+  physics/         kinematic AABB collision, one-way platforms, slopes
+  project/         project, scene, prefab, animation and tileset file formats
+  scripting/       Luau sandbox, resource limits, gameplay API, Script lifecycle, visual scripts
   runtime/         headless fixed-tick game simulation and gameplay systems
   render/          renderer interface, camera, scene-to-draw-call extraction
   platform_sdl/    SDL3 window, input and renderer backend
@@ -222,5 +227,6 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [docs/scripting.md](docs/scripting.md): Luau scripting guide: lifecycle, sandbox, limits, realms, versioning
 - [docs/scripting-api.md](docs/scripting-api.md): generated API reference
 - [docs/visual-scripting.md](docs/visual-scripting.md): visual scripts (node graphs) and the graph editor
+- [docs/prefabs.md](docs/prefabs.md), [docs/animation.md](docs/animation.md), [docs/tilesets.md](docs/tilesets.md): prefabs, animation clips, tilesets
 - [docs/security.md](docs/security.md): threat model and current protections
 - [docs/adr/](docs/adr/): architecture decision records

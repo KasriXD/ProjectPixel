@@ -14,8 +14,8 @@ drift slowly to the left and start again past the right edge of the level.
 ## Making one in Studio
 
 1. *Assets > + New > Visual Script...*, give it a name. It opens in the
-   **graph editor** with a starter graph: *Start* → *Print* "Hello from
-   &lt;name&gt;!".
+   **graph editor** with a starter graph: *Start* → *Print* "Hello from"
+   and the name you gave it.
 2. Attach it to an entity: drag it from Assets onto the entity (Scene view
    or Explorer), or *Add Script* in Properties, where graphs are listed with
    "(nodes)".
@@ -56,8 +56,9 @@ There are three kinds:
 
 - **Event** nodes (red header) start a chain when something happens:
   *Start*, *Tick* (with `dt`), *Trigger Enter*/*Trigger Exit* (with
-  `other`), *On Custom Event* (any script's `Events.emit` with that name)
-  and *Every N Seconds*.
+  `other`), *Destroy*, *Player Joined*/*Player Left* (with `player`), *On
+  Custom Event* (any script's `Events.emit` with that name) and *Every N
+  Seconds*.
 - **Action** nodes (blue; grey for flow control) do something. White
   triangles are the execution pins: a chain runs from an event through the
   actions wired one after another.
