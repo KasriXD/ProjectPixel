@@ -6,6 +6,7 @@
 #include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/project/Tileset.hpp"
+#include "px/scripting/Graph.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
@@ -64,7 +65,7 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 18); // 6 images, 4 scripts, 2 prefabs, 4 animations, 1 tileset, 1 scene
+    CHECK(manifest->assets.size() == 19); // 6 images, 4 scripts, 1 graph, 2 prefabs, 4 animations, 1 tileset, 1 scene
     CHECK(manifest->settings.scripting.apiVersion == 1);
 }
 
@@ -81,7 +82,7 @@ TEST_CASE("Example scene loads with all expected content") {
     REQUIRE_FALSE(player.isNull());
     CHECK(scene->tryGet<PlatformerController>(player) != nullptr);
     CHECK(scene->registry().count<Tags>() == 14);
-    CHECK(scene->registry().count<Scripts>() == 16); // 14 coins, the moving platform, the level rules
+    CHECK(scene->registry().count<Scripts>() == 24); // 14 coins, the moving platform, the level rules, 8 clouds
     CHECK(scene->registry().count<Tilemap>() == 1);
     const Entity level = scene->findByName("Level");
     const auto* map = scene->tryGet<Tilemap>(level);
@@ -459,13 +460,21 @@ TEST_CASE("The example projects are stored exactly as Studio saves them") {
         CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
         for (const auto& entry : manifest->assets.entries()) {
             if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab &&
-                entry.type != assets::AssetType::Animation && entry.type != assets::AssetType::Tileset) {
+                entry.type != assets::AssetType::Animation && entry.type != assets::AssetType::Tileset &&
+                entry.type != assets::AssetType::Graph) {
                 continue;
             }
             auto text = fs.readText(entry.path);
             REQUIRE(text.ok());
             std::string onDisk = text.value();
             std::erase(onDisk, '\r');
+            if (entry.type == assets::AssetType::Graph) {
+                auto graph = scripting::parseGraph(onDisk, entry.path);
+                REQUIRE_MESSAGE(graph.ok(), (graph.ok() ? "" : graph.error().message));
+                CHECK_MESSAGE(scripting::serializeGraph(graph.value()) == onDisk, entry.path,
+                              " is not in canonical form; run px-headless examples/<name> --resave");
+                continue;
+            }
             if (entry.type == assets::AssetType::Tileset) {
                 auto tileset = parseTileset(onDisk, entry.path, &manifest->assets);
                 REQUIRE_MESSAGE(tileset.ok(), (tileset.ok() ? "" : tileset.error().message));

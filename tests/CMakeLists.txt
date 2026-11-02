@@ -14,7 +14,8 @@ add_executable(px_tests
     test_netgame.cpp
     test_prefabs.cpp
     test_animation.cpp
-    test_tilesets.cpp)
+    test_tilesets.cpp
+    test_graphs.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest

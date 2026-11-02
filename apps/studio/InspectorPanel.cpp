@@ -310,7 +310,7 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
             assets::AssetId asset;
             std::memcpy(&asset, payload->Data, sizeof(asset));
             const auto* entry = app.project()->asset(asset);
-            if (entry != nullptr && entry->type == assets::AssetType::Script) {
+            if (entry != nullptr && assets::isBehaviour(entry->type)) {
                 if (auto added = app.document()->attachScript(entity, asset); !added) {
                     app.notify(added.error().message, true);
                 }
@@ -347,9 +347,10 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
     if (ImGui::BeginPopup("AddScript")) {
         bool any = false;
         for (const auto& entry : app.project()->assets().entries()) {
-            if (entry.type != assets::AssetType::Script) continue;
+            if (!assets::isBehaviour(entry.type)) continue;
             any = true;
-            if (ImGui::MenuItem(entry.name.c_str())) {
+            const std::string label = entry.type == assets::AssetType::Graph ? entry.name + " (nodes)" : entry.name;
+            if (ImGui::MenuItem(label.c_str())) {
                 if (auto added = app.document()->attachScript(entity, entry.id); !added) {
                     app.notify(added.error().message, true);
                 }

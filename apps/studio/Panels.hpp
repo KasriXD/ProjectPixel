@@ -7,12 +7,16 @@
 #include "px/project/Animation.hpp"
 #include "px/project/Project.hpp"
 #include "px/project/Tileset.hpp"
+#include "px/scripting/Graph.hpp"
 #include "px/render/Camera2D.hpp"
 #include "px/render/Renderer2D.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <cstdint>
 #include <map>
+#include <optional>
+#include <set>
+#include <tuple>
 #include <string>
 #include <vector>
 
@@ -142,6 +146,8 @@ private:
     assets::AssetId m_newAnimationImage;
     int m_newAnimationCell[2] = {16, 16};
     bool m_openNewAnimation = false;
+    std::string m_newGraphName = "My Visual Script";
+    bool m_openNewGraph = false;
     std::string m_importPath;
     bool m_openNewScript = false;
     bool m_openNewScene = false;
@@ -224,6 +230,67 @@ private:
     bool m_open = false;
     bool m_focus = false;
     bool m_pendingSave = false;
+};
+
+// Edits a visual script: nodes on a canvas connected pin to pin, the
+// selected node's values, the graph's properties; shows problems and the
+// Luau it compiles to. Saves as it goes; has its own undo.
+class GraphEditorPanel {
+public:
+    void draw(StudioApp& app);
+    void open(StudioApp& app, assets::AssetId graph);
+    void close();
+    [[nodiscard]] static const char* windowId() { return "###graph-editor"; }
+
+private:
+    struct Layout;
+    enum class Drag { None, Pan, Nodes, Link, Box };
+
+    void drawContents(StudioApp& app);
+    void drawCanvas(StudioApp& app);
+    void drawSidePanel(StudioApp& app);
+    void drawAddMenu(StudioApp& app);
+    void addNode(StudioApp& app, const scripting::NodeTypeInfo& type);
+    void connect(StudioApp& app, const std::string& fromNode, const std::string& fromPin, const std::string& toNode,
+                 const std::string& toPin);
+    void deleteSelected();
+    void duplicateSelected();
+    void beginChange(); // records an undo step before a change
+    void changed();     // marks for saving and recompiling
+    void undo();
+    void redo();
+    [[nodiscard]] Layout layout(const scripting::GraphNode& node) const;
+    [[nodiscard]] ImVec2 toScreen(ImVec2 graph) const;
+    [[nodiscard]] ImVec2 toGraph(ImVec2 screen) const;
+    [[nodiscard]] ImVec2 pinPosition(const scripting::GraphNode& node, const std::string& pin, bool output) const;
+
+    assets::AssetId m_id;
+    scripting::Graph m_graph;
+    scripting::CompiledGraph m_compiled;
+    std::vector<scripting::Graph> m_undo;
+    std::vector<scripting::Graph> m_redo;
+    std::vector<std::string> m_selected; // node ids
+    ImVec2 m_origin{};      // screen position of the canvas
+    ImVec2 m_pan{};         // graph offset
+    float m_zoom = 1.0f;
+    Drag m_drag = Drag::None;
+    ImVec2 m_dragStart{};   // graph space
+    bool m_dragMoved = false;
+    float m_panMoved = 0.0f;
+    std::string m_linkNode; // the pin a link is being dragged from
+    std::string m_linkPin;
+    bool m_linkFromOutput = true;
+    ImVec2 m_addAt{};       // where the add menu puts the node (graph space)
+    std::optional<std::tuple<std::string, std::string, bool>> m_addFrom; // node, pin, is output
+    std::string m_search;
+    bool m_openAdd = false;
+    bool m_focusSearch = false;
+    bool m_open = false;
+    bool m_focus = false;
+    bool m_pendingSave = false;
+    bool m_recompile = true;
+    bool m_showCode = false;
+    bool m_editing = false; // a value field is being typed in (one undo step)
 };
 
 class ProjectSettingsPanel {

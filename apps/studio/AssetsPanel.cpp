@@ -15,7 +15,7 @@ namespace {
 
 bool matches(const assets::AssetEntry& entry, int typeFilter, const std::string& filter) {
     if (typeFilter == 1 && entry.type != assets::AssetType::Texture) return false;
-    if (typeFilter == 2 && entry.type != assets::AssetType::Script) return false;
+    if (typeFilter == 2 && !assets::isBehaviour(entry.type)) return false;
     if (typeFilter == 3 && entry.type != assets::AssetType::Scene) return false;
     if (typeFilter == 4 && entry.type != assets::AssetType::Prefab) return false;
     if (typeFilter == 5 && entry.type != assets::AssetType::Animation) return false;
@@ -37,6 +37,7 @@ const char* typeLabel(assets::AssetType type) {
         case assets::AssetType::Prefab: return "prefab";
         case assets::AssetType::Animation: return "animation";
         case assets::AssetType::Tileset: return "tileset";
+        case assets::AssetType::Graph: return "visual script";
     }
     return "?";
 }
@@ -53,6 +54,9 @@ void AssetsPanel::drawAssetMenu(StudioApp& app, const assets::AssetEntry& entry)
     }
     if (entry.type == assets::AssetType::Script) {
         if (ImGui::MenuItem("Edit Script")) app.openScript(entry.id);
+    }
+    if (entry.type == assets::AssetType::Graph) {
+        if (ImGui::MenuItem("Edit Visual Script")) app.openScript(entry.id);
     }
     if (entry.type == assets::AssetType::Animation) {
         if (ImGui::MenuItem("Edit Animation")) app.openAnimation(entry.id);
@@ -112,9 +116,10 @@ void AssetsPanel::draw(StudioApp& app) {
                 "drop files onto the Studio window.");
     flow(buttonWidth("+ New"));
     if (ImGui::Button("+ New")) ImGui::OpenPopup("NewAsset");
-    ui::tooltip("Create a script, a scene or an animation");
+    ui::tooltip("Create a script, a visual script, a scene or an animation");
     if (ImGui::BeginPopup("NewAsset")) {
         if (ImGui::MenuItem("Script...")) m_openNewScript = true;
+        if (ImGui::MenuItem("Visual Script...")) m_openNewGraph = true;
         if (ImGui::MenuItem("Scene...")) m_openNewScene = true;
         if (ImGui::MenuItem("Animation...")) m_openNewAnimation = true;
         ImGui::EndPopup();
@@ -167,6 +172,9 @@ void AssetsPanel::draw(StudioApp& app) {
             } else if (entry.type == assets::AssetType::Tileset) {
                 bg = IM_COL32(60, 110, 110, 255);
                 glyph = "TILES";
+            } else if (entry.type == assets::AssetType::Graph) {
+                bg = IM_COL32(40, 95, 130, 255);
+                glyph = "NODES";
             }
             dl->AddRectFilled({cursor.x + 6, cursor.y + 4}, {cursor.x + tile - 6, cursor.y + tile * 0.75f - 4}, bg, 6.0f);
             const ImVec2 ts = ImGui::CalcTextSize(glyph);
@@ -179,13 +187,13 @@ void AssetsPanel::draw(StudioApp& app) {
             if (entry.type == assets::AssetType::Prefab && !app.playing()) app.placePrefab(entry.id, std::nullopt);
             if (entry.type == assets::AssetType::Animation) app.openAnimation(entry.id);
             if (entry.type == assets::AssetType::Tileset) app.openTileset(entry.id);
-            if (entry.type == assets::AssetType::Script) app.openScript(entry.id);
+            if (assets::isBehaviour(entry.type)) app.openScript(entry.id);
         }
         if (ImGui::BeginDragDropSource()) {
             ImGui::SetDragDropPayload(ui::kAssetPayload, &entry.id, sizeof(entry.id));
             ImGui::Text("%s (%s)", entry.name.c_str(), typeLabel(entry.type));
             if (entry.type == assets::AssetType::Texture) ImGui::TextDisabled("Drop in the Scene view to create a sprite");
-            if (entry.type == assets::AssetType::Script) ImGui::TextDisabled("Drop on an entity to attach it");
+            if (assets::isBehaviour(entry.type)) ImGui::TextDisabled("Drop on an entity to attach it");
             if (entry.type == assets::AssetType::Prefab) ImGui::TextDisabled("Drop in the Scene view to place a copy");
             if (entry.type == assets::AssetType::Animation) ImGui::TextDisabled("Drop on an entity to play it there");
             ImGui::EndDragDropSource();
@@ -197,7 +205,7 @@ void AssetsPanel::draw(StudioApp& app) {
         // Name, with markers.
         const std::string label = ui::fitText(entry.name, tile);
         const editor::ScriptInfo* script =
-            entry.type == assets::AssetType::Script ? project->scriptInfo(entry.id) : nullptr;
+            assets::isBehaviour(entry.type) ? project->scriptInfo(entry.id) : nullptr;
         if (script != nullptr && !script->error.empty()) {
             ImGui::TextColored(ui::kErrorColor, "%s", label.c_str());
         } else if (current) {
@@ -298,6 +306,29 @@ void AssetsPanel::draw(StudioApp& app) {
         ImGui::TextDisabled("Creates scripts/%s.luau from a template", editor::toFileStem(m_newScriptName).c_str());
         if (enter || ImGui::Button("Create")) {
             auto id = project->createScript(m_newScriptName);
+            if (!id) {
+                app.notify(id.error().message, true);
+            } else {
+                app.assetsChanged();
+                app.openScript(id.value());
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (m_openNewGraph) {
+        ImGui::OpenPopup("New Visual Script");
+        m_openNewGraph = false;
+    }
+    if (ImGui::BeginPopupModal("New Visual Script", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("A behaviour made of nodes instead of code:");
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        const bool enter = ImGui::InputText("##name", &m_newGraphName, ImGuiInputTextFlags_EnterReturnsTrue);
+        ImGui::TextDisabled("Creates graphs/%s.graph.json", editor::toFileStem(m_newGraphName).c_str());
+        if (enter || ImGui::Button("Create")) {
+            auto id = project->createGraph(m_newGraphName);
             if (!id) {
                 app.notify(id.error().message, true);
             } else {

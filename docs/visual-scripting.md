@@ -1,117 +1,177 @@
-# Visual scripting design
+# Visual scripting
 
-**Status: design only. Nothing in this document is implemented yet.**
-Planned for Milestone 5; this records the decisions that Milestone 2's
-scripting API was shaped by, so the two systems stay one system.
+A **visual script** is a behaviour made of nodes connected by wires instead
+of typed Luau. It is attached to entities exactly like a script, has
+properties you can change per entity, and can sit next to Luau scripts on
+the same entity. Under the hood each graph is compiled to Luau and run by
+the same VM, sandbox, limits and API, so anything a graph does a script
+could do too, and the other way round as far as the nodes reach
+([ADR 0020](adr/0020-visual-scripting.md)).
 
-## Goal
+The platformer example has one: `graphs/drift.graph.json` makes the clouds
+drift slowly to the left and start again past the right edge of the level.
 
-Beginners build behaviour by connecting nodes; experienced creators write
-Luau. Both must be able to do the same things, mix in one project, and
-move between the two without rewriting a game. Project principle: *do not
-build two unrelated gameplay systems*.
+## Making one in Studio
 
-## Core decision: one API, two front ends
+1. *Assets > + New > Visual Script...*, give it a name. It opens in the
+   **graph editor** with a starter graph: *Start* → *Print* "Hello from
+   &lt;name&gt;!".
+2. Attach it to an entity: drag it from Assets onto the entity (Scene view
+   or Explorer), or *Add Script* in Properties, where graphs are listed with
+   "(nodes)".
+3. Press F5. The message appears in Output.
 
-Visual graphs are **compiled to Luau source** and run by the same VM,
-sandbox, limits and API as handwritten scripts.
+Double-click a visual script in Assets to open it again (the *Scripts*
+filter shows scripts and visual scripts). The editor saves as you go; every
+change is recompiled at once.
 
-```
-  node graph (.graph.json) ──compile──▶ Luau source ──Luau compiler──▶ bytecode ──▶ ScriptVm
-  handwritten .luau ─────────────────────────────────▲
-```
+## The graph editor
 
-Why compile to Luau rather than interpret graphs:
-
-- One execution engine: sandboxing, CPU and memory limits, determinism,
-  realms and error reporting already exist and are tested.
-- Graph performance equals script performance.
-- "Convert graph to script" becomes a real export, and the generated code
-  can be read when debugging.
-- Visual nodes can call any Luau module, and Luau behaviours can be used in
-  graphs, because both are behaviours with properties and lifecycle events.
-
-Rejected alternative: a separate C++ graph interpreter. It would need its own
-limits, sandbox, error reporting and determinism guarantees, and would drift
-from the Luau API.
-
-## Mapping the API to nodes
-
-The node palette is generated from `scripting::apiReference()`
-(`engine/scripting/src/Api.cpp`), the same table that registers the Luau
-functions and generates [scripting-api.md](scripting-api.md):
-
-| API member | Node kind |
+| Input | Action |
 |---|---|
-| Lifecycle event (`Start`, `Tick`, `TriggerEnter`, ...) | **Event node**: an execution output plus data outputs for its arguments (`dt`, `other`) |
-| Function or method with side effects (`Game.addScore`, `entity:destroy`) | **Action node**: execution in/out + typed data inputs |
-| Member marked `pure` (`World.find`, `entity.position`, `Input.isDown`) | **Data node**: no execution pins, evaluated when its output is needed |
-| Writable property (`entity.position`) | a "get" data node and a "set" action node |
-| `Events.on` / `Events.emit` | "On custom event" event node / "Emit event" action node |
-| Behaviour `properties` | graph variables exposed in the inspector |
-| `authority` availability | nodes are hidden or flagged in client graphs |
+| Right-click the canvas, *+ Add Node* | Add a node: type to search titles and ids, Enter adds the first match |
+| Drag from a pin to a pin | Connect them. A data input takes one wire and an execution output continues one chain (use *Sequence* for more); a new wire replaces the old one |
+| Drag from a pin to empty space | Opens the add menu showing only nodes that fit, and connects the new node |
+| Alt+click a pin | Disconnect it |
+| Click, Ctrl+click, drag on empty space | Select a node, add or remove one, select with a box (Ctrl adds) |
+| Drag a node | Move it (and the rest of the selection) |
+| Delete, Ctrl+D | Delete, duplicate the selection |
+| Ctrl+Z, Ctrl+Y | Undo, redo (the editor's own history) |
+| Mouse wheel; middle or right drag | Zoom; pan |
 
-To support this, every API entry already records: group, name, kind,
-availability (realm), a typed Luau signature, a description, writability,
-and whether it is pure. Still needed before the editor: machine-readable
-parameter lists (name, type, default) instead of only the signature text.
-This is an additive change to `ApiMember`.
+The panel on the right shows the selected node's description and lets you
+type values into inputs that have no wire (numbers, text, true/false,
+vectors). Below it are the graph's **properties**: *+ Property* adds one with
+a name and a default; *Get Property* and *Set Property* nodes read and
+change it. Properties appear in Properties for each entity the graph is on,
+like a script's `properties` table.
 
-## Types
+The toolbar shows **Compiles** or the number of problems; problems are
+listed under the canvas and the nodes they name are outlined in red.
+*Show Luau* shows the code the graph runs as (read only).
 
-Pin types follow the API's value types: `number`, `boolean`, `string`,
-`vector`, `Entity`, plus `exec` for control flow. These are the same types
-allowed for script properties and event values, so variables, properties
-and events need no conversions. Connections are type-checked in the editor;
-implicit conversions are limited to number → string for display.
+## Nodes
 
-## Graph file format (sketch)
+There are three kinds:
 
-A graph is an asset like a script and is attached with the same `Script`
-component (its asset type tells the loader to compile it first):
+- **Event** nodes (red header) start a chain when something happens:
+  *Start*, *Tick* (with `dt`), *Trigger Enter*/*Trigger Exit* (with
+  `other`), *On Custom Event* (any script's `Events.emit` with that name)
+  and *Every N Seconds*.
+- **Action** nodes (blue; grey for flow control) do something. White
+  triangles are the execution pins: a chain runs from an event through the
+  actions wired one after another.
+- **Data** nodes (green) have no execution pins; they compute a value
+  whenever an input wired to them needs it (*Get Position*, *Add*, *Less
+  Than*, *World Find*).
+
+Pins are coloured by type: number, boolean, text, vector, entity, list of
+entities, or any. A wire can only join pins whose types fit; an
+unconnected input uses the value typed into the node, or a sensible empty
+value (0, false, "", the zero vector). Entity inputs need a wire, except
+`self`, which means *this entity* when it is left empty.
+
+Most nodes are generated from the scripting API, so every function,
+method and property in [scripting-api.md](scripting-api.md) is available, in
+the same groups (*Game*, *World*, *Input*, *Events*, *Entity*, ...).
+Writable properties give a *Get* and a *Set* node. Nodes that only the
+authority may use (changing entities, spawning, scoring) say so in their
+tooltip. The rest are built in:
+
+| Node | What it does |
+|---|---|
+| Branch | Runs *true* or *false* depending on a condition |
+| Sequence | Runs *first*, *second*, *third* in order |
+| For Each Entity | Runs *body* once per entity of a list (`item`), then *done* |
+| Repeat | Runs *body* `count` times (`index` from 1), then *done* |
+| Delay | Runs *then* after a number of seconds; the rest of the chain does not wait |
+| Every N Seconds | An event that fires on a timer |
+| On Custom Event | An event for `Events.emit(name, value)` from any script or graph |
+| This Entity | The entity the behaviour is on |
+| Get Property / Set Property | The graph's own properties |
+| Add, Subtract, Multiply, Divide, Random Number | Arithmetic |
+| Equal, Not Equal, Less Than, Greater Than | Comparisons |
+| And, Or, Not | Logic |
+| Make Vector, Split Vector, Vector Length | Vectors |
+| Join Text | Joins two values as text (handy with *Print*) |
+
+### How a graph runs
+
+- Each event node is a handler. Several event nodes of the same kind (two
+  *Tick* nodes) run one after the other, in the order the nodes are in the
+  file.
+- Values from an action (a *World Spawn* result, a *For Each* item, an
+  event's `other`) can only be used further along that action's own
+  chain. Using them anywhere else is a problem the editor reports.
+- A data node is computed **where it is used**: if one *Random Number*
+  feeds two inputs, they get two different numbers. Store a value in a
+  property with *Set Property* to use the same one twice, or to keep it
+  until the next event.
+- Chains cannot loop back on themselves (use *Repeat* or *For Each*), and
+  a data node cannot depend on its own output.
+- *Delay* and *Every N Seconds* count simulated time, so they are
+  deterministic and pause with the game.
+
+## Errors
+
+The compiler checks a graph before it runs and names the node in every
+message, for example `node 'Set Position' (n7): input 'value' (vector)
+cannot take 'result' (number) of node 'Add' (n5)`. A graph with problems is
+not loaded: the game reports it like a Luau compile error.
+
+Runtime errors name the node that failed, not a line of generated code:
+
+```
+Script error in graphs/turret.graph.json (entity 'Turret') during Tick: graphs/turret.graph.json,
+node 'World Spawn' (spawn): World.spawn: no prefab named 'Bullit' (did you mean 'Bullet'?)
+```
+
+## Files
+
+A graph is a JSON asset (`px.graph`, version 1) of type `graph` in
+`project.json`, usually under `graphs/`. Studio and
+`px-headless --resave` write it with one line per node and link so diffs
+stay readable:
 
 ```json
 {
-  "format": "px.graph", "formatVersion": 1,
-  "properties": { "value": { "type": "number", "default": 1 } },
+  "format": "px.graph",
+  "formatVersion": 1,
+  "properties": [
+    {"name": "speed", "value": 6.0}
+  ],
   "nodes": [
-    { "id": "n1", "type": "event:TriggerEnter" },
-    { "id": "n2", "type": "method:Entity.hasComponent", "inputs": { "name": "Player" } },
-    { "id": "n3", "type": "flow:Branch" },
-    { "id": "n4", "type": "function:Game.addScore" },
-    { "id": "n5", "type": "method:Entity.destroy" }
+    {"id": "tick", "type": "event.Tick", "position": [0.0, 0.0]},
+    {"id": "speed", "type": "property.get", "position": [180.0, 340.0], "property": "speed"},
+    {"id": "say", "type": "call.print", "position": [200.0, 0.0], "inputs": {"value": "hi"}}
   ],
   "links": [
-    ["n1.other", "n2.self"], ["n1.exec", "n3.exec"], ["n2.result", "n3.condition"],
-    ["n3.true", "n4.exec"], ["property:value", "n4.amount"], ["n4.exec", "n5.exec"], ["self.entity", "n5.self"]
+    {"from": "tick.then", "to": "say.in"}
   ]
 }
 ```
 
-That graph compiles to essentially `coin.luau` from the example project.
-Node ids are stable so diffs and merges stay readable; editor-only data
-(positions, comments, colours) goes in a separate `layout` section that the
-compiler ignores.
+- Node ids are any short identifier, unique in the graph; Studio uses
+  `n1`, `n2`, ... They appear in error messages, so hand-written graphs can
+  use meaningful ones.
+- `type` is a node id from the catalog: `event.<Event>`, `call.<Group>.<name>`,
+  `call.<global>`, `method.<name>`, `get.<property>`, `set.<property>`, or a
+  built-in (`flow.branch`, `math.add`, ...). The editor's tooltips show them.
+- `inputs` holds values typed into unconnected inputs (numbers, booleans,
+  strings, `[x, y]` vectors).
+- Limits: 2000 nodes and 8000 links per graph.
 
-## Flow-control and utility nodes
+`px-headless --compile-graph graphs/drift.graph.json` prints the Luau a graph
+compiles to, or its problems.
 
-Provided by the graph compiler, not the engine API: Branch, Sequence,
-For-each (over arrays such as `World.findWithTag`), Compare, Math, Vector
-make/split, Variable get/set, Delay (implemented with a per-instance timer
-in `Tick`; no coroutines in generated code for v1, which keeps debugging
-and limits simple).
+## Limitations
 
-## Errors and debugging
-
-- The graph compiler validates graphs (unconnected required inputs, type
-  mismatches, cycles in data nodes) and reports errors by node id.
-- Generated Luau carries a source map (generated line → node id), so a
-  runtime error `graph.luau:14` is shown on the node that failed.
-- Later: execution highlighting during play mode, using the same mapping.
-
-## Prerequisites before building the editor
-
-1. Structured parameter metadata in `ApiMember` (see above).
-2. Studio foundation (Milestone 3): inspector, asset browser, play mode.
-3. Multiple behaviours per entity, so graphs and scripts can be combined.
-4. `require` for shared Luau modules, so graphs can call creator libraries.
+- No functions or sub-graphs yet: repeated logic is copied, and a chain
+  that joins another chain's nodes again is compiled twice.
+- No local variables beyond properties, no tables, no `require` of Luau
+  modules from a graph.
+- No comments, groups or reroute points on the canvas.
+- No conversion from Luau to a graph (*Show Luau* goes the other way).
+- No execution highlighting while playing; runtime errors name the node.
+- Like scripts, graphs run on the authority only (single player and the
+  server); client-side behaviours are planned.

@@ -1041,6 +1041,85 @@ const char* apiKindName(ApiKind kind) noexcept {
     return "?";
 }
 
+namespace {
+
+std::string_view trim(std::string_view s) {
+    while (!s.empty() && (s.front() == ' ')) s.remove_prefix(1);
+    while (!s.empty() && (s.back() == ' ')) s.remove_suffix(1);
+    return s;
+}
+
+ApiParam parseTyped(std::string_view text, bool named) {
+    ApiParam p;
+    text = trim(text);
+    if (named) {
+        const std::size_t colon = text.find(':');
+        p.name = std::string(trim(text.substr(0, colon)));
+        text = colon == std::string_view::npos ? std::string_view() : trim(text.substr(colon + 1));
+    }
+    if (!text.empty() && text.back() == '?') {
+        p.optional = true;
+        text.remove_suffix(1);
+    }
+    p.type = std::string(trim(text));
+    return p;
+}
+
+} // namespace
+
+ApiSignature parseApiSignature(const ApiMember& member) {
+    ApiSignature sig;
+    std::string_view text = member.signature;
+    if (member.kind == ApiKind::Property) {
+        const std::size_t colon = text.rfind(": ");
+        if (colon != std::string_view::npos) sig.result = parseTyped(text.substr(colon + 2), false);
+        return sig;
+    }
+    const std::size_t open = text.find('(');
+    if (open == std::string_view::npos) return sig;
+    // The matching ')' (parameters may contain function types with parentheses).
+    int depth = 0;
+    std::size_t close = std::string_view::npos;
+    for (std::size_t i = open; i < text.size(); ++i) {
+        if (text[i] == '(' || text[i] == '{') ++depth;
+        if (text[i] == ')' || text[i] == '}') {
+            --depth;
+            if (depth == 0) {
+                close = i;
+                break;
+            }
+        }
+    }
+    if (close == std::string_view::npos) return sig;
+    const std::string_view params = text.substr(open + 1, close - open - 1);
+    depth = 0;
+    std::size_t start = 0;
+    const auto addParam = [&](std::string_view p) {
+        p = trim(p);
+        if (p.empty()) return;
+        if (p.starts_with("...")) {
+            sig.variadic = true;
+            return;
+        }
+        ApiParam param = parseTyped(p, true);
+        if (param.type.find("->") != std::string::npos) sig.takesFunction = true;
+        sig.params.push_back(std::move(param));
+    };
+    for (std::size_t i = 0; i < params.size(); ++i) {
+        const char c = params[i];
+        if (c == '(' || c == '{') ++depth;
+        if (c == ')' || c == '}') --depth;
+        if (c == ',' && depth == 0) {
+            addParam(params.substr(start, i - start));
+            start = i + 1;
+        }
+    }
+    addParam(params.substr(start));
+    const std::string_view rest = trim(text.substr(close + 1));
+    if (rest.starts_with(":")) sig.result = parseTyped(rest.substr(1), false);
+    return sig;
+}
+
 std::span<const ApiMember> apiReference() {
     static const std::vector<ApiMember> members = [] {
         std::vector<ApiMember> out;

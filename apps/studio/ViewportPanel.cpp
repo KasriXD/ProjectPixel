@@ -364,6 +364,17 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                 case assets::AssetType::Scene: app.requestOpenScene(id); break;
                 case assets::AssetType::Prefab: app.placePrefab(id, world); break;
                 case assets::AssetType::Tileset: app.openTileset(id); break;
+                case assets::AssetType::Graph: {
+                    const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));
+                    if (target.isNull()) {
+                        app.notify("Drop a visual script onto an entity to attach it", true);
+                    } else if (auto ok = doc->attachScript(target, id); !ok) {
+                        app.notify(ok.error().message, true);
+                    } else {
+                        doc->select(target);
+                    }
+                    break;
+                }
                 case assets::AssetType::Animation: {
                     const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));
                     if (target.isNull()) {

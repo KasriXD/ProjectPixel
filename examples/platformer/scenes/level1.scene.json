@@ -83,7 +83,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 8
+            }
+          }
+        ]
       }
     },
     {
@@ -106,7 +114,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 8
+            }
+          }
+        ]
       }
     },
     {
@@ -129,7 +145,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 6
+            }
+          }
+        ]
       }
     },
     {
@@ -152,7 +176,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 8
+            }
+          }
+        ]
       }
     },
     {
@@ -175,7 +207,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 8
+            }
+          }
+        ]
       }
     },
     {
@@ -198,7 +238,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 6
+            }
+          }
+        ]
       }
     },
     {
@@ -221,7 +269,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 5
+            }
+          }
+        ]
       }
     },
     {
@@ -244,7 +300,15 @@
           "flipX": false,
           "flipY": false,
           "visible": true
-        }
+        },
+        "Scripts": [
+          {
+            "script": "83b8999f-374a-543e-a1ac-897ab87c299d",
+            "properties": {
+              "speed": 8
+            }
+          }
+        ]
       }
     },
     {

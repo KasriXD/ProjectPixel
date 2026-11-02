@@ -4,6 +4,7 @@
 px_add_module(scripting
     SOURCES
         src/Api.cpp
+        src/Graph.cpp
         src/ScriptLibrary.cpp
         src/ScriptSystem.cpp
         src/ScriptVm.cpp
@@ -12,4 +13,5 @@ px_add_module(scripting
         px::assets
         px::scene
     PRIVATE_DEPS
-        px_luau)
+        px_luau
+        nlohmann_json::nlohmann_json)

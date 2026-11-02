@@ -21,5 +21,6 @@
 | [0017](0017-game-types-and-starter-library.md) | Game types and a starter library copied into projects | Accepted |
 | [0018](0018-multiplayer-networking.md) | Multiplayer: authoritative server, input-only clients, delta snapshots | Accepted |
 | [0019](0019-prefabs.md) | Prefabs: copies tracked by derived ids, updated by three-way merge | Accepted |
+| [0020](0020-visual-scripting.md) | Visual scripting compiles graphs to Luau | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

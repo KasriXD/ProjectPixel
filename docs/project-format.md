@@ -2,7 +2,8 @@
 
 Current versions: project manifest **2**, scene **3**, prefab **1**,
 animation **1** ([animation.md](animation.md#file-format)), tileset **1**
-([tilesets.md](tilesets.md#file-format)).
+([tilesets.md](tilesets.md#file-format)), graph **1**
+([visual-scripting.md](visual-scripting.md#files)).
 Starter library manifests and `px.entities` objects are described in
 [library-format.md](library-format.md).
 
@@ -16,6 +17,7 @@ my-game/
   animations/*.anim.json  animation clips (docs/animation.md)
   tilesets/*.tileset.json what the tiles of a tileset image are (docs/tilesets.md)
   scripts/*.luau          Luau scripts (docs/scripting.md)
+  graphs/*.graph.json     visual scripts (docs/visual-scripting.md)
   assets/...              textures and other assets
 ```
 
@@ -96,7 +98,7 @@ type, each on the arrow keys and WASD (plus Space and Z for jumping).
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | asset GUID, unique |
-| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"prefab"`, `"animation"` or `"tileset"` |
+| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"graph"`, `"prefab"`, `"animation"` or `"tileset"` |
 | `path` | yes | file path inside the project |
 | `name` | no | label for tools (defaults to the path) |
 | `filter` | no (`"nearest"`) | textures only: `"nearest"` for pixel art, `"linear"` for smooth art |
@@ -104,7 +106,8 @@ type, each on the arrow keys and WASD (plus Space and Z for jumping).
 Textures may be PNG, JPEG, BMP or TGA, at most 8192x8192 pixels.
 Scripts are Luau source files (UTF-8, at most 1 MiB). All scripts are
 compiled when the project loads; a syntax error stops loading and names the
-file and line.
+file and line. Graphs (visual scripts) are compiled to Luau first; a graph
+with problems stops loading and names the node.
 
 ## Scene files
 
@@ -184,7 +187,7 @@ table that the loader, the writer and Studio's Properties panel use. In short:
 | `Player` | the player character; respawns at its spawn point (its start position unless a script moves it) |
 | `Camera` | the view; can follow an entity |
 | `Tags` | an array of labels, e.g. `["coin"]` |
-| `Scripts` | an array of Luau behaviours, each `{ "script": <script asset id>, "properties": {...} }` |
+| `Scripts` | an array of behaviours, each `{ "script": <script or graph asset id>, "properties": {...} }` |
 | `PrefabInstance` | marks the root of a copy of a prefab: `{ "prefab": <prefab asset id> }` ([prefabs.md](prefabs.md)) |
 
 Script properties override defaults declared in the script's `properties`
@@ -252,6 +255,10 @@ nothing else stored in the scene.
 | Tileset format | Engine | Change | Migration |
 |---|---|---|---|
 | 1 | 0.5 | Initial format; `tileset` assets and `BoxCollider.oneWay` were added compatibly | |
+
+| Graph format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.5 | Initial format; `graph` assets were added compatibly | |
 
 | Project format | Engine | Change | Migration |
 |---|---|---|---|

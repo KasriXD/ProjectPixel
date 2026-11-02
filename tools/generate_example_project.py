@@ -6,6 +6,7 @@ Produces:
   assets/scenery.png, assets/platform.png
   animations/player_{idle,run,jump,fall}.anim.json
   tilesets/tiles.tileset.json (slopes and one-way planks)
+  graphs/drift.graph.json (a visual script: the clouds drift)
   scenes/level1.scene.json
   prefabs/coin.prefab.json, prefabs/sparkle.prefab.json
   project.json
@@ -486,6 +487,43 @@ def dump_pretty(value, indent=0):
     return json.dumps(value)
 
 
+def drift_graph(level_width_px):
+    """A visual script: the entity drifts left and starts again past the right edge (the clouds)."""
+    def n(id, type, x, y, **extra):
+        node = {"id": id, "type": type, "position": [x, y]}
+        node.update(extra)
+        return node
+    nodes = [
+        n("tick", "event.Tick", 0, 0),
+        n("pos", "get.position", 0, 140),
+        n("split", "vector.split", 180, 140),
+        n("wrapAt", "property.get", 180, 240, property="wrapAt"),
+        n("past", "compare.less", 380, 140),
+        n("branch", "flow.branch", 560, 0),
+        n("restartX", "property.get", 560, 240, property="restartX"),
+        n("restartAt", "call.Vec2", 760, 200),
+        n("restart", "set.position", 960, 0),
+        n("speed", "property.get", 180, 340, property="speed"),
+        n("step", "math.multiply", 380, 300),
+        n("newX", "math.subtract", 560, 360),
+        n("moved", "call.Vec2", 760, 340),
+        n("move", "set.position", 960, 160),
+    ]
+    links = [
+        ("pos.value", "split.vector"), ("split.x", "past.a"), ("wrapAt.value", "past.b"),
+        ("tick.then", "branch.in"), ("past.result", "branch.condition"),
+        ("restartX.value", "restartAt.x"), ("split.y", "restartAt.y"),
+        ("branch.true", "restart.in"), ("restartAt.result", "restart.value"),
+        ("tick.dt", "step.a"), ("speed.value", "step.b"), ("split.x", "newX.a"), ("step.result", "newX.b"),
+        ("newX.result", "moved.x"), ("split.y", "moved.y"),
+        ("branch.false", "move.in"), ("moved.result", "move.value"),
+    ]
+    return {"format": "px.graph", "formatVersion": 1,
+            "properties": [{"name": "speed", "value": 6}, {"name": "wrapAt", "value": -40},
+                           {"name": "restartX", "value": level_width_px + 40}],
+            "nodes": nodes, "links": [{"from": a, "to": b} for a, b in links]}
+
+
 def coin_components(tex, script, position):
     return {
         "Transform": {"position": position},
@@ -518,6 +556,9 @@ def main():
         doc = clip_document(tex["player_sheet"], frames, fps, loop)
         (ROOT / "animations" / f"player_{name}.anim.json").write_text(dump_pretty(doc) + "\n")
     script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle")}
+    drift_id = gid("asset/graph/drift")
+    (ROOT / "graphs").mkdir(parents=True, exist_ok=True)
+    (ROOT / "graphs" / "drift.graph.json").write_text(json.dumps(drift_graph(LEVEL_WIDTH * 16), indent=2) + "\n")
     prefab = {name: gid("asset/prefab/" + name) for name in ("coin", "sparkle")}
     scene_id = gid("asset/level1")
     player_id = gid("entity/player")
@@ -558,10 +599,13 @@ def main():
                 name = {"c": "Cloud", "b": "Bush", "f": "Flowers", "s": "Sign"}[ch]
                 # Ground decorations sit on the tile below; clouds float.
                 pos = [cx + (8 if size[0] == 32 else 0), cy]
+                components = {"Transform": {"position": pos},
+                              "Sprite": {"texture": tex["scenery"], "source": source, "size": size, "layer": layer}}
+                if ch == "c":
+                    # Clouds drift: a visual script (graphs/drift.graph.json), each at its own speed.
+                    components["Scripts"] = [{"script": drift_id, "properties": {"speed": 4 + (x * 7) % 5}}]
                 scenery.append({"id": gid(f"entity/{name.lower()}/{x}/{y}"), "name": name,
-                                "parent": scenery_group, "components": {
-                    "Transform": {"position": pos},
-                    "Sprite": {"texture": tex["scenery"], "source": source, "size": size, "layer": layer}}})
+                                "parent": scenery_group, "components": components})
             elif ch == "P":
                 spawn = [cx, cy]
     entities.append({"id": scenery_group, "name": "Scenery", "components": {}})
@@ -644,6 +688,7 @@ def main():
             {"id": script["moving_platform"], "type": "script", "name": "Moving Platform",
              "path": "scripts/moving_platform.luau"},
             {"id": script["sparkle"], "type": "script", "name": "Sparkle", "path": "scripts/sparkle.luau"},
+            {"id": drift_id, "type": "graph", "name": "Drift", "path": "graphs/drift.graph.json"},
             {"id": prefab["coin"], "type": "prefab", "name": "Coin", "path": "prefabs/coin.prefab.json"},
             {"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"},
             {"id": scene_id, "type": "scene", "name": "Level 1", "path": "scenes/level1.scene.json"},

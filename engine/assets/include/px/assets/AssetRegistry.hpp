@@ -11,7 +11,11 @@
 
 namespace px::assets {
 
-enum class AssetType { Texture, Scene, Script, Prefab, Animation, Tileset };
+enum class AssetType { Texture, Scene, Script, Prefab, Animation, Tileset, Graph };
+
+// Scripts and visual scripts (graphs) are both behaviours: attached the same
+// way and run by the same scripting system.
+[[nodiscard]] constexpr bool isBehaviour(AssetType type) { return type == AssetType::Script || type == AssetType::Graph; }
 
 [[nodiscard]] std::string_view assetTypeName(AssetType type) noexcept;
 [[nodiscard]] std::optional<AssetType> assetTypeFromName(std::string_view name) noexcept;

@@ -161,8 +161,8 @@ TEST_CASE("Netgame: two players join, move independently and see each other") {
     const Entity cam = ada.view().findByName("Main Camera");
     REQUIRE_FALSE(cam.isNull());
     CHECK(ada.view().get<Camera>(cam).follow == ada.view().get<EntityInfo>(ada.character()).id);
-    // Idle snapshots are small (animated coins and nothing else).
-    CHECK(h.server->lastSnapshotBytes() < 400);
+    // Idle snapshots are small: only the animated coins and the 8 drifting clouds change.
+    CHECK(h.server->lastSnapshotBytes() < 520);
 }
 
 TEST_CASE("Netgame: a networked player completes the top-down level over a lossy link") {

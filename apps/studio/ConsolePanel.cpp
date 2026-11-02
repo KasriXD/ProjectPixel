@@ -84,7 +84,7 @@ void ConsolePanel::draw(StudioApp& app) {
         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && hasLocation &&
             app.project() != nullptr) {
             for (const auto& entry : app.project()->assets().entries()) {
-                if (entry.type == assets::AssetType::Script && entry.path == path) app.openScript(entry.id, line);
+                if (assets::isBehaviour(entry.type) && entry.path == path) app.openScript(entry.id, line);
             }
         }
         if (ImGui::BeginPopupContextItem("copy")) {

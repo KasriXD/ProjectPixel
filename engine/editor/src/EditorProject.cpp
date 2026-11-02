@@ -3,6 +3,7 @@
 #include "px/assets/Image.hpp"
 #include "px/core/Log.hpp"
 #include "px/project/Prefab.hpp"
+#include "px/scripting/Graph.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
@@ -290,6 +291,11 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         folder = "scenes";
         extension = ".scene.json";
         stem = fileName.substr(0, fileName.size() - extension.size());
+    } else if (endsWith(lowered, ".graph.json")) {
+        type = assets::AssetType::Graph;
+        folder = "graphs";
+        extension = ".graph.json";
+        stem = fileName.substr(0, fileName.size() - extension.size());
     } else if (endsWith(lowered, ".tileset.json")) {
         type = assets::AssetType::Tileset;
         folder = "tilesets";
@@ -319,8 +325,8 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         } else {
             return makeError(ErrorCode::Unsupported,
                              "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), Luau scripts "
-                             "(.luau), scenes (.scene.json), prefabs (.prefab.json), animations (.anim.json) and "
-                             "tilesets (.tileset.json)",
+                             "(.luau), visual scripts (.graph.json), scenes (.scene.json), prefabs (.prefab.json), "
+                             "animations (.anim.json) and tilesets (.tileset.json)",
                              fileName);
         }
     }
@@ -334,6 +340,10 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         const std::string text(bytes->begin(), bytes->end());
         auto scene = project::parseScene(text, fileName, &m_manifest.assets);
         if (!scene) return makeError(scene.error().code, "Cannot import '{}': {}", fileName, scene.error().message);
+    } else if (type == assets::AssetType::Graph) {
+        const std::string text(bytes->begin(), bytes->end());
+        auto graph = scripting::parseGraph(text, fileName);
+        if (!graph) return makeError(graph.error().code, "Cannot import '{}': {}", fileName, graph.error().message);
     } else if (type == assets::AssetType::Tileset) {
         const std::string text(bytes->begin(), bytes->end());
         auto tileset = project::parseTileset(text, fileName, &m_manifest.assets);
@@ -729,6 +739,56 @@ Result<project::AnimationClip> EditorProject::clipFromSheet(assets::AssetId text
     return clip;
 }
 
+// --- Visual scripts -------------------------------------------------------------------------------
+
+Result<assets::AssetId> EditorProject::createGraph(std::string_view name) {
+    if (auto ok = checkName(name, "visual script"); !ok) return ok.error();
+    // A start: when the game starts, print a greeting (shows how chains work).
+    scripting::Graph graph;
+    graph.nodes.push_back({"n1", "event.Start", {40, 40}, {}, {}});
+    graph.nodes.push_back({"n2", "call.print", {300, 40}, {}, {{"value", std::format("Hello from {}!", name)}}});
+    graph.links.push_back({"n1", "then", "n2", "in"});
+    auto path = uniquePath("graphs", toFileStem(name).empty() ? std::string("graph") : toFileStem(name), ".graph.json");
+    if (!path) return path.error();
+    if (auto written = m_files.writeText(path.value(), scripting::serializeGraph(graph)); !written) return written.error();
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Graph,
+                             uniqueAssetName(name, assets::AssetType::Graph), path.value(), assets::TextureFilter::Nearest};
+    if (auto added = m_manifest.assets.add(entry); !added) return added.error();
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(entry.id);
+        return saved.error();
+    }
+    m_scriptsStale = true;
+    log::info("Created visual script '{}' ({})", entry.name, entry.path);
+    return entry.id;
+}
+
+Result<scripting::Graph> EditorProject::loadGraph(assets::AssetId id) const {
+    const auto* entry = m_manifest.assets.find(id);
+    if (entry == nullptr || entry->type != assets::AssetType::Graph) {
+        return makeError(ErrorCode::NotFound, "Visual script {} is not part of the project", id.toString());
+    }
+    auto text = scriptText(id);
+    if (!text) return text.error();
+    return scripting::parseGraph(text.value(), entry->path);
+}
+
+Status EditorProject::saveGraph(assets::AssetId id, const scripting::Graph& graph) {
+    const auto* entry = m_manifest.assets.find(id);
+    if (entry == nullptr || entry->type != assets::AssetType::Graph) {
+        return makeError(ErrorCode::NotFound, "Visual script {} is not part of the project", id.toString());
+    }
+    // A graph with problems is saved too (it is work in progress); they are
+    // reported where the graph is used, like a script with an error.
+    if (auto written = m_files.writeText(entry->path, scripting::serializeGraph(graph)); !written) return written;
+    m_scriptBuffers.erase(id);
+    m_staleScripts.insert(id);
+    std::error_code ec;
+    const auto time = std::filesystem::last_write_time(m_root / std::filesystem::path(entry->path), ec);
+    if (!ec) m_scriptTimes[id] = time;
+    return {};
+}
+
 // --- Tilesets -----------------------------------------------------------------------------------
 
 Result<project::Tileset> EditorProject::loadTileset(assets::AssetId id) const {
@@ -818,7 +878,7 @@ Status EditorProject::saveScene(assets::AssetId id, const scene::Scene& scene) {
 
 Result<std::string> EditorProject::readSource(assets::AssetId id) const {
     const auto* entry = m_manifest.assets.find(id);
-    if (entry == nullptr || entry->type != assets::AssetType::Script) {
+    if (entry == nullptr || !assets::isBehaviour(entry->type)) {
         return makeError(ErrorCode::NotFound, "Script {} is not part of the project", id.toString());
     }
     return m_files.readText(entry->path);
@@ -880,7 +940,7 @@ Status EditorProject::saveAllScripts() {
 bool EditorProject::checkScriptsChangedOnDisk() {
     bool changed = false;
     for (const auto& entry : m_manifest.assets.entries()) {
-        if (entry.type != assets::AssetType::Script) continue;
+        if (!assets::isBehaviour(entry.type)) continue;
         std::error_code ec;
         const auto time = std::filesystem::last_write_time(m_root / std::filesystem::path(entry.path), ec);
         if (ec) continue;
@@ -902,7 +962,10 @@ ScriptInfo EditorProject::describeScript(const assets::AssetEntry& entry) const 
     auto library = std::make_shared<scripting::ScriptLibrary>();
     if (!source) {
         info.error = source.error().message;
-    } else if (auto added = library->add(entry.id, entry.path, source.value()); !added) {
+    } else if (auto added = entry.type == assets::AssetType::Graph
+                                ? library->addGraph(entry.id, entry.path, source.value())
+                                : library->add(entry.id, entry.path, source.value());
+               !added) {
         info.error = added.error().message;
     } else {
         info.compiled = true;
@@ -921,7 +984,7 @@ ScriptInfo EditorProject::describeScript(const assets::AssetEntry& entry) const 
 void EditorProject::refreshScripts() {
     m_scriptInfo.clear();
     for (const auto& entry : m_manifest.assets.entries()) {
-        if (entry.type == assets::AssetType::Script) m_scriptInfo.emplace(entry.id, describeScript(entry));
+        if (assets::isBehaviour(entry.type)) m_scriptInfo.emplace(entry.id, describeScript(entry));
     }
     m_scriptsStale = false;
     m_staleScripts.clear();
@@ -941,10 +1004,13 @@ const ScriptInfo* EditorProject::scriptInfo(assets::AssetId id) {
 Result<std::shared_ptr<const scripting::ScriptLibrary>> EditorProject::buildScriptLibrary() const {
     auto library = std::make_shared<scripting::ScriptLibrary>();
     for (const auto& entry : m_manifest.assets.entries()) {
-        if (entry.type != assets::AssetType::Script) continue;
+        if (!assets::isBehaviour(entry.type)) continue;
         auto source = scriptText(entry.id);
         if (!source) return source.error();
-        if (auto added = library->add(entry.id, entry.path, source.value()); !added) return added.error();
+        const Status added = entry.type == assets::AssetType::Graph
+                                 ? library->addGraph(entry.id, entry.path, source.value())
+                                 : library->add(entry.id, entry.path, source.value());
+        if (!added) return added.error();
     }
     return std::shared_ptr<const scripting::ScriptLibrary>(std::move(library));
 }

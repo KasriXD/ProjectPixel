@@ -9,6 +9,7 @@
 #include "px/project/Tileset.hpp"
 #include "px/project/Project.hpp"
 #include "px/scene/Scene.hpp"
+#include "px/scripting/Graph.hpp"
 #include "px/scripting/ScriptLibrary.hpp"
 #include "px/scripting/ScriptSystem.hpp"
 
@@ -136,6 +137,14 @@ public:
     // A clip of `texture` cut into `cellSize` cells: the cells of the first
     // row that are not fully transparent (a sprite strip), at 8 frames per second.
     [[nodiscard]] Result<project::AnimationClip> clipFromSheet(assets::AssetId texture, Vec2 cellSize) const;
+
+    // --- Visual scripts (graphs) --------------------------------------------------------------
+    // Creates graphs/<name>.graph.json with a small starting graph. Graphs are
+    // behaviours like scripts: attached the same way, described by scriptInfo.
+    [[nodiscard]] Result<assets::AssetId> createGraph(std::string_view name);
+    [[nodiscard]] Result<scripting::Graph> loadGraph(assets::AssetId id) const;
+    // Writes the graph at once (Studio's graph editor saves as it goes).
+    [[nodiscard]] Status saveGraph(assets::AssetId id, const scripting::Graph& graph);
 
     // --- Tilesets (what the tiles of a tileset image are) -----------------------------------
     [[nodiscard]] Result<project::Tileset> loadTileset(assets::AssetId id) const;

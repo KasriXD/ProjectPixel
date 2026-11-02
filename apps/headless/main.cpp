@@ -9,6 +9,7 @@
 //   px-headless <project-dir> --net-test [--clients N] [--latency MS] [--jitter MS] [--loss PCT]
 //               [--udp] [--port N] [--input-script FILE] [--ticks N] [--expect-...]
 //   px-headless --print-api-reference
+//   px-headless --compile-graph FILE.graph.json
 //   px-headless --print-component-reference
 //
 // Exit codes: 0 success, 1 load/runtime error, 2 bad arguments,
@@ -27,8 +28,10 @@
 #include "px/scene/ComponentInfo.hpp"
 #include "px/runtime/InputScript.hpp"
 #include "px/scripting/ApiReference.hpp"
+#include "px/scripting/Graph.hpp"
 
 #include <charconv>
+#include <filesystem>
 #include <cstdio>
 #include <format>
 #include <optional>
@@ -49,6 +52,7 @@ struct Options {
     bool logEvents = false;
     bool verbose = false;
     bool printApiReference = false;
+    std::string compileGraph; // print the Luau a visual script compiles to
     bool printComponentReference = false;
     bool resave = false;
     int traceEvery = 0; // print the player state every N ticks (0 = off)
@@ -82,6 +86,7 @@ void printUsage() {
                  "                                            (server and clients in one process; client 1\n"
                  "                                             plays the input script)\n"
                  "       px-headless --print-api-reference\n"
+                 "       px-headless --compile-graph FILE.graph.json   (print the Luau a visual script runs as)\n"
                  "       px-headless --print-component-reference\n",
                  version::productName, version::string);
 }
@@ -157,6 +162,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.printApiReference = true;
         } else if (arg == "--print-component-reference") {
             o.printComponentReference = true;
+        } else if (arg == "--compile-graph") {
+            o.compileGraph = needValue();
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -166,7 +173,9 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             return std::nullopt;
         }
     }
-    if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference) return std::nullopt;
+    if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty()) {
+        return std::nullopt;
+    }
     return o;
 }
 
@@ -191,9 +200,19 @@ int resaveProject(DirectoryFileSystem& files) {
         return 1;
     }
     for (const auto& entry : manifest->assets.entries()) {
-        if (entry.type == assets::AssetType::Animation || entry.type == assets::AssetType::Tileset) {
+        if (entry.type == assets::AssetType::Animation || entry.type == assets::AssetType::Tileset ||
+            entry.type == assets::AssetType::Graph) {
             std::string saved;
-            if (entry.type == assets::AssetType::Animation) {
+            if (entry.type == assets::AssetType::Graph) {
+                auto text = files.readText(entry.path);
+                auto graph = text ? scripting::parseGraph(text.value(), files.describe(entry.path))
+                                  : Result<scripting::Graph>(text.error());
+                if (!graph) {
+                    log::error("{}", graph.error().message);
+                    return 1;
+                }
+                saved = scripting::serializeGraph(graph.value());
+            } else if (entry.type == assets::AssetType::Animation) {
                 auto clip = project::loadAnimation(files, manifest.value(), entry.id);
                 if (!clip) {
                     log::error("{}", clip.error().message);
@@ -266,6 +285,25 @@ int main(int argc, char** argv) {
         const std::string md = scripting::generateApiReferenceMarkdown();
         std::fwrite(md.data(), 1, md.size(), stdout);
         return 0;
+    }
+    if (!options->compileGraph.empty()) {
+        // Shows what a visual script runs as (and its problems).
+        const std::filesystem::path file(options->compileGraph);
+        DirectoryFileSystem here(file.has_parent_path() ? file.parent_path() : std::filesystem::path("."));
+        auto text = here.readText(file.filename().string());
+        if (!text) {
+            log::error("{}", text.error().message);
+            return 1;
+        }
+        auto graph = scripting::parseGraph(text.value(), options->compileGraph);
+        if (!graph) {
+            log::error("{}", graph.error().message);
+            return 1;
+        }
+        const auto compiled = scripting::compileGraph(graph.value(), options->compileGraph);
+        for (const auto& p : compiled.problems) log::error("{}: {}", options->compileGraph, p.message);
+        std::fwrite(compiled.source.data(), 1, compiled.source.size(), stdout);
+        return compiled.ok() ? 0 : 1;
     }
     if (options->printComponentReference) {
         const std::string md = scene::generateComponentReferenceMarkdown();

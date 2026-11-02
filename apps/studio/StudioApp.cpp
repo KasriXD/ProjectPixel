@@ -254,6 +254,7 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     m_scripts = std::make_unique<ScriptEditorPanel>();
     m_animationEditor = std::make_unique<AnimationEditorPanel>();
     m_tilesetEditor = std::make_unique<TilesetEditorPanel>();
+    m_graphEditor = std::make_unique<GraphEditorPanel>();
     m_projectSettings = std::make_unique<ProjectSettingsPanel>();
     m_toolbox = std::make_unique<ToolboxPanel>();
     if (m_options.resetLayout) m_layoutBuilt = false;
@@ -386,6 +387,7 @@ void StudioApp::closeProjectNow() {
     *m_scripts = ScriptEditorPanel{};
     m_animationEditor->close();
     m_tilesetEditor->close();
+    m_graphEditor->close();
     m_tilesets.reset();
     showProjectSettings = false;
     updateTitle();
@@ -558,7 +560,14 @@ void StudioApp::advancePlay(double elapsed) {
 
 // --- Misc commands -------------------------------------------------------------------------------------
 
-void StudioApp::openScript(assets::AssetId script, int line) { m_scripts->open(*this, script, line); }
+void StudioApp::openScript(assets::AssetId script, int line) {
+    const auto* entry = m_project ? m_project->asset(script) : nullptr;
+    if (entry != nullptr && entry->type == assets::AssetType::Graph) {
+        m_graphEditor->open(*this, script);
+    } else {
+        m_scripts->open(*this, script, line);
+    }
+}
 
 void StudioApp::openAnimation(assets::AssetId clip) { m_animationEditor->open(*this, clip); }
 
@@ -1016,6 +1025,7 @@ void StudioApp::drawUi() {
         m_scripts->draw(*this);
         m_animationEditor->draw(*this);
         m_tilesetEditor->draw(*this);
+        m_graphEditor->draw(*this);
         if (showProjectSettings) m_projectSettings->draw(*this, showProjectSettings);
         if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
     }
@@ -1058,6 +1068,7 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
     for (const std::string& script : m_scripts->windowIds()) ImGui::DockBuilderDockWindow(script.c_str(), center);
     ImGui::DockBuilderDockWindow(AnimationEditorPanel::windowId(), center);
     ImGui::DockBuilderDockWindow(TilesetEditorPanel::windowId(), center);
+    ImGui::DockBuilderDockWindow(GraphEditorPanel::windowId(), center);
     ImGui::DockBuilderFinish(dockspace);
 }
 

@@ -1,8 +1,10 @@
 #pragma once
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // Machine-readable description of the gameplay scripting API.
 //
@@ -36,6 +38,23 @@ struct ApiMember {
     bool writable = false;      // properties: can be assigned (authority only)
     bool pure = false;          // no side effects: a visual-scripting "data" node rather than an "exec" node
 };
+
+// A parameter or result in a member's signature.
+struct ApiParam {
+    std::string name;     // empty for results
+    std::string type;     // "number", "boolean", "string", "vector", "Entity", "{Entity}", "any", ...
+    bool optional = false; // written "type?"
+};
+
+// The signature of a member, parsed from its signature text (structured
+// metadata for tools such as the visual-scripting node palette).
+struct ApiSignature {
+    std::vector<ApiParam> params; // in call order; methods without `self`, events: the handler's arguments
+    std::optional<ApiParam> result; // functions, methods, globals: the return value; properties: the value
+    bool variadic = false;          // ends in "...: any"
+    bool takesFunction = false;     // a parameter is a function (e.g. Events.on): not usable as a node
+};
+[[nodiscard]] ApiSignature parseApiSignature(const ApiMember& member);
 
 [[nodiscard]] std::span<const ApiMember> apiReference();
 [[nodiscard]] std::string generateApiReferenceMarkdown();

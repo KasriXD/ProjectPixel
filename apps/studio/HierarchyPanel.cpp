@@ -228,7 +228,7 @@ void HierarchyPanel::draw(StudioApp& app) {
                     assets::AssetId asset;
                     std::memcpy(&asset, payload->Data, sizeof(asset));
                     const auto* entry = app.project()->asset(asset);
-                    if (entry != nullptr && entry->type == assets::AssetType::Script) {
+                    if (entry != nullptr && assets::isBehaviour(entry->type)) {
                         if (auto attached = app.document()->attachScript(e, asset); !attached) {
                             app.notify(attached.error().message, true);
                         } else {

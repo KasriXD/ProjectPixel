@@ -221,6 +221,6 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [docs/platform-support.md](docs/platform-support.md): desktop, mobile and browser: what is verified and what is planned
 - [docs/scripting.md](docs/scripting.md): Luau scripting guide: lifecycle, sandbox, limits, realms, versioning
 - [docs/scripting-api.md](docs/scripting-api.md): generated API reference
-- [docs/visual-scripting.md](docs/visual-scripting.md): visual scripting design (planned)
+- [docs/visual-scripting.md](docs/visual-scripting.md): visual scripts (node graphs) and the graph editor
 - [docs/security.md](docs/security.md): threat model and current protections
 - [docs/adr/](docs/adr/): architecture decision records

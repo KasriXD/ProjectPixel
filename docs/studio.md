@@ -225,6 +225,12 @@ size, collider display and zoom.
 Scripting itself is described in [scripting.md](scripting.md) and
 [scripting-api.md](scripting-api.md).
 
+**Visual scripts**: *+ New > Visual Script...* in Assets makes a behaviour of
+connected nodes and opens it in the graph editor (right-click the canvas to
+add nodes, drag between pins to connect them; *Show Luau* shows the code it
+runs as). Visual scripts attach, take properties and run like scripts. See
+[visual-scripting.md](visual-scripting.md).
+
 ## Playing
 
 | Button | Key | Effect |
@@ -325,7 +331,6 @@ both kinds, saved, reloaded and played without script errors.
 
 These are known and planned, not bugs:
 
-- **No prefabs** yet: copy/paste and duplicate are the way to reuse entities.
 - The Toolbox has the built-in starter library only; creators cannot add
   their own items to it yet. Two kinds of game so far (platformer and
   top-down); more are planned and need only a controller, art and a library

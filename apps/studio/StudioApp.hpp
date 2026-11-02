@@ -39,6 +39,7 @@ class ConsolePanel;
 class ScriptEditorPanel;
 class AnimationEditorPanel;
 class TilesetEditorPanel;
+class GraphEditorPanel;
 class ProjectSettingsPanel;
 class ToolboxPanel;
 
@@ -137,6 +138,7 @@ public:
     void togglePause();
     void stepOnce();
 
+    // Opens a script in the script editor, or a visual script in the graph editor.
     void openScript(assets::AssetId script, int line = 0);
     void openAnimation(assets::AssetId clip);
     // Opens the tile properties of a tileset image (creating its tileset).
@@ -254,6 +256,7 @@ private:
     std::unique_ptr<ScriptEditorPanel> m_scripts;
     std::unique_ptr<AnimationEditorPanel> m_animationEditor;
     std::unique_ptr<TilesetEditorPanel> m_tilesetEditor;
+    std::unique_ptr<GraphEditorPanel> m_graphEditor;
     std::shared_ptr<const project::TilesetLibrary> m_tilesets; // cache; reset when tilesets change
     std::unique_ptr<ProjectSettingsPanel> m_projectSettings;
     std::unique_ptr<ToolboxPanel> m_toolbox;

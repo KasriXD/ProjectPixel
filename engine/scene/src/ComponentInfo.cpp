@@ -530,7 +530,11 @@ std::vector<ComponentProblem> validateEntity(const Scene& scene, Entity entity, 
                                        std::format("too many scripts; the limit is {}", f.maxCount)});
                     }
                     for (const AttachedScript& s : list) {
-                        checkAsset(out, c, f.name, s.script, assets::AssetType::Script, true, assets);
+                        const auto* entry = assets != nullptr ? assets->find(s.script) : nullptr;
+                        const auto type = entry != nullptr && entry->type == assets::AssetType::Graph
+                                              ? assets::AssetType::Graph
+                                              : assets::AssetType::Script;
+                        checkAsset(out, c, f.name, s.script, type, true, assets);
                         if (s.properties.size() > kMaxScriptProperties) {
                             out.push_back({std::string(c.name), std::string(f.name),
                                            std::format("too many properties; the limit is {}", kMaxScriptProperties)});

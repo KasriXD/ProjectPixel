@@ -87,8 +87,8 @@ fails to load with a message like:
 Entity 'Moving Platform': scripts/moving_platform.luau has no property 'sped' (did you mean 'speed'?)
 ```
 
-This strictness is deliberate: it is also what a future property inspector
-(Studio) and visual-scripting nodes will rely on.
+This strictness is deliberate: Studio's property inspector and visual
+scripts rely on it.
 
 ## Lifecycle
 
@@ -290,7 +290,10 @@ changing the API.
 
 ## Visual scripting
 
-Not implemented yet. The API was designed for it: see
+Visual scripts (`*.graph.json`) are behaviours made of nodes. They compile to
+Luau and run exactly like scripts, so they mix freely with Luau behaviours on
+the same entity and talk to them through properties and `Events`. Every
+function, method and property in the API is a node. See
 [visual-scripting.md](visual-scripting.md).
 
 ## Hierarchy

@@ -343,6 +343,7 @@ void ScriptSystem::reportError(const std::string& script, const std::string& ent
     error.entity = entity;
     error.phase = phase;
     error.message = result.message;
+    if (const CompiledScript* compiled = m_library->findByName(script)) error.message = compiled->locate(result.message);
     error.traceback = result.traceback;
     m_host.scriptError(error);
 }

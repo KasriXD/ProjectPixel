@@ -141,6 +141,12 @@
       "path": "scripts/sparkle.luau"
     },
     {
+      "id": "83b8999f-374a-543e-a1ac-897ab87c299d",
+      "type": "graph",
+      "name": "Drift",
+      "path": "graphs/drift.graph.json"
+    },
+    {
       "id": "af8ce9e3-1b7e-5977-bb8e-f35dba9370d5",
       "type": "prefab",
       "name": "Coin",

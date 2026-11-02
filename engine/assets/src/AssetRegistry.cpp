@@ -12,6 +12,7 @@ std::string_view assetTypeName(AssetType type) noexcept {
         case AssetType::Prefab: return "prefab";
         case AssetType::Animation: return "animation";
         case AssetType::Tileset: return "tileset";
+        case AssetType::Graph: return "graph";
     }
     return "unknown";
 }
@@ -23,6 +24,7 @@ std::optional<AssetType> assetTypeFromName(std::string_view name) noexcept {
     if (name == "prefab") return AssetType::Prefab;
     if (name == "animation") return AssetType::Animation;
     if (name == "tileset") return AssetType::Tileset;
+    if (name == "graph") return AssetType::Graph;
     return std::nullopt;
 }
 
