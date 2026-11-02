@@ -24,6 +24,9 @@ Result<LoadedGame> loadGame(const IFileSystem& files) {
     auto animations = project::loadAnimationLibrary(files, game.manifest);
     if (!animations) return animations.error();
     game.animations = std::move(animations.value());
+    auto tilesets = project::loadTilesetLibrary(files, game.manifest);
+    if (!tilesets) return tilesets.error();
+    game.tilesets = std::move(tilesets.value());
 
     auto scripts = scripting::loadScriptLibrary(files, game.manifest.assets);
     if (!scripts) return scripts.error();
@@ -35,6 +38,7 @@ Result<std::unique_ptr<GameSession>> startSession(const LoadedGame& game, const 
     SessionOptions withContent = options;
     if (withContent.prefabs == nullptr) withContent.prefabs = game.prefabs;
     if (withContent.animations == nullptr) withContent.animations = game.animations;
+    if (withContent.tilesets == nullptr) withContent.tilesets = game.tilesets;
     return GameSession::create(game.manifest, game.startScene, game.scripts, withContent);
 }
 

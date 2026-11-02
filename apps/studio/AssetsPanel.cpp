@@ -19,6 +19,7 @@ bool matches(const assets::AssetEntry& entry, int typeFilter, const std::string&
     if (typeFilter == 3 && entry.type != assets::AssetType::Scene) return false;
     if (typeFilter == 4 && entry.type != assets::AssetType::Prefab) return false;
     if (typeFilter == 5 && entry.type != assets::AssetType::Animation) return false;
+    if (typeFilter == 6 && entry.type != assets::AssetType::Tileset) return false;
     if (filter.empty()) return true;
     const auto lower = [](std::string s) {
         for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -35,6 +36,7 @@ const char* typeLabel(assets::AssetType type) {
         case assets::AssetType::Scene: return "scene";
         case assets::AssetType::Prefab: return "prefab";
         case assets::AssetType::Animation: return "animation";
+        case assets::AssetType::Tileset: return "tileset";
     }
     return "?";
 }
@@ -54,6 +56,9 @@ void AssetsPanel::drawAssetMenu(StudioApp& app, const assets::AssetEntry& entry)
     }
     if (entry.type == assets::AssetType::Animation) {
         if (ImGui::MenuItem("Edit Animation")) app.openAnimation(entry.id);
+    }
+    if (entry.type == assets::AssetType::Tileset) {
+        if (ImGui::MenuItem("Edit Tiles")) app.openTileset(entry.id);
     }
     if (entry.type == assets::AssetType::Prefab) {
         if (ImGui::MenuItem("Place In Scene", nullptr, false, !app.playing() && app.document() != nullptr)) {
@@ -114,10 +119,10 @@ void AssetsPanel::draw(StudioApp& app) {
         if (ImGui::MenuItem("Animation...")) m_openNewAnimation = true;
         ImGui::EndPopup();
     }
-    const char* types[] = {"All", "Images", "Scripts", "Scenes", "Prefabs", "Animations"};
+    const char* types[] = {"All", "Images", "Scripts", "Scenes", "Prefabs", "Animations", "Tilesets"};
     flow(em * 6.0f);
     ImGui::SetNextItemWidth(em * 6.0f);
-    ImGui::Combo("##type", &m_typeFilter, types, 6);
+    ImGui::Combo("##type", &m_typeFilter, types, 7);
     flow(em * 8.0f);
     ImGui::SetNextItemWidth(std::min(em * 12.0f, lineEnd - ImGui::GetCursorScreenPos().x));
     ImGui::InputTextWithHint("##filter", "Search", &m_filter);
@@ -159,6 +164,9 @@ void AssetsPanel::draw(StudioApp& app) {
             } else if (entry.type == assets::AssetType::Animation) {
                 bg = IM_COL32(130, 95, 45, 255);
                 glyph = "ANIM";
+            } else if (entry.type == assets::AssetType::Tileset) {
+                bg = IM_COL32(60, 110, 110, 255);
+                glyph = "TILES";
             }
             dl->AddRectFilled({cursor.x + 6, cursor.y + 4}, {cursor.x + tile - 6, cursor.y + tile * 0.75f - 4}, bg, 6.0f);
             const ImVec2 ts = ImGui::CalcTextSize(glyph);
@@ -170,6 +178,7 @@ void AssetsPanel::draw(StudioApp& app) {
             if (entry.type == assets::AssetType::Scene) openScene = entry.id;
             if (entry.type == assets::AssetType::Prefab && !app.playing()) app.placePrefab(entry.id, std::nullopt);
             if (entry.type == assets::AssetType::Animation) app.openAnimation(entry.id);
+            if (entry.type == assets::AssetType::Tileset) app.openTileset(entry.id);
             if (entry.type == assets::AssetType::Script) app.openScript(entry.id);
         }
         if (ImGui::BeginDragDropSource()) {
@@ -237,8 +246,8 @@ void AssetsPanel::draw(StudioApp& app) {
         ImGui::Text("'%s' is used by %zu entit%s", entry != nullptr ? entry->name.c_str() : "?", uses.size(),
                     uses.size() == 1 ? "y" : "ies");
         for (const auto& use : uses) {
-            if (use.where == assets::AssetType::Animation) {
-                ImGui::BulletText("animation %s", use.sceneName.c_str());
+            if (use.where == assets::AssetType::Animation || use.where == assets::AssetType::Tileset) {
+                ImGui::BulletText("%s %s", assets::assetTypeName(use.where).data(), use.sceneName.c_str());
             } else {
                 ImGui::BulletText("%s  (%s %s)", use.entityName.c_str(),
                                   use.where == assets::AssetType::Prefab ? "prefab" : "scene", use.sceneName.c_str());

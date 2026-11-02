@@ -57,6 +57,7 @@ struct SessionOptions {
     // Content beyond the scene; startSession passes the game's.
     std::shared_ptr<const project::PrefabLibrary> prefabs;       // scripts can spawn these (World.spawn)
     std::shared_ptr<const project::AnimationLibrary> animations; // clips Animators play
+    std::shared_ptr<const project::TilesetLibrary> tilesets;     // what tiles are (collision, tags)
 };
 
 // Entities scripts may create in one tick (World.spawn; a prefab's
@@ -198,6 +199,7 @@ private:
     assets::AssetId findAnimation(std::string_view name) const override;
     std::string animationName(assets::AssetId clip) const override;
     std::vector<std::string> animationNames() const override;
+    const std::vector<std::string>* tileTags(assets::AssetId tileset, Vec2 tileSize, int tile) const override;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -232,6 +234,7 @@ private:
     std::vector<scene::Entity> m_pendingDestroy;
     std::shared_ptr<const project::PrefabLibrary> m_prefabs;
     std::shared_ptr<const project::AnimationLibrary> m_animations;
+    std::shared_ptr<const project::TilesetLibrary> m_tilesets;
     std::vector<scene::Entity> m_pendingCreated; // spawned roots whose scripts are created after the phase
     std::uint64_t m_spawnCount = 0;              // entities spawned so far (derives their ids)
     std::size_t m_spawnedThisTick = 0;

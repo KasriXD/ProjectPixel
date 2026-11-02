@@ -172,9 +172,11 @@ in `px-player` and `px-headless`.)
    and move with their parent afterwards.
 5. **Paint tiles**: select a Tilemap, pick a tile in its palette in Properties,
    choose the Paint tool (B) and drag in the Scene view. Right-drag or the
-   Erase tool (E) erases; Alt+click picks the tile under the mouse. Resize the
-   map in Properties (tiles are kept at the top left). Turn on *Solid* to
-   make painted tiles block movement.
+   Erase tool (E) erases; Rect (U) fills a rectangle, Fill (G) bucket-fills;
+   Alt+click picks the tile under the mouse. Resize the map in Properties
+   (tiles are kept at the top left). Turn on *Solid* to make painted tiles
+   block movement, and *Edit Tile Properties* to make tiles one-way
+   platforms, slopes or not blocking ([tilesets.md](tilesets.md)).
 6. **Components**: *Add Component* in Properties, grouped by category.
    Adding *PlatformerController* or *TopDownController* also adds the
    components it needs.
@@ -196,7 +198,7 @@ in `px-player` and `px-headless`.)
 | Mouse wheel | Zoom around the mouse |
 | Middle drag, right drag, Space + left drag, Pan tool (H) | Pan |
 | F | Frame the selection (or the whole scene) |
-| Q / H / B / E | Select / Pan / Paint / Erase tool |
+| Q / H / B / E / U / G | Select / Pan / Paint / Erase / Rect / Fill tool |
 | Arrows, Shift+arrows | Nudge the selection |
 
 The toolbar above the view has the tools, grid and snapping options, grid

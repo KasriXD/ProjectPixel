@@ -5,6 +5,7 @@
 #include "px/project/Animation.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
@@ -63,7 +64,7 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 17); // 6 images, 4 scripts, 2 prefabs, 4 animations, 1 scene
+    CHECK(manifest->assets.size() == 18); // 6 images, 4 scripts, 2 prefabs, 4 animations, 1 tileset, 1 scene
     CHECK(manifest->settings.scripting.apiVersion == 1);
 }
 
@@ -458,13 +459,20 @@ TEST_CASE("The example projects are stored exactly as Studio saves them") {
         CHECK(serializeProjectManifest(manifest.value()) == manifestOnDisk);
         for (const auto& entry : manifest->assets.entries()) {
             if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab &&
-                entry.type != assets::AssetType::Animation) {
+                entry.type != assets::AssetType::Animation && entry.type != assets::AssetType::Tileset) {
                 continue;
             }
             auto text = fs.readText(entry.path);
             REQUIRE(text.ok());
             std::string onDisk = text.value();
             std::erase(onDisk, '\r');
+            if (entry.type == assets::AssetType::Tileset) {
+                auto tileset = parseTileset(onDisk, entry.path, &manifest->assets);
+                REQUIRE_MESSAGE(tileset.ok(), (tileset.ok() ? "" : tileset.error().message));
+                CHECK_MESSAGE(serializeTileset(tileset.value()) == onDisk, entry.path,
+                              " is not in canonical form; run px-headless examples/<name> --resave");
+                continue;
+            }
             if (entry.type == assets::AssetType::Animation) {
                 auto clip = parseAnimation(onDisk, entry.path, &manifest->assets);
                 REQUIRE_MESSAGE(clip.ok(), (clip.ok() ? "" : clip.error().message));

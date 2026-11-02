@@ -144,6 +144,7 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
 
     session->m_prefabs = options.prefabs;
     session->m_animations = options.animations;
+    session->m_tilesets = options.tilesets;
     session->m_spawnCount = options.seed;
 
     scripting::ScriptSystemOptions scriptOptions;
@@ -169,7 +170,7 @@ Entity GameSession::player() const {
 
 void GameSession::buildStaticCollision() {
     m_collision.clear();
-    addTilemapCollision(m_scene, m_collision);
+    addTilemapCollision(m_scene, m_collision, m_tilesets.get());
     m_worldBounds = tilemapBounds(m_scene);
 }
 
@@ -429,7 +430,7 @@ void GameSession::updateMovingSolids() {
         const auto* t = m_scene.tryGet<Transform>(e);
         if (c == nullptr || t == nullptr || c->isTrigger || m_scene.tryGet<KinematicBody>(e) != nullptr) continue;
         const Vec2 position = m_scene.worldPosition(e);
-        m_collision.addBox(c->worldRect(position), ownerOf(e));
+        m_collision.addBox(c->worldRect(position), ownerOf(e), colliderShape(*c));
         m_solids.push_back({e, position});
     }
 
@@ -607,6 +608,11 @@ assets::AssetId GameSession::findAnimation(std::string_view name) const {
 std::string GameSession::animationName(assets::AssetId clip) const {
     const auto* entry = m_animations != nullptr ? m_animations->find(clip) : nullptr;
     return entry != nullptr ? entry->name : std::string();
+}
+
+const std::vector<std::string>* GameSession::tileTags(assets::AssetId tileset, Vec2 tileSize, int tile) const {
+    const project::Tileset* t = m_tilesets != nullptr ? m_tilesets->forTexture(tileset, tileSize) : nullptr;
+    return t != nullptr ? &t->info(tile).tags : nullptr;
 }
 
 std::vector<std::string> GameSession::animationNames() const {

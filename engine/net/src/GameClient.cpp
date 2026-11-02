@@ -224,7 +224,7 @@ void GameClient::rebuildCollision() {
     if (h.value() != m_tilemapHash || m_collision.grids().empty()) {
         m_tilemapHash = h.value();
         m_collision.clear();
-        runtime::addTilemapCollision(m_latest, m_collision);
+        runtime::addTilemapCollision(m_latest, m_collision, m_loaded.tilesets.get());
         m_worldBounds = runtime::tilemapBounds(m_latest);
     }
     m_collision.clearBoxes();
@@ -234,7 +234,7 @@ void GameClient::rebuildCollision() {
             m_latest.tryGet<KinematicBody>(e) != nullptr) {
             continue;
         }
-        m_collision.addBox(c->worldRect(m_latest.worldPosition(e)), e.index + 1);
+        m_collision.addBox(c->worldRect(m_latest.worldPosition(e)), e.index + 1, runtime::colliderShape(*c));
     }
 }
 

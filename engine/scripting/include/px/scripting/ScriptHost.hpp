@@ -71,6 +71,14 @@ public:
     [[nodiscard]] virtual std::string animationName(assets::AssetId /*clip*/) const { return {}; }
     [[nodiscard]] virtual std::vector<std::string> animationNames() const { return {}; }
 
+    // --- Tiles -------------------------------------------------------------------------
+    // Tags of a tile of the tileset image `tileset` (tiles of `tileSize`), or
+    // nullptr when the image has no tileset.
+    [[nodiscard]] virtual const std::vector<std::string>* tileTags(assets::AssetId /*tileset*/, Vec2 /*tileSize*/,
+                                                                   int /*tile*/) const {
+        return nullptr;
+    }
+
     // --- Reporting --------------------------------------------------------------
     virtual void scriptLog(log::Level level, std::string_view script, std::string_view message) = 0;
     virtual void scriptError(const ScriptError& error) = 0;

@@ -87,6 +87,12 @@
       "filter": "nearest"
     },
     {
+      "id": "031238fa-03fe-5042-9c82-e25c142d7e1e",
+      "type": "tileset",
+      "name": "Tiles",
+      "path": "tilesets/tiles.tileset.json"
+    },
+    {
       "id": "2ae5af57-b8e8-5c4a-828d-27d1f2bc3cb7",
       "type": "animation",
       "name": "Player Idle",

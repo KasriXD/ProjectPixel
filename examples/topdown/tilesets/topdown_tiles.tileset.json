@@ -1,0 +1,62 @@
+{
+  "format": "px.tileset",
+  "formatVersion": 1,
+  "texture": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
+  "tileSize": [16, 16],
+  "tiles": [
+    {
+      "tile": 0,
+      "collision": "none"
+    },
+    {
+      "tile": 1,
+      "collision": "none"
+    },
+    {
+      "tile": 2,
+      "collision": "none"
+    },
+    {
+      "tile": 3,
+      "collision": "none"
+    },
+    {
+      "tile": 4,
+      "collision": "solid",
+      "tags": [
+        "water"
+      ]
+    },
+    {
+      "tile": 5,
+      "collision": "none"
+    },
+    {
+      "tile": 6,
+      "collision": "none"
+    },
+    {
+      "tile": 7,
+      "collision": "none"
+    },
+    {
+      "tile": 11,
+      "collision": "solid",
+      "tags": [
+        "water"
+      ]
+    },
+    {
+      "tile": 12,
+      "collision": "none"
+    },
+    {
+      "tile": 14,
+      "collision": "none"
+    },
+    {
+      "tile": 15,
+      "collision": "none"
+    }
+  ]
+}

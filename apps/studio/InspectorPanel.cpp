@@ -697,10 +697,23 @@ void InspectorPanel::drawTilemapTools(StudioApp& app, Scene& scene, Entity entit
         ImGui::SeparatorText("Paint tiles");
         if (ImGui::RadioButton("Paint (B)", app.tool == Tool::Paint)) app.tool = Tool::Paint;
         ImGui::SameLine();
+        if (ImGui::RadioButton("Rect (U)", app.tool == Tool::Rectangle)) app.tool = Tool::Rectangle;
+        ImGui::SameLine();
+        if (ImGui::RadioButton("Fill (G)", app.tool == Tool::Fill)) app.tool = Tool::Fill;
         if (ImGui::RadioButton("Erase (E)", app.tool == Tool::Erase)) app.tool = Tool::Erase;
         ImGui::SameLine();
         if (ImGui::RadioButton("Select (Q)", app.tool == Tool::Select)) app.tool = Tool::Select;
-        ImGui::TextDisabled("Left drag paints, right drag erases, Alt+click picks a tile.");
+        ImGui::TextDisabled("Left button paints, right button erases, Alt+click picks a tile.");
+        const project::Tileset* tileset = app.tilesetFor(map->tileset, map->tileSize);
+        if (ImGui::SmallButton(tileset != nullptr ? "Edit Tile Properties" : "Set Up Tile Properties")) {
+            app.editTileProperties(map->tileset, map->tileSize);
+        }
+        ui::tooltip("Say which tiles are solid, one-way floors, slopes or not blocking, and give them tags. They "
+                    "apply to every tilemap painted with this image.");
+        if (!map->solid && tileset != nullptr) {
+            ImGui::SameLine();
+            ImGui::TextDisabled("(Solid is off: no tile blocks)");
+        }
 
         const float cell = std::clamp(ImGui::GetContentRegionAvail().x / static_cast<float>(columns), 16.0f,
                                       ImGui::GetFontSize() * 3.0f);
@@ -722,6 +735,7 @@ void InspectorPanel::drawTilemapTools(StudioApp& app, Scene& scene, Entity entit
                                  (static_cast<float>(r) + 1.0f) * map->tileSize.y / th};
                 dl->AddImage(texRef, p0, p1, uv0, uv1);
                 const int index = r * columns + c;
+                if (tileset != nullptr) ui::drawTileMarker(dl, p0, p1, tileset->info(index));
                 if (index == app.paintTile) dl->AddRect(p0, p1, IM_COL32(255, 220, 60, 255), 0.0f, 2.0f);
             }
         }
@@ -730,7 +744,7 @@ void InspectorPanel::drawTilemapTools(StudioApp& app, Scene& scene, Entity entit
             const int c = std::clamp(static_cast<int>((m.x - origin.x) / cell), 0, columns - 1);
             const int r = std::clamp(static_cast<int>((m.y - origin.y) / cell), 0, rows - 1);
             app.paintTile = r * columns + c;
-            app.tool = Tool::Paint;
+            if (!isTileTool(app.tool) || app.tool == Tool::Erase) app.tool = Tool::Paint;
         }
         ImGui::Text("Tile %d", app.paintTile);
     } else {

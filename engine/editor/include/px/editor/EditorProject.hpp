@@ -6,6 +6,7 @@
 #include "px/project/Animation.hpp"
 #include "px/project/Library.hpp"
 #include "px/project/Prefab.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/project/Project.hpp"
 #include "px/scene/Scene.hpp"
 #include "px/scripting/ScriptLibrary.hpp"
@@ -89,7 +90,7 @@ public:
     // Copies a file from outside the project into it and registers it.
     // The type comes from the extension: .png .jpg .jpeg .bmp .tga (texture),
     // .luau (script), .scene.json (scene), .prefab.json (prefab), .anim.json
-    // (animation). Files are
+    // (animation), .tileset.json (tileset). Files are
     // checked first (images decoded, scenes and prefabs parsed), so a broken
     // file is refused.
     [[nodiscard]] Result<assets::AssetId> importFile(const std::filesystem::path& source);
@@ -135,6 +136,16 @@ public:
     // A clip of `texture` cut into `cellSize` cells: the cells of the first
     // row that are not fully transparent (a sprite strip), at 8 frames per second.
     [[nodiscard]] Result<project::AnimationClip> clipFromSheet(assets::AssetId texture, Vec2 cellSize) const;
+
+    // --- Tilesets (what the tiles of a tileset image are) -----------------------------------
+    [[nodiscard]] Result<project::Tileset> loadTileset(assets::AssetId id) const;
+    [[nodiscard]] Status saveTileset(assets::AssetId id, const project::Tileset& tileset);
+    [[nodiscard]] Result<std::shared_ptr<const project::TilesetLibrary>> buildTilesetLibrary() const;
+    // The tileset of an image with tiles of `tileSize` (nil if it has none).
+    [[nodiscard]] assets::AssetId tilesetFor(assets::AssetId texture, Vec2 tileSize) const;
+    // The tileset of the image, creating tilesets/<image>.tileset.json (every
+    // tile solid) if there is none yet.
+    [[nodiscard]] Result<assets::AssetId> createTileset(assets::AssetId texture, Vec2 tileSize);
 
     // --- Scenes ----------------------------------------------------------------------------
     [[nodiscard]] Result<scene::Scene> loadScene(assets::AssetId id, std::vector<std::string>* warnings = nullptr) const;

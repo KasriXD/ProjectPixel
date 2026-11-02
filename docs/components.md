@@ -89,6 +89,7 @@ Runtime: `current` (The clip playing now.), `scripted` (The clip a script chose 
 | `size` | vector | [16, 16] | must be positive | Width and height of the box. |
 | `offset` | vector | [0, 0] |  | Centre of the box relative to the entity's position. |
 | `isTrigger` | boolean | false |  | Triggers do not block; they report overlaps to scripts (TriggerEnter/TriggerExit). |
+| `oneWay` | boolean | false |  | A solid box that is only a floor: bodies jump up through it, walk through it sideways and land on top (platforms). |
 
 ## KinematicBody
 

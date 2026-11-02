@@ -550,6 +550,57 @@ void SceneDocument::resizeTilemap(Entity entity, int width, int height) {
     markChanged();
 }
 
+int SceneDocument::fillTiles(Entity entity, int x0, int y0, int x1, int y1, int tile) {
+    auto* map = m_scene.tryGet<Tilemap>(entity);
+    if (map == nullptr || map->width <= 0 || map->height <= 0) return 0;
+    if (x0 > x1) std::swap(x0, x1);
+    if (y0 > y1) std::swap(y0, y1);
+    x0 = std::max(x0, 0);
+    y0 = std::max(y0, 0);
+    x1 = std::min(x1, map->width - 1);
+    y1 = std::min(y1, map->height - 1);
+    int changed = 0;
+    AutoEdit edit(*this, tile < 0 ? "Erase Tiles" : "Fill Tiles");
+    for (int y = y0; y <= y1; ++y) {
+        for (int x = x0; x <= x1; ++x) {
+            int& slot = map->tiles[static_cast<std::size_t>(y) * static_cast<std::size_t>(map->width) + static_cast<std::size_t>(x)];
+            if (slot == tile) continue;
+            slot = tile;
+            ++changed;
+        }
+    }
+    if (changed > 0) markChanged();
+    return changed;
+}
+
+int SceneDocument::floodFillTiles(Entity entity, int x, int y, int tile) {
+    auto* map = m_scene.tryGet<Tilemap>(entity);
+    if (map == nullptr || x < 0 || y < 0 || x >= map->width || y >= map->height) return 0;
+    const int target = map->tileAt(x, y);
+    if (target == tile) return 0;
+    AutoEdit edit(*this, "Fill Tiles");
+    const auto at = [&](int cx, int cy) -> int& {
+        return map->tiles[static_cast<std::size_t>(cy) * static_cast<std::size_t>(map->width) + static_cast<std::size_t>(cx)];
+    };
+    // Four-way fill of the connected cells that hold the same tile, with an explicit stack.
+    // Cells are changed when pushed, so each is on the stack at most once.
+    std::vector<std::pair<int, int>> stack{{x, y}};
+    at(x, y) = tile;
+    int changed = 1;
+    while (!stack.empty()) {
+        const auto [cx, cy] = stack.back();
+        stack.pop_back();
+        for (const auto& [nx, ny] : {std::pair{cx + 1, cy}, std::pair{cx - 1, cy}, std::pair{cx, cy + 1}, std::pair{cx, cy - 1}}) {
+            if (nx < 0 || ny < 0 || nx >= map->width || ny >= map->height || at(nx, ny) != target) continue;
+            at(nx, ny) = tile;
+            ++changed;
+            stack.emplace_back(nx, ny);
+        }
+    }
+    if (changed > 0) markChanged();
+    return changed;
+}
+
 bool SceneDocument::setTile(Entity entity, int x, int y, int tile) {
     auto* map = m_scene.tryGet<Tilemap>(entity);
     if (map == nullptr || x < 0 || y < 0 || x >= map->width || y >= map->height) return false;

@@ -23,6 +23,7 @@ struct LoadedGame {
     std::shared_ptr<const scripting::ScriptLibrary> scripts;
     std::shared_ptr<const project::PrefabLibrary> prefabs;
     std::shared_ptr<const project::AnimationLibrary> animations;
+    std::shared_ptr<const project::TilesetLibrary> tilesets;
     std::vector<std::string> warnings; // e.g. format migration notes
 };
 

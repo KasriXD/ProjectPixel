@@ -165,6 +165,9 @@ void ViewportPanel::drawToolbar(StudioApp& app) {
         toolButton("Select", Tool::Select, "Select and move entities (Q). Drag empty space to select an area.");
         toolButton("Paint", Tool::Paint, "Paint tiles into the selected tilemap (B)");
         toolButton("Erase", Tool::Erase, "Erase tiles of the selected tilemap (E)");
+        toolButton("Rect", Tool::Rectangle, "Fill a rectangle of tiles: drag over it (U). Right-drag erases.");
+        toolButton("Fill", Tool::Fill, "Bucket fill: click to replace a tile and the same tiles touching it (G). "
+                                       "Right-click erases them.");
         toolButton("Pan", Tool::Pan, "Drag to move the view (H). The middle mouse button always pans.");
         ImGui::TextDisabled("|");
         ImGui::SameLine();
@@ -360,6 +363,7 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                 }
                 case assets::AssetType::Scene: app.requestOpenScene(id); break;
                 case assets::AssetType::Prefab: app.placePrefab(id, world); break;
+                case assets::AssetType::Tileset: app.openTileset(id); break;
                 case assets::AssetType::Animation: {
                     const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));
                     if (target.isNull()) {
@@ -396,6 +400,8 @@ void ViewportPanel::handleInput(StudioApp& app, Scene& scene, ImVec2 origin, ImV
         if (ImGui::IsKeyPressed(ImGuiKey_Q, false)) app.tool = Tool::Select;
         if (ImGui::IsKeyPressed(ImGuiKey_B, false)) app.tool = Tool::Paint;
         if (ImGui::IsKeyPressed(ImGuiKey_E, false)) app.tool = Tool::Erase;
+        if (ImGui::IsKeyPressed(ImGuiKey_U, false)) app.tool = Tool::Rectangle;
+        if (ImGui::IsKeyPressed(ImGuiKey_G, false)) app.tool = Tool::Fill;
         if (ImGui::IsKeyPressed(ImGuiKey_H, false)) app.tool = Tool::Pan;
         const float step = io.KeyShift ? app.settings().gridSize : 1.0f;
         Vec2 nudge{};
@@ -414,7 +420,7 @@ void ViewportPanel::handleInput(StudioApp& app, Scene& scene, ImVec2 origin, ImV
     // Panning: middle button, right button in the select tool, Space + left, or the pan tool.
     const bool spaceHeld = keyboard && ImGui::IsKeyDown(ImGuiKey_Space);
     if (m_hovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Middle) ||
-                      (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && app.tool != Tool::Paint && app.tool != Tool::Erase) ||
+                      (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && !isTileTool(app.tool)) ||
                       (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && (app.tool == Tool::Pan || spaceHeld)))) {
         m_drag = Drag::Pan;
     }
@@ -429,18 +435,26 @@ void ViewportPanel::handleInput(StudioApp& app, Scene& scene, ImVec2 origin, ImV
     }
 
     // Tile painting.
-    if ((app.tool == Tool::Paint || app.tool == Tool::Erase) && !playing && doc != nullptr) {
+    if (isTileTool(app.tool) && !playing && doc != nullptr) {
         const Entity map = selectedTilemap(app);
         const bool leftPress = m_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left);
         const bool rightPress = m_hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Right);
         if (!map.isNull() && (leftPress || rightPress)) {
             const editor::TileCoord cell = editor::tileAt(scene, map, world);
+            const int tile = rightPress || app.tool == Tool::Erase ? -1 : app.paintTile;
             if (leftPress && io.KeyAlt) {
                 const auto* tm = scene.tryGet<Tilemap>(map);
                 if (cell.inside && tm->tileAt(cell.x, cell.y) >= 0) {
                     app.paintTile = tm->tileAt(cell.x, cell.y);
                     app.tool = Tool::Paint;
                 }
+            } else if (app.tool == Tool::Fill) {
+                if (cell.inside) doc->floodFillTiles(map, cell.x, cell.y, tile);
+            } else if (app.tool == Tool::Rectangle) {
+                m_drag = Drag::TileRect;
+                m_painted = tile < 0;
+                m_rectStartX = cell.x;
+                m_rectStartY = cell.y;
             } else {
                 m_drag = Drag::Paint;
                 m_painted = rightPress || app.tool == Tool::Erase; // erasing stroke
@@ -463,6 +477,18 @@ void ViewportPanel::handleInput(StudioApp& app, Scene& scene, ImVec2 origin, ImV
                 }
             } else {
                 doc->endEdit();
+                m_drag = Drag::None;
+            }
+        }
+        if (m_drag == Drag::TileRect) {
+            const bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseDown(ImGuiMouseButton_Right);
+            if (!down) {
+                if (!map.isNull()) {
+                    const editor::TileCoord cell = editor::tileAt(scene, map, world);
+                    doc->fillTiles(map, m_rectStartX, m_rectStartY, cell.x, cell.y, m_painted ? -1 : app.paintTile);
+                }
+                m_drag = Drag::None;
+            } else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                 m_drag = Drag::None;
             }
         }
@@ -636,9 +662,41 @@ void ViewportPanel::drawOverlays(StudioApp& app, Scene& scene, ImVec2 origin, Im
         dl->AddLine({p.x, p.y - 5}, {p.x, p.y + 5}, color(80, 170, 255, 255));
     }
 
-    // Tile cursor.
-    if ((app.tool == Tool::Paint || app.tool == Tool::Erase) && !app.playing()) {
+    // Tile cursor, and what the tiles of the selected tilemap are.
+    if (isTileTool(app.tool) && !app.playing()) {
         const Entity map = selectedTilemap(app);
+        if (!map.isNull()) {
+            const auto* tm = scene.tryGet<Tilemap>(map);
+            if (const project::Tileset* tileset = tm->solid ? app.tilesetFor(tm->tileset, tm->tileSize) : nullptr) {
+                const Vec2 o = scene.worldPosition(map);
+                for (int y = 0; y < tm->height; ++y) {
+                    for (int x = 0; x < tm->width; ++x) {
+                        const int tile = tm->tileAt(x, y);
+                        if (tile < 0) continue;
+                        const auto& info = tileset->info(tile);
+                        if (info.isDefault()) continue;
+                        const Rect r{o.x + static_cast<float>(x) * tm->tileSize.x, o.y + static_cast<float>(y) * tm->tileSize.y,
+                                     tm->tileSize.x, tm->tileSize.y};
+                        const auto [a, b] = screenRect(r);
+                        ui::drawTileMarker(dl, a, b, info);
+                    }
+                }
+            }
+        }
+        if (m_drag == Drag::TileRect && !map.isNull()) {
+            const auto* tm = scene.tryGet<Tilemap>(map);
+            const editor::TileCoord cell = editor::tileAt(scene, map, mouseWorld);
+            const Vec2 o = scene.worldPosition(map);
+            const int x0 = std::clamp(std::min(m_rectStartX, cell.x), 0, tm->width - 1);
+            const int x1 = std::clamp(std::max(m_rectStartX, cell.x), 0, tm->width - 1);
+            const int y0 = std::clamp(std::min(m_rectStartY, cell.y), 0, tm->height - 1);
+            const int y1 = std::clamp(std::max(m_rectStartY, cell.y), 0, tm->height - 1);
+            const Rect r{o.x + static_cast<float>(x0) * tm->tileSize.x, o.y + static_cast<float>(y0) * tm->tileSize.y,
+                         static_cast<float>(x1 - x0 + 1) * tm->tileSize.x, static_cast<float>(y1 - y0 + 1) * tm->tileSize.y};
+            const auto [a, b] = screenRect(r);
+            dl->AddRectFilled(a, b, m_painted ? color(255, 90, 90, 50) : color(255, 220, 60, 50));
+            dl->AddRect(a, b, m_painted ? color(255, 90, 90) : color(255, 220, 60), 0.0f, 2.0f);
+        }
         if (map.isNull()) {
             dl->AddText({origin.x + 10.0f, origin.y + 10.0f}, color(255, 200, 120),
                         "Select a tilemap (Explorer) to paint tiles. Its palette is in Properties.");

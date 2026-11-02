@@ -96,6 +96,13 @@ TEX = {k: example.gid("asset/" + k) for k in SHARED_TEXTURES}
 TEX.update({k: lid("asset/texture/" + k) for k in LIBRARY_TEXTURES})
 SCRIPT = {k: example.gid("script/" + k) for k in SHARED_SCRIPTS}
 CLIP = {"player_" + k: example.gid("asset/animation/player_" + k) for k in SHARED_ANIMATIONS}
+# Tilesets (what each tile is): the platformer's comes from the example.
+TILESET = {"tiles": example.gid("asset/tileset/tiles"), "topdown_tiles": lid("asset/tileset/topdown_tiles")}
+# Top-down tiles: floors do not block (so one solid tilemap can hold floors and walls), water is tagged.
+TOPDOWN_TILE_INFO = [{"tile": t, "collision": "none"} for t in (0, 1, 2, 3, 5, 6, 7, 12, 14, 15)] + [
+    {"tile": 4, "collision": "solid", "tags": ["water"]},
+    {"tile": 11, "collision": "solid", "tags": ["water"]},
+]
 CLIP.update({"hero_" + k: lid("asset/animation/hero_" + k) for k in library_art.HERO_CLIPS})
 SCRIPT.update({k: lid("asset/script/" + k) for k in LIBRARY_SCRIPTS})
 
@@ -283,7 +290,7 @@ def objects():
 # --------------------------------------------------------------------------- output
 
 def main():
-    for sub in ("art", "objects", "animations"):
+    for sub in ("art", "objects", "animations", "tilesets"):
         if (LIB / sub).exists():
             shutil.rmtree(LIB / sub)
         (LIB / sub).mkdir(parents=True)
@@ -313,6 +320,15 @@ def main():
         (LIB / "animations" / f"hero_{key}.anim.json").write_text(example.dump_pretty(doc) + "\n")
         assets.append({"id": CLIP["hero_" + key], "type": "animation", "name": f"Top-down Hero {key.title()}",
                        "path": f"animations/hero_{key}.anim.json", "category": "Characters", "gameTypes": [T]})
+    (LIB / "tilesets").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(EXAMPLE / "tilesets" / "tiles.tileset.json", LIB / "tilesets" / "tiles.tileset.json")
+    assets.append({"id": TILESET["tiles"], "type": "tileset", "name": "Platformer Tiles",
+                   "path": "tilesets/tiles.tileset.json", "category": "Tiles", "gameTypes": [P]})
+    doc = {"format": "px.tileset", "formatVersion": 1, "texture": TEX["topdown_tiles"], "tileSize": [16, 16],
+           "tiles": sorted(TOPDOWN_TILE_INFO, key=lambda t: t["tile"])}
+    (LIB / "tilesets" / "topdown_tiles.tileset.json").write_text(example.dump_pretty(doc) + "\n")
+    assets.append({"id": TILESET["topdown_tiles"], "type": "tileset", "name": "Top-down Tiles",
+                   "path": "tilesets/topdown_tiles.tileset.json", "category": "Tiles", "gameTypes": [T]})
     for key, (file, name, description) in LIBRARY_SCRIPTS.items():
         assert (LIB / "scripts" / file).exists(), f"library/scripts/{file} is missing"
         assets.append({"id": SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file,

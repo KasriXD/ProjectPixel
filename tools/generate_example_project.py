@@ -5,6 +5,7 @@ Produces:
   assets/tiles.png, assets/player.png, assets/player_sheet.png, assets/coin.png,
   assets/scenery.png, assets/platform.png
   animations/player_{idle,run,jump,fall}.anim.json
+  tilesets/tiles.tileset.json (slopes and one-way planks)
   scenes/level1.scene.json
   prefabs/coin.prefab.json, prefabs/sparkle.prefab.json
   project.json
@@ -51,8 +52,8 @@ def draw_grid(img, ox, oy, rows, palette):
 # --------------------------------------------------------------------------- art
 
 def make_tiles():
-    """4x2 tileset of 16x16 tiles."""
-    img = Image.new("RGBA", (64, 32), (0, 0, 0, 0))
+    """4x3 tileset of 16x16 tiles (row 3: slopes and one-way planks, see TILE_INFO)."""
+    img = Image.new("RGBA", (64, 48), (0, 0, 0, 0))
     grass_hi, grass, grass_dk = hexrgb("#8fd16a"), hexrgb("#5bb450"), hexrgb("#3e8e41")
     dirt, dirt_dk, dirt_lt = hexrgb("#a0663c"), hexrgb("#7d4a2a"), hexrgb("#c48450")
     stone, stone_dk, stone_lt = hexrgb("#8a8f98"), hexrgb("#5f646d"), hexrgb("#b7bcc4")
@@ -128,7 +129,42 @@ def make_tiles():
     for (rx, ry) in ((3, 3), (12, 3), (3, 12), (12, 12)):
         img.putpixel((48 + rx, 16 + ry), metal_lt)
         img.putpixel((48 + rx + 1, 16 + ry + 1), metal_dk)
+    # 8: grass slope rising to the right, 9: rising to the left
+    for idx, rising_right in ((0, True), (1, False)):
+        ox, oy = idx * 16, 32
+        for x in range(16):
+            surface = 15 - x if rising_right else x
+            for y in range(surface, 16):
+                depth = y - surface
+                if depth == 0:
+                    c = grass_hi
+                elif depth < 4:
+                    c = grass
+                elif depth == 4:
+                    c = grass_dk
+                else:
+                    c = dirt_lt if (x * 7 + y * 3) % 11 == 0 else dirt
+                img.putpixel((ox + x, oy + y), c)
+    # 10: wooden plank, 11: stone ledge (one-way floors: only their top is solid)
+    for x in range(16):
+        for y in range(5):
+            edge = y in (0, 4) or x in (0, 15)
+            img.putpixel((32 + x, 32 + y), wood_dk if edge else (wood_lt if y == 1 else wood))
+        if x in (3, 12):
+            for y in range(5, 9):
+                img.putpixel((32 + x, 32 + y), wood_dk)
+        for y in range(4):
+            img.putpixel((48 + x, 32 + y), stone_dk if y == 3 else (stone_lt if y == 0 else stone))
     return img
+
+
+# What the tiles are (tilesets/tiles.tileset.json): unlisted tiles are solid.
+TILE_INFO = [
+    {"tile": 8, "collision": "slopeUpRight"},
+    {"tile": 9, "collision": "slopeUpLeft"},
+    {"tile": 10, "collision": "oneWay"},
+    {"tile": 11, "collision": "oneWay"},
+]
 
 
 PLAYER = [
@@ -359,8 +395,9 @@ def make_platform():
 # ------------------------------------------------------------------------- level
 
 # Legend: G grass, L grass-left-edge, R grass-right-edge, D dirt, E deep dirt,
-# S stone, C crate, M metal, o coin, P player spawn, c cloud, b bush, f flowers,
-# s sign. '.' is empty. The level is 84 x 14 tiles of 16x16 pixels.
+# S stone, C crate, M metal, / slope, = one-way plank, o coin, P player spawn,
+# c cloud, b bush, f flowers, s sign. '.' is empty. The level is 84 x 14
+# tiles of 16x16 pixels.
 LEVEL_WIDTH, LEVEL_HEIGHT = 84, 14
 
 # (first column, last column, surface row) of each ground segment; gaps are pits.
@@ -376,6 +413,9 @@ DECOR = [("c", 7, 1), ("c", 18, 3), ("c", 27, 1), ("c", 42, 3), ("c", 46, 1), ("
          ("s", 4, 10), ("f", 8, 10), ("b", 24, 10), ("b", 50, 10), ("f", 60, 10), ("f", 37, 9), ("b", 73, 10),
          ("f", 79, 10)]
 SPAWN = (3, 10)
+# A slope up the step at column 34, and a one-way plank to jump up through.
+SLOPES = [(34, 10)]
+PLANKS = [(17, 8), (18, 8), (19, 8)]
 # Moving platform: left edge at the first pit column, top level with the ground,
 # travelling right until it touches the far side.
 PLATFORM_COLUMN, PLATFORM_ROW, PLATFORM_TILES = 62, 11, 3
@@ -398,6 +438,10 @@ def build_level():
                 grid[y][x] = "E" if y == LEVEL_HEIGHT - 1 else "D"
     for ch, x, y in BLOCKS:
         grid[y][x] = ch
+    for x, y in SLOPES:
+        grid[y][x] = "/"
+    for x, y in PLANKS:
+        grid[y][x] = "="
     for x, y in COINS:
         assert grid[y][x] == ".", f"coin at {x},{y} overlaps a tile"
         grid[y][x] = "o"
@@ -410,7 +454,7 @@ def build_level():
 
 LEVEL = build_level()
 
-TILE_INDEX = {"G": 0, "D": 1, "S": 2, "C": 3, "L": 4, "R": 5, "E": 6, "M": 7}
+TILE_INDEX = {"G": 0, "D": 1, "S": 2, "C": 3, "L": 4, "R": 5, "E": 6, "M": 7, "/": 8, "=": 10}
 
 
 def tile_rows(level):
@@ -464,6 +508,11 @@ def main():
 
     tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery", "platform", "player_sheet")}
     clips = {name: gid("asset/animation/player_" + name) for name in PLAYER_CLIPS}
+    tileset_id = gid("asset/tileset/tiles")
+    (ROOT / "tilesets").mkdir(parents=True, exist_ok=True)
+    tileset = {"format": "px.tileset", "formatVersion": 1, "texture": tex["tiles"], "tileSize": [16, 16],
+               "tiles": TILE_INFO}
+    (ROOT / "tilesets" / "tiles.tileset.json").write_text(dump_pretty(tileset) + "\n")
     (ROOT / "animations").mkdir(parents=True, exist_ok=True)
     for name, (frames, fps, loop) in PLAYER_CLIPS.items():
         doc = clip_document(tex["player_sheet"], frames, fps, loop)
@@ -587,6 +636,7 @@ def main():
             {"id": tex["platform"], "type": "texture", "name": "Platform", "path": "assets/platform.png", "filter": "nearest"},
             {"id": tex["player_sheet"], "type": "texture", "name": "Player Sheet", "path": "assets/player_sheet.png",
              "filter": "nearest"},
+            {"id": tileset_id, "type": "tileset", "name": "Tiles", "path": "tilesets/tiles.tileset.json"},
             *[{"id": clips[name], "type": "animation", "name": f"Player {name.title()}",
                "path": f"animations/player_{name}.anim.json"} for name in PLAYER_CLIPS],
             {"id": script["coin"], "type": "script", "name": "Coin", "path": "scripts/coin.luau"},

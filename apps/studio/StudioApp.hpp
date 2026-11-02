@@ -38,6 +38,7 @@ class AssetsPanel;
 class ConsolePanel;
 class ScriptEditorPanel;
 class AnimationEditorPanel;
+class TilesetEditorPanel;
 class ProjectSettingsPanel;
 class ToolboxPanel;
 
@@ -53,7 +54,11 @@ struct StudioOptions {
 [[nodiscard]] const char* studioUsage();
 
 // Editing tools of the scene viewport.
-enum class Tool { Select, Pan, Paint, Erase };
+enum class Tool { Select, Pan, Paint, Erase, Rectangle, Fill };
+// The tools that edit the selected tilemap.
+[[nodiscard]] inline bool isTileTool(Tool t) {
+    return t == Tool::Paint || t == Tool::Erase || t == Tool::Rectangle || t == Tool::Fill;
+}
 
 // Studio: the desktop editor. Owns the window, Dear ImGui, the open project
 // and scene (editor::EditorProject / SceneDocument), play mode and the
@@ -134,6 +139,12 @@ public:
 
     void openScript(assets::AssetId script, int line = 0);
     void openAnimation(assets::AssetId clip);
+    // Opens the tile properties of a tileset image (creating its tileset).
+    void editTileProperties(assets::AssetId texture, Vec2 tileSize);
+    void openTileset(assets::AssetId tileset);
+    // What the tiles of an image are (nullptr: plain solid tiles). Cached.
+    [[nodiscard]] const project::Tileset* tilesetFor(assets::AssetId texture, Vec2 tileSize);
+    void tilesetsChanged() { m_tilesets.reset(); }
     // Puts the clip on the entity's Animator (adding one), as one undo step.
     void useAnimation(assets::AssetId clip, scene::Entity entity);
     void importFiles(const std::vector<std::filesystem::path>& files);
@@ -242,6 +253,8 @@ private:
     std::unique_ptr<ConsolePanel> m_console;
     std::unique_ptr<ScriptEditorPanel> m_scripts;
     std::unique_ptr<AnimationEditorPanel> m_animationEditor;
+    std::unique_ptr<TilesetEditorPanel> m_tilesetEditor;
+    std::shared_ptr<const project::TilesetLibrary> m_tilesets; // cache; reset when tilesets change
     std::unique_ptr<ProjectSettingsPanel> m_projectSettings;
     std::unique_ptr<ToolboxPanel> m_toolbox;
 

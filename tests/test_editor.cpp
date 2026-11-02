@@ -683,13 +683,15 @@ TEST_CASE("Library: images become sprites or tilemaps; behaviours attach") {
     assets::AssetId tree;
     assets::AssetId hazard;
     for (const auto& a : library.manifest().assets) {
-        if (a.entry.name == "Top-down Tiles") tiles = a.entry.id;
+        if (a.entry.name == "Top-down Tiles" && a.entry.type == assets::AssetType::Texture) tiles = a.entry.id;
         if (a.entry.name == "Tree") tree = a.entry.id;
         if (a.entry.name == "Hazard") hazard = a.entry.id;
     }
     const Entity map = must(insertLibraryImage(*project, doc, library, tiles, {160, 90}));
     const auto& tilemap = doc.scene().get<Tilemap>(map);
     CHECK(tilemap.tilesetColumns == 8);
+    // The image's tileset (what its tiles are) came along.
+    CHECK_FALSE(project->tilesetFor(tilemap.tileset, tilemap.tileSize).isNil());
     CHECK(doc.scene().worldPosition(map) == Vec2{0, 16}); // 320 x 160 map centred on (160, 90), on tile lines
     const Entity treeEntity = must(insertLibraryImage(*project, doc, library, tree, {50, 50}));
     CHECK(doc.scene().get<Sprite>(treeEntity).size == Vec2{32, 32});

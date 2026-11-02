@@ -20,6 +20,7 @@
 #include <cctype>
 #include <cmath>
 #include <format>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -277,6 +278,59 @@ struct Bindings {
         auto spawned = s.m_host.spawnPrefab(std::string_view(name, length), position, parent);
         if (!spawned) luaL_errorL(L, "World.spawn: %s", spawned.error().message.c_str());
         s.pushEntity(L, spawned.value());
+        return 1;
+    }
+
+    // The tile of `map` (on entity e) at world point p, if there is one.
+    static std::optional<int> tileAt(const scene::Scene& scene, scene::Entity e, const scene::Tilemap& map, Vec2 p) {
+        if (map.tileSize.x <= 0.0f || map.tileSize.y <= 0.0f) return std::nullopt;
+        const Vec2 origin = scene.worldPosition(e);
+        const float fx = (p.x - origin.x) / map.tileSize.x;
+        const float fy = (p.y - origin.y) / map.tileSize.y;
+        if (!(fx >= 0.0f) || !(fy >= 0.0f) || fx >= static_cast<float>(map.width) || fy >= static_cast<float>(map.height)) {
+            return std::nullopt;
+        }
+        const auto index = static_cast<std::size_t>(fy) * static_cast<std::size_t>(map.width) + static_cast<std::size_t>(fx);
+        if (index >= map.tiles.size() || map.tiles[index] < 0) return std::nullopt;
+        return map.tiles[index];
+    }
+    static int worldTileAt(lua_State* L) {
+        const Vec2 p = checkVec2(L, 1);
+        ScriptSystem& s = system(L);
+        std::optional<int> best;
+        int bestLayer = 0;
+        for (const scene::Entity e : s.m_scene.entities()) {
+            const auto* map = s.m_scene.tryGet<scene::Tilemap>(e);
+            if (map == nullptr || s.m_scene.tryGet<scene::Transform>(e) == nullptr) continue;
+            const auto tile = tileAt(s.m_scene, e, *map, p);
+            if (tile && (!best || map->layer >= bestLayer)) {
+                best = tile;
+                bestLayer = map->layer;
+            }
+        }
+        if (best) {
+            lua_pushnumber(L, *best);
+        } else {
+            lua_pushnil(L);
+        }
+        return 1;
+    }
+    static int worldTileHasTag(lua_State* L) {
+        const Vec2 p = checkVec2(L, 1);
+        const char* tag = luaL_checkstring(L, 2);
+        ScriptSystem& s = system(L);
+        for (const scene::Entity e : s.m_scene.entities()) {
+            const auto* map = s.m_scene.tryGet<scene::Tilemap>(e);
+            if (map == nullptr || s.m_scene.tryGet<scene::Transform>(e) == nullptr) continue;
+            const auto tile = tileAt(s.m_scene, e, *map, p);
+            if (!tile) continue;
+            const auto* tags = s.m_host.tileTags(map->tileset, map->tileSize, *tile);
+            if (tags != nullptr && std::find(tags->begin(), tags->end(), tag) != tags->end()) {
+                lua_pushboolean(L, 1);
+                return 1;
+            }
+        }
+        lua_pushboolean(L, 0);
         return 1;
     }
 
@@ -728,6 +782,14 @@ const Binding kBindings[] = {
     {{"World", "findWithTag", K::Function, A::Everywhere, "World.findWithTag(tag: string): {Entity}",
       "All entities with the tag, in hierarchy order.", false, true},
      &Bindings::worldFindWithTag},
+    {{"World", "tileAt", K::Function, A::Everywhere, "World.tileAt(position: vector): number?",
+      "The tile number at a world position (from the tilemap drawn on top there), or nil where there is no "
+      "tile.", false, true},
+     &Bindings::worldTileAt},
+    {{"World", "tileHasTag", K::Function, A::Everywhere, "World.tileHasTag(position: vector, tag: string): boolean",
+      "True if a tile at the world position has the tag in its tileset (e.g. \"water\"; see docs/tilesets.md).",
+      false, true},
+     &Bindings::worldTileHasTag},
     {{"World", "spawn", K::Function, A::AuthorityOnly,
       "World.spawn(prefab: string, position: vector?, parent: Entity?): Entity",
       "Creates a copy of a prefab (by its name in the project) and returns its root. It is placed at `position` "

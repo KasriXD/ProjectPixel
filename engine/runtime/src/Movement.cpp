@@ -77,7 +77,10 @@ void stepTopDownControl(TopDownController& c, KinematicBody& body, Sprite* sprit
 }
 
 physics::MoveResult moveBody(const physics::CollisionWorld& world, KinematicBody& body, const Rect& box, float dt) {
-    physics::MoveResult r = world.moveBox(box, body.velocity * dt);
+    // A body on the ground stays on it while walking down slopes and small steps.
+    const Vec2 delta = body.velocity * dt;
+    const float snap = body.onGround && body.velocity.y >= 0.0f ? std::abs(delta.x) + 1.0f : 0.0f;
+    physics::MoveResult r = world.moveBox(box, delta, snap);
     body.onGround = r.hitBottom;
     body.hitCeiling = r.hitTop;
     body.hitWall = r.hitLeft || r.hitRight;
@@ -109,20 +112,44 @@ Rect tilemapBounds(const Scene& scene) {
     return bounds;
 }
 
-void addTilemapCollision(const Scene& scene, physics::CollisionWorld& world) {
+namespace {
+
+physics::Shape shapeOf(project::TileCollision c) {
+    switch (c) {
+        case project::TileCollision::Solid: return physics::Shape::Solid;
+        case project::TileCollision::None: return physics::Shape::Empty;
+        case project::TileCollision::OneWay: return physics::Shape::OneWay;
+        case project::TileCollision::SlopeUpRight: return physics::Shape::SlopeUpRight;
+        case project::TileCollision::SlopeUpLeft: return physics::Shape::SlopeUpLeft;
+    }
+    return physics::Shape::Solid;
+}
+
+} // namespace
+
+void addTilemapCollision(const Scene& scene, physics::CollisionWorld& world, const project::TilesetLibrary* tilesets) {
     // Tilemaps use their world position; rotation and scale do not apply to them.
     for (const Entity e : scene.entities()) {
         const auto* map = scene.tryGet<Tilemap>(e);
         if (map == nullptr || !map->solid || scene.tryGet<Transform>(e) == nullptr) continue;
+        const project::Tileset* tileset = tilesets != nullptr ? tilesets->forTexture(map->tileset, map->tileSize) : nullptr;
         physics::SolidGrid grid;
         grid.origin = scene.worldPosition(e);
         grid.cellSize = map->tileSize;
         grid.width = map->width;
         grid.height = map->height;
         grid.solid.reserve(map->tiles.size());
-        for (const int tile : map->tiles) grid.solid.push_back(tile >= 0 ? 1 : 0);
+        for (const int tile : map->tiles) {
+            physics::Shape shape = tile >= 0 ? physics::Shape::Solid : physics::Shape::Empty;
+            if (tile >= 0 && tileset != nullptr) shape = shapeOf(tileset->info(tile).collision);
+            grid.solid.push_back(static_cast<std::uint8_t>(shape));
+        }
         world.addGrid(std::move(grid));
     }
+}
+
+physics::Shape colliderShape(const BoxCollider& collider) {
+    return collider.oneWay ? physics::Shape::OneWay : physics::Shape::Solid;
 }
 
 void updateCameras(Scene& scene, const Rect& bounds, Vec2 viewSize) {

@@ -178,6 +178,12 @@
       "path": "scripts/sign.luau"
     },
     {
+      "id": "caebf187-f81d-5d28-8ae6-30929ea883c3",
+      "type": "tileset",
+      "name": "Top-down Tiles",
+      "path": "tilesets/topdown_tiles.tileset.json"
+    },
+    {
       "id": "530d7592-cf63-5d15-863b-9c4b8cc895b4",
       "type": "animation",
       "name": "Hero Idle",

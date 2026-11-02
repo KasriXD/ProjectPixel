@@ -4,6 +4,7 @@
 #include "px/core/Color.hpp"
 #include "px/core/Math.hpp"
 #include "px/editor/SceneDocument.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/render/TextureCache.hpp"
 
 #include <imgui.h>
@@ -77,6 +78,10 @@ private:
 };
 
 void helpMarker(std::string_view text);
+// Marks a tile's collision inside the screen rectangle [a, b]: one-way floors
+// get a bar at the top, slopes their surface line, tiles that do not block a
+// cross; solid tiles nothing (unless `showSolid`). Tags add a dot.
+void drawTileMarker(ImDrawList* dl, ImVec2 a, ImVec2 b, const project::TileInfo& info, bool showSolid = false);
 // `text`, shortened with ".." (by whole UTF-8 characters) to fit `width`.
 [[nodiscard]] std::string fitText(std::string text, float width);
 void tooltip(std::string_view text);

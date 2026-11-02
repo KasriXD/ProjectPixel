@@ -62,6 +62,42 @@ ImTextureID textureId(StudioApp& app, unsigned int handle) {
     return static_cast<ImTextureID>(reinterpret_cast<std::uintptr_t>(app.renderer().sdlTexture(handle)));
 }
 
+void drawTileMarker(ImDrawList* dl, ImVec2 a, ImVec2 b, const project::TileInfo& info, bool showSolid) {
+    const ImU32 line = IM_COL32(255, 230, 80, 255);
+    const ImU32 shadow = IM_COL32(0, 0, 0, 160);
+    const float w = b.x - a.x;
+    const float t = std::max(1.5f, w / 12.0f);
+    using C = project::TileCollision;
+    switch (info.collision) {
+        case C::Solid:
+            if (showSolid) dl->AddRect(a, b, IM_COL32(255, 120, 90, 160), 0.0f, t);
+            break;
+        case C::None: {
+            const float m = w * 0.3f;
+            dl->AddLine({a.x + m, a.y + m}, {b.x - m, b.y - m}, IM_COL32(150, 220, 255, 220), t);
+            dl->AddLine({b.x - m, a.y + m}, {a.x + m, b.y - m}, IM_COL32(150, 220, 255, 220), t);
+            break;
+        }
+        case C::OneWay:
+            dl->AddRectFilled({a.x, a.y}, {b.x, a.y + t * 1.5f}, shadow);
+            dl->AddRectFilled({a.x, a.y}, {b.x, a.y + t}, line);
+            dl->AddTriangleFilled({(a.x + b.x) * 0.5f, a.y + w * 0.25f}, {(a.x + b.x) * 0.5f - w * 0.12f, a.y + w * 0.45f},
+                                  {(a.x + b.x) * 0.5f + w * 0.12f, a.y + w * 0.45f}, line);
+            break;
+        case C::SlopeUpRight:
+            dl->AddLine({a.x, b.y}, {b.x, a.y}, shadow, t * 1.8f);
+            dl->AddLine({a.x, b.y}, {b.x, a.y}, line, t);
+            break;
+        case C::SlopeUpLeft:
+            dl->AddLine({a.x, a.y}, {b.x, b.y}, shadow, t * 1.8f);
+            dl->AddLine({a.x, a.y}, {b.x, b.y}, line, t);
+            break;
+    }
+    if (!info.tags.empty()) {
+        dl->AddCircleFilled({b.x - w * 0.18f, b.y - w * 0.18f}, std::max(2.0f, w * 0.1f), IM_COL32(120, 255, 160, 255));
+    }
+}
+
 bool textureImage(StudioApp& app, assets::AssetId texture, ImVec2 size, Rect source, const char* id) {
     return textureImage(app, app.textures(), texture, size, source, id);
 }

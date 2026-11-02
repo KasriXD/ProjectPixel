@@ -91,6 +91,11 @@ def main():
         file, name, _ = lib.SHARED_SCRIPTS.get(key) or lib.LIBRARY_SCRIPTS[key]
         shutil.copyfile(lib.LIB / "scripts" / file, OUT / "scripts" / file)
         assets.append({"id": lib.SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file})
+    # What the tiles are (floors do not block, water is tagged): from the library.
+    (OUT / "tilesets").mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(lib.LIB / "tilesets" / "topdown_tiles.tileset.json", OUT / "tilesets" / "topdown_tiles.tileset.json")
+    assets.append({"id": lib.TILESET["topdown_tiles"], "type": "tileset", "name": "Top-down Tiles",
+                   "path": "tilesets/topdown_tiles.tileset.json"})
     # The hero's animation clips come from the library (same ids).
     (OUT / "animations").mkdir(parents=True, exist_ok=True)
     for key in ("idle", "walk"):

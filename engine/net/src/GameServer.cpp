@@ -51,6 +51,7 @@ Status GameServer::startSession() {
     options.seed = m_options.seed;
     options.prefabs = m_game.prefabs;
     options.animations = m_game.animations;
+    options.tilesets = m_game.tilesets;
     auto session = runtime::GameSession::create(m_game.manifest, m_game.startScene, m_game.scripts, options);
     if (!session) return session.error();
     m_session = std::move(session.value());

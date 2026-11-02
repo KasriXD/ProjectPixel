@@ -94,6 +94,7 @@ struct BoxCollider {
     Vec2 size{16.0f, 16.0f};
     Vec2 offset{};
     bool isTrigger = false;
+    bool oneWay = false; // solid only from above: bodies jump up through it (platforms)
 
     [[nodiscard]] Rect worldRect(Vec2 position) const { return Rect::fromCenter(position + offset, size); }
 };

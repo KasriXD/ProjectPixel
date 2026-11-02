@@ -290,6 +290,11 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         folder = "scenes";
         extension = ".scene.json";
         stem = fileName.substr(0, fileName.size() - extension.size());
+    } else if (endsWith(lowered, ".tileset.json")) {
+        type = assets::AssetType::Tileset;
+        folder = "tilesets";
+        extension = ".tileset.json";
+        stem = fileName.substr(0, fileName.size() - extension.size());
     } else if (endsWith(lowered, ".anim.json")) {
         type = assets::AssetType::Animation;
         folder = "animations";
@@ -314,7 +319,8 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         } else {
             return makeError(ErrorCode::Unsupported,
                              "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), Luau scripts "
-                             "(.luau), scenes (.scene.json), prefabs (.prefab.json) and animations (.anim.json)",
+                             "(.luau), scenes (.scene.json), prefabs (.prefab.json), animations (.anim.json) and "
+                             "tilesets (.tileset.json)",
                              fileName);
         }
     }
@@ -328,6 +334,10 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         const std::string text(bytes->begin(), bytes->end());
         auto scene = project::parseScene(text, fileName, &m_manifest.assets);
         if (!scene) return makeError(scene.error().code, "Cannot import '{}': {}", fileName, scene.error().message);
+    } else if (type == assets::AssetType::Tileset) {
+        const std::string text(bytes->begin(), bytes->end());
+        auto tileset = project::parseTileset(text, fileName, &m_manifest.assets);
+        if (!tileset) return makeError(tileset.error().code, "Cannot import '{}': {}", fileName, tileset.error().message);
     } else if (type == assets::AssetType::Animation) {
         const std::string text(bytes->begin(), bytes->end());
         auto clip = project::parseAnimation(text, fileName, &m_manifest.assets);
@@ -395,6 +405,13 @@ Result<assets::AssetId> EditorProject::addLibraryAsset(const project::LibraryAss
     } else if (source.type == assets::AssetType::Script) {
         folder = "scripts";
         extension = ".luau";
+    } else if (source.type == assets::AssetType::Tileset) {
+        const std::string text(bytes->begin(), bytes->end());
+        if (auto tileset = project::parseTileset(text, source.name, &m_manifest.assets); !tileset) {
+            return makeError(tileset.error().code, "Library tileset '{}': {}", source.name, tileset.error().message);
+        }
+        folder = "tilesets";
+        extension = ".tileset.json";
     } else if (source.type == assets::AssetType::Animation) {
         const std::string text(bytes->begin(), bytes->end());
         if (auto clip = project::parseAnimation(text, source.name, &m_manifest.assets); !clip) {
@@ -408,6 +425,9 @@ Result<assets::AssetId> EditorProject::addLibraryAsset(const project::LibraryAss
     std::string fileStem = file.stem().string();
     if (source.type == assets::AssetType::Animation && endsWith(lower(fileStem), ".anim")) {
         fileStem.resize(fileStem.size() - 5);
+    }
+    if (source.type == assets::AssetType::Tileset && endsWith(lower(fileStem), ".tileset")) {
+        fileStem.resize(fileStem.size() - 8);
     }
     const std::string stem = toFileStem(fileStem);
     auto path = uniquePath(folder, stem.empty() ? std::string("asset") : stem, extension);
@@ -491,6 +511,11 @@ std::vector<AssetUse> EditorProject::findUses(
         if (entry.type == assets::AssetType::Animation) {
             auto clip = loadAnimation(entry.id);
             if (clip && clip.value().texture == id) uses.push_back({entry.id, entry.name, {}, entry.type});
+            continue;
+        }
+        if (entry.type == assets::AssetType::Tileset) {
+            auto tileset = loadTileset(entry.id);
+            if (tileset && tileset.value().texture == id) uses.push_back({entry.id, entry.name, {}, entry.type});
             continue;
         }
         if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab) continue;
@@ -702,6 +727,65 @@ Result<project::AnimationClip> EditorProject::clipFromSheet(assets::AssetId text
                                std::min(cellSize.y, static_cast<float>(img.height))});
     }
     return clip;
+}
+
+// --- Tilesets -----------------------------------------------------------------------------------
+
+Result<project::Tileset> EditorProject::loadTileset(assets::AssetId id) const {
+    return project::loadTileset(m_files, m_manifest, id);
+}
+
+Status EditorProject::saveTileset(assets::AssetId id, const project::Tileset& tileset) {
+    const auto* entry = m_manifest.assets.find(id);
+    if (entry == nullptr || entry->type != assets::AssetType::Tileset) {
+        return makeError(ErrorCode::NotFound, "Tileset {} is not part of the project", id.toString());
+    }
+    const std::string text = project::serializeTileset(tileset);
+    if (auto check = project::parseTileset(text, entry->path, &m_manifest.assets); !check) {
+        return makeError(ErrorCode::InvalidData, "'{}' was not saved: {}", entry->name, check.error().message);
+    }
+    return m_files.writeText(entry->path, text);
+}
+
+Result<std::shared_ptr<const project::TilesetLibrary>> EditorProject::buildTilesetLibrary() const {
+    return project::loadTilesetLibrary(m_files, m_manifest);
+}
+
+assets::AssetId EditorProject::tilesetFor(assets::AssetId texture, Vec2 tileSize) const {
+    for (const auto& entry : m_manifest.assets.entries()) {
+        if (entry.type != assets::AssetType::Tileset) continue;
+        auto tileset = loadTileset(entry.id);
+        if (tileset && tileset.value().texture == texture && tileset.value().tileSize == tileSize) return entry.id;
+    }
+    return {};
+}
+
+Result<assets::AssetId> EditorProject::createTileset(assets::AssetId texture, Vec2 tileSize) {
+    if (const assets::AssetId existing = tilesetFor(texture, tileSize); !existing.isNil()) return existing;
+    const auto* image = m_manifest.assets.find(texture);
+    if (image == nullptr || image->type != assets::AssetType::Texture) {
+        return makeError(ErrorCode::InvalidArgument, "A tileset needs a tileset image");
+    }
+    project::Tileset tileset;
+    tileset.texture = texture;
+    tileset.tileSize = tileSize;
+    const std::string text = project::serializeTileset(tileset);
+    auto path = uniquePath("tilesets", toFileStem(image->name).empty() ? std::string("tiles") : toFileStem(image->name),
+                           ".tileset.json");
+    if (!path) return path.error();
+    if (auto written = m_files.writeText(path.value(), text); !written) return written.error();
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Tileset,
+                             uniqueAssetName(image->name, assets::AssetType::Tileset), path.value(),
+                             assets::TextureFilter::Nearest};
+    if (auto added = m_manifest.assets.add(entry); !added) return added.error();
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(entry.id);
+        std::error_code ec;
+        std::filesystem::remove(m_root / std::filesystem::path(entry.path), ec);
+        return saved.error();
+    }
+    log::info("Created tileset '{}' ({})", entry.name, entry.path);
+    return entry.id;
 }
 
 // --- Scenes -----------------------------------------------------------------------------------

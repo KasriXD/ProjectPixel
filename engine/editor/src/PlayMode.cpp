@@ -16,6 +16,11 @@ Result<std::unique_ptr<PlayMode>> PlayMode::start(const EditorProject& project, 
         if (!prefabs) return prefabs.error();
         withPrefabs.prefabs = std::move(prefabs.value());
     }
+    if (withPrefabs.tilesets == nullptr) {
+        auto tilesets = project.buildTilesetLibrary();
+        if (!tilesets) return tilesets.error();
+        withPrefabs.tilesets = std::move(tilesets.value());
+    }
     if (withPrefabs.animations == nullptr) {
         auto animations = project.buildAnimationLibrary();
         if (!animations) return animations.error();

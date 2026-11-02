@@ -6,6 +6,7 @@
 #include "px/editor/SceneDocument.hpp"
 #include "px/project/Animation.hpp"
 #include "px/project/SceneFormat.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
@@ -93,6 +94,15 @@ Result<Library> Library::load(const std::filesystem::path& folder) {
                                     clip.error().message);
         clipTextures[asset.entry.id] = clip.value().texture;
     }
+    for (const project::LibraryAsset& asset : library.m_manifest.assets) {
+        if (asset.entry.type != assets::AssetType::Tileset) continue;
+        auto tilesetText = readText(library.assetFile(asset.entry.id));
+        if (!tilesetText) return tilesetText.error();
+        auto tileset = project::parseTileset(tilesetText.value(), asset.entry.path, &registry);
+        if (!tileset) return makeError(ErrorCode::InvalidData, "Library tileset '{}': {}", asset.entry.name,
+                                       tileset.error().message);
+        library.m_tilesets[tileset.value().texture] = asset.entry.id;
+    }
     for (const project::LibraryObject& object : library.m_manifest.objects) {
         auto objectText = readText(folder / std::filesystem::path(object.path));
         if (!objectText) return makeError(objectText.error().code, "Library object '{}': {}", object.name,
@@ -124,6 +134,10 @@ Result<Library> Library::load(const std::filesystem::path& folder) {
             }
         }
         for (const assets::AssetId& id : clips) addAsset(id); // after their sprite sheets
+        const std::vector<assets::AssetId> textures = data.assets;
+        for (const assets::AssetId& id : textures) {
+            if (const auto it = library.m_tilesets.find(id); it != library.m_tilesets.end()) addAsset(it->second);
+        }
         library.m_objects.push_back(std::move(data));
     }
     return library;
@@ -137,6 +151,11 @@ std::filesystem::path Library::assetFile(const assets::AssetId& id) const {
 Vec2i Library::imageSize(const assets::AssetId& id) const {
     const auto it = m_imageSizes.find(id);
     return it == m_imageSizes.end() ? Vec2i{} : it->second;
+}
+
+assets::AssetId Library::tilesetFor(const assets::AssetId& texture) const {
+    const auto it = m_tilesets.find(texture);
+    return it == m_tilesets.end() ? assets::AssetId{} : it->second;
 }
 
 int Library::findObject(const Guid& id) const {
@@ -198,6 +217,13 @@ Result<Entity> insertLibraryImage(EditorProject& project, SceneDocument& documen
     }
     auto added = project.addLibraryAsset(*asset, library.assetFile(image));
     if (!added) return added.error();
+    if (const assets::AssetId tileset = library.tilesetFor(image); !tileset.isNil()) {
+        if (const auto* t = library.manifest().findAsset(tileset)) {
+            if (auto addedTileset = project.addLibraryAsset(*t, library.assetFile(tileset)); !addedTileset) {
+                return addedTileset.error();
+            }
+        }
+    }
 
     document.beginEdit(std::format("Insert {}", asset->entry.name));
     Entity e;

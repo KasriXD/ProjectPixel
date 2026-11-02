@@ -2,6 +2,7 @@
 
 #include "px/core/Math.hpp"
 #include "px/physics/CollisionWorld.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/runtime/Input.hpp"
 #include "px/scene/Components.hpp"
 #include "px/scene/Scene.hpp"
@@ -43,8 +44,13 @@ void resetMotion(scene::KinematicBody* body, scene::PlatformerController* platfo
 // Union of the world bounds of all tilemaps (empty if there are none).
 [[nodiscard]] Rect tilemapBounds(const scene::Scene& scene);
 
-// Adds the solid tiles of every solid tilemap to `world` as grids.
-void addTilemapCollision(const scene::Scene& scene, physics::CollisionWorld& world);
+// Adds the tiles of every solid tilemap to `world` as grids. With
+// `tilesets`, each tile blocks as its tileset says (solid, none, one-way,
+// slopes); without, every tile is solid.
+void addTilemapCollision(const scene::Scene& scene, physics::CollisionWorld& world,
+                         const project::TilesetLibrary* tilesets = nullptr);
+// The shape a box collider gives the collision world (solid or one-way).
+[[nodiscard]] physics::Shape colliderShape(const scene::BoxCollider& collider);
 
 // Moves every Camera to its target: the followed entity (or the camera's own
 // position), kept inside `bounds` when clampToBounds is set.

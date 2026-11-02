@@ -1,0 +1,24 @@
+{
+  "format": "px.tileset",
+  "formatVersion": 1,
+  "texture": "782c3432-d57a-558a-a29f-2eb189772494",
+  "tileSize": [16, 16],
+  "tiles": [
+    {
+      "tile": 8,
+      "collision": "slopeUpRight"
+    },
+    {
+      "tile": 9,
+      "collision": "slopeUpLeft"
+    },
+    {
+      "tile": 10,
+      "collision": "oneWay"
+    },
+    {
+      "tile": 11,
+      "collision": "oneWay"
+    }
+  ]
+}

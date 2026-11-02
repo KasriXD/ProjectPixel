@@ -32,6 +32,9 @@ public:
     [[nodiscard]] std::filesystem::path assetFile(const assets::AssetId& id) const;
     // Pixel size of a library image (0, 0 for scripts or unknown ids).
     [[nodiscard]] Vec2i imageSize(const assets::AssetId& id) const;
+    // The library's tileset for a tileset image (nil if none): it is added
+    // to a project together with the image.
+    [[nodiscard]] assets::AssetId tilesetFor(const assets::AssetId& texture) const;
 
     [[nodiscard]] const std::string& objectText(std::size_t index) const { return m_objects[index].text; }
     // Library assets the object's entities refer to (textures and scripts).
@@ -50,6 +53,7 @@ private:
     project::LibraryManifest m_manifest;
     std::vector<ObjectData> m_objects;
     std::map<assets::AssetId, Vec2i> m_imageSizes;
+    std::map<assets::AssetId, assets::AssetId> m_tilesets; // texture -> tileset
 };
 
 // Inserts a ready-made object into the open scene as one undo step: copies

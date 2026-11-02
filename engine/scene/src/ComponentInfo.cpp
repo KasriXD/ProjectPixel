@@ -151,6 +151,9 @@ struct Tables {
         field<&BoxCollider::isTrigger>("isTrigger", "Triggers do not block; they report overlaps to scripts "
                                                     "(TriggerEnter/TriggerExit).")
             .withLabel("Trigger"),
+        field<&BoxCollider::oneWay>("oneWay", "A solid box that is only a floor: bodies jump up through it, walk "
+                                              "through it sideways and land on top (platforms).")
+            .withLabel("One-way"),
     };
     std::vector<FieldInfo> kinematicBody{
         field<&KinematicBody::velocity>("velocity", "Units per second.").withFlags(kFieldRuntime),

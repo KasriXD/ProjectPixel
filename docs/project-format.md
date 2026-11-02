@@ -1,7 +1,8 @@
 # Project format
 
 Current versions: project manifest **2**, scene **3**, prefab **1**,
-animation **1** ([animation.md](animation.md#file-format)).
+animation **1** ([animation.md](animation.md#file-format)), tileset **1**
+([tilesets.md](tilesets.md#file-format)).
 Starter library manifests and `px.entities` objects are described in
 [library-format.md](library-format.md).
 
@@ -13,6 +14,7 @@ my-game/
   scenes/*.scene.json     scenes
   prefabs/*.prefab.json   prefabs (docs/prefabs.md)
   animations/*.anim.json  animation clips (docs/animation.md)
+  tilesets/*.tileset.json what the tiles of a tileset image are (docs/tilesets.md)
   scripts/*.luau          Luau scripts (docs/scripting.md)
   assets/...              textures and other assets
 ```
@@ -94,7 +96,7 @@ type, each on the arrow keys and WASD (plus Space and Z for jumping).
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | asset GUID, unique |
-| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"prefab"` or `"animation"` |
+| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"prefab"`, `"animation"` or `"tileset"` |
 | `path` | yes | file path inside the project |
 | `name` | no | label for tools (defaults to the path) |
 | `filter` | no (`"nearest"`) | textures only: `"nearest"` for pixel art, `"linear"` for smooth art |
@@ -246,6 +248,10 @@ nothing else stored in the scene.
 | Animation format | Engine | Change | Migration |
 |---|---|---|---|
 | 1 | 0.5 | Initial format; `animation` assets and the `Animator` component were added compatibly | |
+
+| Tileset format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.5 | Initial format; `tileset` assets and `BoxCollider.oneWay` were added compatibly | |
 
 | Project format | Engine | Change | Migration |
 |---|---|---|---|

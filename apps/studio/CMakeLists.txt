@@ -11,6 +11,7 @@ add_executable(px_studio
     ViewportPanel.cpp
     AnimationEditorPanel.cpp
     AssetsPanel.cpp
+    TilesetEditorPanel.cpp
     ConsolePanel.cpp
     ScriptEditorPanel.cpp
     ProjectSettingsPanel.cpp

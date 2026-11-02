@@ -6,6 +6,7 @@
 #include "px/core/Guid.hpp"
 #include "px/project/Animation.hpp"
 #include "px/project/Project.hpp"
+#include "px/project/Tileset.hpp"
 #include "px/render/Camera2D.hpp"
 #include "px/render/Renderer2D.hpp"
 #include "px/scene/ComponentInfo.hpp"
@@ -96,13 +97,15 @@ private:
     render::TextureHandle m_gameTarget = render::kNoTexture;
     Vec2i m_gameTargetSize{};
 
-    enum class Drag { None, Move, Pan, Marquee, Paint };
+    enum class Drag { None, Move, Pan, Marquee, Paint, TileRect };
     Drag m_drag = Drag::None;
     Vec2 m_dragStartWorld{};
     Vec2 m_dragApplied{};       // offset already applied during a move
     ImVec2 m_dragStartScreen{};
     int m_lastPaintX = 0;
     int m_lastPaintY = 0;
+    int m_rectStartX = 0; // TileRect: the cell where the drag began
+    int m_rectStartY = 0;
     bool m_painted = false;
     Vec2 m_lastClickWorld{};
     std::size_t m_clickCycle = 0;
@@ -200,6 +203,27 @@ private:
     bool m_focus = false;
     bool m_pendingSave = false;
     double m_previewStart = 0.0;
+};
+
+// Edits what the tiles of a tileset image are: collision (solid, none,
+// one-way, slopes) and tags, tile by tile. Saves as it goes.
+class TilesetEditorPanel {
+public:
+    void draw(StudioApp& app);
+    void open(StudioApp& app, assets::AssetId tileset);
+    void close();
+    [[nodiscard]] static const char* windowId() { return "###tileset-editor"; }
+
+private:
+    void drawContents(StudioApp& app);
+
+    assets::AssetId m_id;
+    project::Tileset m_tileset;
+    std::vector<int> m_selected; // tile indices
+    std::string m_newTag;
+    bool m_open = false;
+    bool m_focus = false;
+    bool m_pendingSave = false;
 };
 
 class ProjectSettingsPanel {

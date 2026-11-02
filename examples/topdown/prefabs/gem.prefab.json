@@ -37,7 +37,8 @@
         "BoxCollider": {
           "size": [10, 10],
           "offset": [0, 0],
-          "isTrigger": true
+          "isTrigger": true,
+          "oneWay": false
         },
         "Tags": [
           "coin"

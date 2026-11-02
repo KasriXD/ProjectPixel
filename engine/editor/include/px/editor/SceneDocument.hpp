@@ -119,6 +119,12 @@ public:
     void resizeTilemap(scene::Entity entity, int width, int height);
     // Sets one tile (no-op outside the map). Use inside a transaction for strokes.
     bool setTile(scene::Entity entity, int x, int y, int tile);
+    // Sets every tile of the rectangle between two cells (clipped to the map).
+    // Returns how many changed.
+    int fillTiles(scene::Entity entity, int x0, int y0, int x1, int y1, int tile);
+    // Bucket fill: replaces the tile at (x, y) and every cell connected to it
+    // (left, right, up, down) holding the same tile. Returns how many changed.
+    int floodFillTiles(scene::Entity entity, int x, int y, int tile);
 
     // If `player` is a Player, cameras that follow nothing start following it.
     // Call inside a transaction.

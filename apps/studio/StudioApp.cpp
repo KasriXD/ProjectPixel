@@ -253,6 +253,7 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     m_console = std::make_unique<ConsolePanel>();
     m_scripts = std::make_unique<ScriptEditorPanel>();
     m_animationEditor = std::make_unique<AnimationEditorPanel>();
+    m_tilesetEditor = std::make_unique<TilesetEditorPanel>();
     m_projectSettings = std::make_unique<ProjectSettingsPanel>();
     m_toolbox = std::make_unique<ToolboxPanel>();
     if (m_options.resetLayout) m_layoutBuilt = false;
@@ -384,6 +385,8 @@ void StudioApp::closeProjectNow() {
     m_viewport->resetCamera();
     *m_scripts = ScriptEditorPanel{};
     m_animationEditor->close();
+    m_tilesetEditor->close();
+    m_tilesets.reset();
     showProjectSettings = false;
     updateTitle();
 }
@@ -559,6 +562,28 @@ void StudioApp::openScript(assets::AssetId script, int line) { m_scripts->open(*
 
 void StudioApp::openAnimation(assets::AssetId clip) { m_animationEditor->open(*this, clip); }
 
+void StudioApp::openTileset(assets::AssetId tileset) { m_tilesetEditor->open(*this, tileset); }
+
+void StudioApp::editTileProperties(assets::AssetId texture, Vec2 tileSize) {
+    if (!m_project) return;
+    auto id = m_project->createTileset(texture, tileSize);
+    if (!id) {
+        notify(id.error().message, true);
+        return;
+    }
+    tilesetsChanged();
+    openTileset(id.value());
+}
+
+const project::Tileset* StudioApp::tilesetFor(assets::AssetId texture, Vec2 tileSize) {
+    if (!m_project) return nullptr;
+    if (!m_tilesets) {
+        auto loaded = m_project->buildTilesetLibrary();
+        m_tilesets = loaded ? loaded.value() : std::make_shared<const project::TilesetLibrary>();
+    }
+    return m_tilesets->forTexture(texture, tileSize);
+}
+
 void StudioApp::useAnimation(assets::AssetId clip, scene::Entity entity) {
     if (!m_project || !m_document || m_play || !m_document->scene().isAlive(entity)) return;
     auto loaded = m_project->loadAnimation(clip);
@@ -731,6 +756,7 @@ void StudioApp::assetsChanged() {
         if (m_textures) m_textures->clear();
     });
     if (m_project) m_project->refreshScripts();
+    m_tilesets.reset();
 }
 
 int StudioApp::libraryPlayerObject() const {
@@ -989,6 +1015,7 @@ void StudioApp::drawUi() {
         m_console->draw(*this);
         m_scripts->draw(*this);
         m_animationEditor->draw(*this);
+        m_tilesetEditor->draw(*this);
         if (showProjectSettings) m_projectSettings->draw(*this, showProjectSettings);
         if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
     }
@@ -1030,6 +1057,7 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
     ImGui::DockBuilderDockWindow(kSceneWindow, center);
     for (const std::string& script : m_scripts->windowIds()) ImGui::DockBuilderDockWindow(script.c_str(), center);
     ImGui::DockBuilderDockWindow(AnimationEditorPanel::windowId(), center);
+    ImGui::DockBuilderDockWindow(TilesetEditorPanel::windowId(), center);
     ImGui::DockBuilderFinish(dockspace);
 }
 

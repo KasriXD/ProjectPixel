@@ -6,6 +6,7 @@ px_add_module(project
         src/Prefab.cpp
         src/ProjectFormat.cpp
         src/SceneFormat.cpp
+        src/Tileset.cpp
     DEPS
         px::core
         px::assets
