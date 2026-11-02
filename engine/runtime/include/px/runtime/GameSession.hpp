@@ -3,6 +3,7 @@
 #include "px/core/Guid.hpp"
 #include "px/core/Result.hpp"
 #include "px/physics/CollisionWorld.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/Input.hpp"
@@ -53,8 +54,9 @@ struct SessionOptions {
     // Multiplayer (server) mode: the scene's Player entities become templates
     // (see extractPlayerTemplates) and players are added with addPlayer.
     bool multiplayer = false;
-    // Prefabs scripts can spawn (World.spawn). startSession passes the game's.
-    std::shared_ptr<const project::PrefabLibrary> prefabs;
+    // Content beyond the scene; startSession passes the game's.
+    std::shared_ptr<const project::PrefabLibrary> prefabs;       // scripts can spawn these (World.spawn)
+    std::shared_ptr<const project::AnimationLibrary> animations; // clips Animators play
 };
 
 // Entities scripts may create in one tick (World.spawn; a prefab's
@@ -99,7 +101,7 @@ struct PlayerTemplates {
 //   2. moving solids carry the bodies standing on them
 //   3. platformer controllers, 4. kinematic movement
 //   5. trigger enter/exit events to scripts
-//   6. kill plane, 7. sprite animation, 8. cameras
+//   6. kill plane, 7. animation (SpriteAnimation, Animator), 8. cameras
 // After each script phase, destroyed entities are removed and queued
 // script events are delivered.
 class GameSession final : private scripting::IScriptHost {
@@ -193,6 +195,9 @@ private:
     void requestDestroy(scene::Entity entity) override;
     Result<scene::Entity> spawnPrefab(std::string_view prefab, Vec2 position, scene::Entity parent) override;
     std::vector<std::string> prefabNames() const override;
+    assets::AssetId findAnimation(std::string_view name) const override;
+    std::string animationName(assets::AssetId clip) const override;
+    std::vector<std::string> animationNames() const override;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -226,6 +231,7 @@ private:
     std::unique_ptr<scripting::ScriptSystem> m_scripts;
     std::vector<scene::Entity> m_pendingDestroy;
     std::shared_ptr<const project::PrefabLibrary> m_prefabs;
+    std::shared_ptr<const project::AnimationLibrary> m_animations;
     std::vector<scene::Entity> m_pendingCreated; // spawned roots whose scripts are created after the phase
     std::uint64_t m_spawnCount = 0;              // entities spawned so far (derives their ids)
     std::size_t m_spawnedThisTick = 0;

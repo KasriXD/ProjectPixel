@@ -101,6 +101,7 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity.onGround: boolean` | property (read-only), pure | all | True if the body is standing on something (KinematicBody). |
 | `entity.visible: boolean` | property (read/write), pure | all | Whether the Sprite is drawn. |
 | `entity.flipX: boolean` | property (read/write), pure | all | Mirrors the Sprite horizontally. |
+| `entity.animation: string` | property (read-only), pure | all | Asset name of the animation clip the Animator is playing (empty if none). |
 | `entity.spawnPoint: vector` | property (read/write), pure | all | Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player come back there. |
 | `entity.playerName: string` | property (read-only), pure | all | The name of the player controlling this character (playing alone: the character's name). |
 | `entity.playerId: number` | property (read-only), pure | all | The id of the player controlling this character in multiplayer (1, 2, ...; 0 when playing alone). |
@@ -109,5 +110,6 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity:respawn()` | method | authority | Sends a Player back to its spawn point and stops it, as when it falls off the level (counts as a respawn). Use it for hazards and enemies. Errors for entities without a Player component. |
 | `entity:hasTag(tag: string): boolean` | method, pure | all | True if the entity's Tags component contains the tag. |
 | `entity:hasComponent(name: string): boolean` | method, pure | all | True if the entity has the named component, e.g. "Player" (see docs/components.md). |
+| `entity:playAnimation(name: string?)` | method | authority | Plays the animation clip with this asset name from its start (needs an Animator). A looping clip plays until another is chosen; a clip that does not loop plays once, then the Animator chooses again (idle, run, ...). nil goes back to the automatic choice at once. |
 | `entity:getChildren(): {Entity}` | method, pure | all | The entity's direct children, in hierarchy order. |
 | `entity:setParent(parent: Entity?)` | method | authority | Moves the entity (with its children) under another entity, or to the top level with nil. It stays where it is in the world. Errors if the parent is the entity itself or one of its descendants. |

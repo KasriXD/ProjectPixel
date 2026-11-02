@@ -9,6 +9,7 @@ add_executable(px_studio
     HierarchyPanel.cpp
     InspectorPanel.cpp
     ViewportPanel.cpp
+    AnimationEditorPanel.cpp
     AssetsPanel.cpp
     ConsolePanel.cpp
     ScriptEditorPanel.cpp

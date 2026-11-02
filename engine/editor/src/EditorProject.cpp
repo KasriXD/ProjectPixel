@@ -290,6 +290,11 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         folder = "scenes";
         extension = ".scene.json";
         stem = fileName.substr(0, fileName.size() - extension.size());
+    } else if (endsWith(lowered, ".anim.json")) {
+        type = assets::AssetType::Animation;
+        folder = "animations";
+        extension = ".anim.json";
+        stem = fileName.substr(0, fileName.size() - extension.size());
     } else if (endsWith(lowered, ".prefab.json")) {
         type = assets::AssetType::Prefab;
         folder = "prefabs";
@@ -309,7 +314,7 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         } else {
             return makeError(ErrorCode::Unsupported,
                              "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), Luau scripts "
-                             "(.luau), scenes (.scene.json) and prefabs (.prefab.json)",
+                             "(.luau), scenes (.scene.json), prefabs (.prefab.json) and animations (.anim.json)",
                              fileName);
         }
     }
@@ -323,6 +328,10 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         const std::string text(bytes->begin(), bytes->end());
         auto scene = project::parseScene(text, fileName, &m_manifest.assets);
         if (!scene) return makeError(scene.error().code, "Cannot import '{}': {}", fileName, scene.error().message);
+    } else if (type == assets::AssetType::Animation) {
+        const std::string text(bytes->begin(), bytes->end());
+        auto clip = project::parseAnimation(text, fileName, &m_manifest.assets);
+        if (!clip) return makeError(clip.error().code, "Cannot import '{}': {}", fileName, clip.error().message);
     } else if (type == assets::AssetType::Prefab) {
         const std::string text(bytes->begin(), bytes->end());
         auto prefab = project::parsePrefab(text, fileName, &m_manifest.assets);
@@ -386,10 +395,21 @@ Result<assets::AssetId> EditorProject::addLibraryAsset(const project::LibraryAss
     } else if (source.type == assets::AssetType::Script) {
         folder = "scripts";
         extension = ".luau";
+    } else if (source.type == assets::AssetType::Animation) {
+        const std::string text(bytes->begin(), bytes->end());
+        if (auto clip = project::parseAnimation(text, source.name, &m_manifest.assets); !clip) {
+            return makeError(clip.error().code, "Library animation '{}': {}", source.name, clip.error().message);
+        }
+        folder = "animations";
+        extension = ".anim.json";
     } else {
         return makeError(ErrorCode::Unsupported, "Library asset '{}' has an unsupported type", source.name);
     }
-    const std::string stem = toFileStem(file.stem().string());
+    std::string fileStem = file.stem().string();
+    if (source.type == assets::AssetType::Animation && endsWith(lower(fileStem), ".anim")) {
+        fileStem.resize(fileStem.size() - 5);
+    }
+    const std::string stem = toFileStem(fileStem);
     auto path = uniquePath(folder, stem.empty() ? std::string("asset") : stem, extension);
     if (!path) return path.error();
     const std::string_view content(reinterpret_cast<const char*>(bytes->data()), bytes->size());
@@ -468,6 +488,11 @@ std::vector<AssetUse> EditorProject::findUses(
     assets::AssetId id, const std::vector<std::pair<assets::AssetId, const scene::Scene*>>& openScenes) const {
     std::vector<AssetUse> uses;
     for (const auto& entry : m_manifest.assets.entries()) {
+        if (entry.type == assets::AssetType::Animation) {
+            auto clip = loadAnimation(entry.id);
+            if (clip && clip.value().texture == id) uses.push_back({entry.id, entry.name, {}, entry.type});
+            continue;
+        }
         if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab) continue;
         const scene::Scene* scene = nullptr;
         for (const auto& [openId, openScene] : openScenes) {
@@ -490,8 +515,7 @@ std::vector<AssetUse> EditorProject::findUses(
             const auto refs = scene::assetReferences(*scene, e);
             if (std::find(refs.begin(), refs.end(), id) == refs.end()) continue;
             const auto* info = scene->tryGet<scene::EntityInfo>(e);
-            uses.push_back({entry.id, entry.name, info != nullptr ? info->name : std::string(),
-                            entry.type == assets::AssetType::Prefab});
+            uses.push_back({entry.id, entry.name, info != nullptr ? info->name : std::string(), entry.type});
         }
     }
     return uses;
@@ -598,6 +622,86 @@ Status EditorProject::savePrefab(assets::AssetId id, const scene::Scene& content
 
 Result<std::shared_ptr<const project::PrefabLibrary>> EditorProject::buildPrefabLibrary() const {
     return project::loadPrefabLibrary(m_files, m_manifest);
+}
+
+// --- Animation clips -------------------------------------------------------------------------
+
+Result<assets::AssetId> EditorProject::createAnimation(std::string_view name, const project::AnimationClip& clip) {
+    if (auto ok = checkName(name, "animation"); !ok) return ok.error();
+    const std::string text = project::serializeAnimation(clip);
+    if (auto check = project::parseAnimation(text, name, &m_manifest.assets); !check) {
+        return makeError(ErrorCode::InvalidData, "The animation was not created: {}", check.error().message);
+    }
+    auto path = uniquePath("animations", toFileStem(name).empty() ? std::string("animation") : toFileStem(name),
+                           ".anim.json");
+    if (!path) return path.error();
+    if (auto written = m_files.writeText(path.value(), text); !written) return written.error();
+    assets::AssetEntry entry{assets::AssetId{Guid::generate()}, assets::AssetType::Animation,
+                             uniqueAssetName(name, assets::AssetType::Animation), path.value(),
+                             assets::TextureFilter::Nearest};
+    if (auto added = m_manifest.assets.add(entry); !added) return added.error();
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(entry.id);
+        std::error_code ec;
+        std::filesystem::remove(m_root / std::filesystem::path(entry.path), ec);
+        return saved.error();
+    }
+    log::info("Created animation '{}' ({})", entry.name, entry.path);
+    return entry.id;
+}
+
+Result<project::AnimationClip> EditorProject::loadAnimation(assets::AssetId id) const {
+    return project::loadAnimation(m_files, m_manifest, id);
+}
+
+Status EditorProject::saveAnimation(assets::AssetId id, const project::AnimationClip& clip) {
+    const auto* entry = m_manifest.assets.find(id);
+    if (entry == nullptr || entry->type != assets::AssetType::Animation) {
+        return makeError(ErrorCode::NotFound, "Animation {} is not part of the project", id.toString());
+    }
+    const std::string text = project::serializeAnimation(clip);
+    if (auto check = project::parseAnimation(text, entry->path, &m_manifest.assets); !check) {
+        return makeError(ErrorCode::InvalidData, "'{}' was not saved: {}", entry->name, check.error().message);
+    }
+    return m_files.writeText(entry->path, text);
+}
+
+Result<std::shared_ptr<const project::AnimationLibrary>> EditorProject::buildAnimationLibrary() const {
+    return project::loadAnimationLibrary(m_files, m_manifest);
+}
+
+Result<project::AnimationClip> EditorProject::clipFromSheet(assets::AssetId texture, Vec2 cellSize) const {
+    const auto* entry = m_manifest.assets.find(texture);
+    if (entry == nullptr || entry->type != assets::AssetType::Texture) {
+        return makeError(ErrorCode::InvalidArgument, "Choose an image for the animation");
+    }
+    auto bytes = m_files.readBinary(entry->path);
+    if (!bytes) return bytes.error();
+    auto image = assets::decodeImage(bytes.value(), entry->name);
+    if (!image) return image.error();
+    project::AnimationClip clip;
+    clip.texture = texture;
+    clip.cellSize = cellSize;
+    const auto& img = image.value();
+    for (const Rect& cell : project::gridCells({img.width, img.height}, cellSize)) {
+        if (cell.y > 0.0f) break; // the first row only
+        bool visible = false;
+        for (int y = static_cast<int>(cell.y); y < static_cast<int>(cell.y + cell.h) && !visible; ++y) {
+            for (int x = static_cast<int>(cell.x); x < static_cast<int>(cell.x + cell.w); ++x) {
+                if (img.pixels[(static_cast<std::size_t>(y) * static_cast<std::size_t>(img.width) +
+                                static_cast<std::size_t>(x)) * 4 + 3] != 0) {
+                    visible = true;
+                    break;
+                }
+            }
+        }
+        if (visible) clip.frames.push_back(cell);
+    }
+    if (clip.frames.empty() && img.width >= 1 && img.height >= 1) {
+        clip.frames.push_back({0.0f, 0.0f, std::min(cellSize.x, static_cast<float>(img.width)),
+                               std::min(cellSize.y, static_cast<float>(img.height))});
+    }
+    return clip;
 }
 
 // --- Scenes -----------------------------------------------------------------------------------

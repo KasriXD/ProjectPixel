@@ -62,6 +62,17 @@
       ]
     },
     {
+      "id": "78cddc51-970f-5787-844d-64f8b0a63b47",
+      "type": "texture",
+      "name": "Platformer Hero Sheet",
+      "path": "art/player_sheet.png",
+      "filter": "nearest",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
       "id": "e57017b1-776a-5b4b-a329-b8a74ea514c8",
       "type": "texture",
       "name": "Top-down Tiles",
@@ -79,6 +90,17 @@
       "type": "texture",
       "name": "Top-down Hero",
       "path": "art/hero.png",
+      "filter": "nearest",
+      "category": "Characters",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "0d39aac6-9f20-56f7-bf48-5a2e76fb138d",
+      "type": "texture",
+      "name": "Top-down Hero Sheet",
+      "path": "art/hero_sheet.png",
       "filter": "nearest",
       "category": "Characters",
       "gameTypes": [
@@ -278,6 +300,66 @@
         "topdown"
       ],
       "description": "Glides back and forth, carrying riders"
+    },
+    {
+      "id": "2ae5af57-b8e8-5c4a-828d-27d1f2bc3cb7",
+      "type": "animation",
+      "name": "Platformer Hero Idle",
+      "path": "animations/player_idle.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "b06c5f65-8242-5a0d-877d-ee540ef85653",
+      "type": "animation",
+      "name": "Platformer Hero Run",
+      "path": "animations/player_run.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "8afde020-038c-5090-bad5-c12ef9f10ec1",
+      "type": "animation",
+      "name": "Platformer Hero Jump",
+      "path": "animations/player_jump.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "15f94181-d26a-5287-9f68-e4ba0f617e79",
+      "type": "animation",
+      "name": "Platformer Hero Fall",
+      "path": "animations/player_fall.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "platformer"
+      ]
+    },
+    {
+      "id": "530d7592-cf63-5d15-863b-9c4b8cc895b4",
+      "type": "animation",
+      "name": "Top-down Hero Idle",
+      "path": "animations/hero_idle.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "topdown"
+      ]
+    },
+    {
+      "id": "83658bcb-d424-5b51-85db-c57635302f52",
+      "type": "animation",
+      "name": "Top-down Hero Walk",
+      "path": "animations/hero_walk.anim.json",
+      "category": "Characters",
+      "gameTypes": [
+        "topdown"
+      ]
     },
     {
       "id": "a02805ff-0282-52d8-925b-aae6f7902c4d",

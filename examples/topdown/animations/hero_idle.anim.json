@@ -1,0 +1,16 @@
+{
+  "format": "px.animation",
+  "formatVersion": 1,
+  "texture": "0d39aac6-9f20-56f7-bf48-5a2e76fb138d",
+  "frames": [
+    [0, 0, 16, 16],
+    [0, 0, 16, 16],
+    [0, 0, 16, 16],
+    [0, 0, 16, 16],
+    [0, 0, 16, 16],
+    [16, 0, 16, 16]
+  ],
+  "framesPerSecond": 4,
+  "loop": true,
+  "cellSize": [16, 16]
+}

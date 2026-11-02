@@ -48,6 +48,24 @@ saved, and Studio shows them read-only while the game is playing.
 
 Runtime: `time` (Seconds played so far.)
 
+## Animator
+
+*Rendering.* Plays animation clips on the Sprite: idle, run, jump and fall follow a controller's movement; scripts can play any clip.
+
+Requires Sprite on the same entity.
+
+| Field | Type | Default | Allowed values | Description |
+|---|---|---|---|---|
+| `clip` | asset | none | a animation asset | Plays when no other clip applies (no controller, or its clip is not set). |
+| `idle` | asset | none | a animation asset | With a controller: standing still. |
+| `run` | asset | none | a animation asset | With a controller: moving (on the ground). |
+| `jump` | asset | none | a animation asset | With a PlatformerController: going up in the air. |
+| `fall` | asset | none | a animation asset | With a PlatformerController: coming down in the air. |
+| `speed` | number | 1 | must be between 0 and 16 | Playback speed: 1 plays the clips at their own speed, 2 twice as fast. |
+| `playing` | boolean | true |  | Whether clips advance (false holds the current frame). |
+
+Runtime: `current` (The clip playing now.), `scripted` (The clip a script chose with entity:playAnimation (none: automatic).), `time` (Seconds into the current clip.)
+
 ## Tilemap
 
 *Rendering.* A grid of tiles from a tileset image; can be solid ground.

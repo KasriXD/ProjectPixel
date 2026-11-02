@@ -493,6 +493,30 @@ struct Bindings {
         const std::string& shown = name.empty() ? need<scene::EntityInfo>(L, s, e, "EntityInfo").name : name;
         lua_pushlstring(L, shown.data(), shown.size());
     }
+    static void getAnimation(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const std::string name = s.m_host.animationName(need<scene::Animator>(L, s, e, "Animator").current);
+        lua_pushlstring(L, name.data(), name.size());
+    }
+    static int entityPlayAnimation(lua_State* L) {
+        requireAuthority(L, "Entity:playAnimation");
+        const scene::Entity e = checkLiveEntity(L, 1);
+        ScriptSystem& s = system(L);
+        scene::Animator& animator = need<scene::Animator>(L, s, e, "Animator");
+        if (lua_isnoneornil(L, 2)) {
+            animator.scripted = {}; // back to the automatic choice
+            return 0;
+        }
+        const char* name = luaL_checkstring(L, 2);
+        const assets::AssetId clip = s.m_host.findAnimation(name);
+        if (clip.isNil()) {
+            const std::string hint = suggestName(name, s.m_host.animationNames());
+            luaL_errorL(L, "playAnimation: no animation named '%s'%s", name, hint.c_str());
+        }
+        animator.scripted = clip;
+        animator.current = clip;
+        animator.time = 0.0f;
+        return 0;
+    }
     static void getPlayerId(lua_State* L, ScriptSystem& s, scene::Entity e) {
         lua_pushnumber(L, need<scene::Player>(L, s, e, "Player").owner);
     }
@@ -776,6 +800,9 @@ const Binding kBindings[] = {
       true, true}, nullptr, &Bindings::getVisible, &Bindings::setVisible},
     {{"Entity", "flipX", K::Property, A::Everywhere, "entity.flipX: boolean", "Mirrors the Sprite horizontally.",
       true, true}, nullptr, &Bindings::getFlipX, &Bindings::setFlipX},
+    {{"Entity", "animation", K::Property, A::Everywhere, "entity.animation: string",
+      "Asset name of the animation clip the Animator is playing (empty if none).", false, true},
+     nullptr, &Bindings::getAnimation},
     {{"Entity", "spawnPoint", K::Property, A::Everywhere, "entity.spawnPoint: vector",
       "Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player "
       "come back there.", true, true},
@@ -803,6 +830,11 @@ const Binding kBindings[] = {
     {{"Entity", "hasComponent", K::Method, A::Everywhere, "entity:hasComponent(name: string): boolean",
       "True if the entity has the named component, e.g. \"Player\" (see docs/components.md).", false, true},
      &Bindings::entityHasComponent},
+    {{"Entity", "playAnimation", K::Method, A::AuthorityOnly, "entity:playAnimation(name: string?)",
+      "Plays the animation clip with this asset name from its start (needs an Animator). A looping clip plays "
+      "until another is chosen; a clip that does not loop plays once, then the Animator chooses again (idle, "
+      "run, ...). nil goes back to the automatic choice at once."},
+     &Bindings::entityPlayAnimation},
     {{"Entity", "getChildren", K::Method, A::Everywhere, "entity:getChildren(): {Entity}",
       "The entity's direct children, in hierarchy order.", false, true},
      &Bindings::entityGetChildren},

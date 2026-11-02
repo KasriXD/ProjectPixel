@@ -337,7 +337,10 @@ Json writeComponent(const ComponentInfo& c, const void* data) {
     Json out = Json::object();
     for (const FieldInfo& f : c.fields) {
         if (f.isRuntime()) continue;
-        if ((f.flags & kFieldOptional) != 0 && f.kind == FieldKind::EntityRef && f.ref<Guid>(data).isNil()) continue;
+        if ((f.flags & kFieldOptional) != 0) {
+            if (f.kind == FieldKind::EntityRef && f.ref<Guid>(data).isNil()) continue;
+            if (f.kind == FieldKind::Asset && f.ref<assets::AssetId>(data).isNil()) continue;
+        }
         out[std::string(f.name)] = writeField(f, data);
     }
     return out;

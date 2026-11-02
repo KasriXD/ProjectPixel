@@ -52,7 +52,10 @@ SHARED_TEXTURES = {
     "coin": ("coin.png", "Coin", "Items", BOTH, {}),
     "scenery": ("scenery.png", "Scenery", "Decoration", [P], {}),
     "platform": ("platform.png", "Platform", "Platforms", [P], {}),
+    "player_sheet": ("player_sheet.png", "Platformer Hero Sheet", "Characters", [P], {}),
 }
+# Animation clips: the platformer hero's come from the example, the top-down hero's are made here.
+SHARED_ANIMATIONS = {name: f"player_{name}.anim.json" for name in example.PLAYER_CLIPS}
 SHARED_SCRIPTS = {
     "coin": ("coin.luau", "Coin", "Collect a coin: adds points, then disappears"),
     "level_rules": ("level_rules.luau", "Level Rules", "Counts collected coins and can end the level"),
@@ -62,6 +65,7 @@ LIBRARY_TEXTURES = {
     "topdown_tiles": ("topdown_tiles.png", "Top-down Tiles", "Tiles", [T],
                       {"tileSize": [16, 16], "tilesetColumns": 8}),
     "hero": ("hero.png", "Top-down Hero", "Characters", [T], {}),
+    "hero_sheet": ("hero_sheet.png", "Top-down Hero Sheet", "Characters", [T], {}),
     "slime": ("slime.png", "Slime", "Enemies", [P], {}),
     "beetle": ("beetle.png", "Beetle", "Enemies", [T], {}),
     "gem": ("gem.png", "Gem", "Items", BOTH, {}),
@@ -91,6 +95,8 @@ LIBRARY_SCRIPTS = {
 TEX = {k: example.gid("asset/" + k) for k in SHARED_TEXTURES}
 TEX.update({k: lid("asset/texture/" + k) for k in LIBRARY_TEXTURES})
 SCRIPT = {k: example.gid("script/" + k) for k in SHARED_SCRIPTS}
+CLIP = {"player_" + k: example.gid("asset/animation/player_" + k) for k in SHARED_ANIMATIONS}
+CLIP.update({"hero_" + k: lid("asset/animation/hero_" + k) for k in library_art.HERO_CLIPS})
 SCRIPT.update({k: lid("asset/script/" + k) for k in LIBRARY_SCRIPTS})
 
 
@@ -162,11 +168,13 @@ def objects():
     # Characters. (Studio's Create > Player makes the same for the project's game type.)
     add("platformer_player", "Platformer Hero", "Characters", [P],
         "The player: runs and jumps with the arrow keys and Space.", ("player", None),
-        entity("platformer_player", "Player", transform(), sprite("player", (16, 16), layer=10),
+        entity("platformer_player", "Player", transform(), sprite("player_sheet", (16, 16), (0, 0, 16, 16), layer=10),
+               {"Animator": {k: CLIP["player_" + k] for k in ("idle", "run", "jump", "fall")}},
                collider((10, 14), (0, 1)), {"KinematicBody": {}}, {"PlatformerController": {}}, {"Player": {}}))
     add("topdown_player", "Top-down Hero", "Characters", [T],
         "The player: walks in every direction with the arrow keys or WASD.", ("hero", None),
-        entity("topdown_player", "Player", transform(), sprite("hero", (16, 16), layer=10),
+        entity("topdown_player", "Player", transform(), sprite("hero_sheet", (16, 16), (0, 0, 16, 16), layer=10),
+               {"Animator": {"idle": CLIP["hero_idle"], "run": CLIP["hero_walk"]}},
                collider((10, 8), (0, 4)), {"KinematicBody": {}}, {"TopDownController": {}}, {"Player": {}}))
 
     # Items.
@@ -275,7 +283,7 @@ def objects():
 # --------------------------------------------------------------------------- output
 
 def main():
-    for sub in ("art", "objects"):
+    for sub in ("art", "objects", "animations"):
         if (LIB / sub).exists():
             shutil.rmtree(LIB / sub)
         (LIB / sub).mkdir(parents=True)
@@ -295,6 +303,16 @@ def main():
         shutil.copyfile(EXAMPLE / "scripts" / file, LIB / "scripts" / file)
         assets.append({"id": SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file,
                        "category": "Behaviours", "gameTypes": BOTH, "description": description})
+    (LIB / "animations").mkdir(parents=True, exist_ok=True)
+    for key, file in SHARED_ANIMATIONS.items():
+        shutil.copyfile(EXAMPLE / "animations" / file, LIB / "animations" / file)
+        assets.append({"id": CLIP["player_" + key], "type": "animation", "name": f"Platformer Hero {key.title()}",
+                       "path": "animations/" + file, "category": "Characters", "gameTypes": [P]})
+    for key, (frames, fps, loop) in library_art.HERO_CLIPS.items():
+        doc = example.clip_document(TEX["hero_sheet"], frames, fps, loop)
+        (LIB / "animations" / f"hero_{key}.anim.json").write_text(example.dump_pretty(doc) + "\n")
+        assets.append({"id": CLIP["hero_" + key], "type": "animation", "name": f"Top-down Hero {key.title()}",
+                       "path": f"animations/hero_{key}.anim.json", "category": "Characters", "gameTypes": [T]})
     for key, (file, name, description) in LIBRARY_SCRIPTS.items():
         assert (LIB / "scripts" / file).exists(), f"library/scripts/{file} is missing"
         assets.append({"id": SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file,

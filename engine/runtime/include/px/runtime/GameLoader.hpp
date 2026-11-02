@@ -2,6 +2,7 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/GameSession.hpp"
@@ -21,6 +22,7 @@ struct LoadedGame {
     scene::Scene startScene;
     std::shared_ptr<const scripting::ScriptLibrary> scripts;
     std::shared_ptr<const project::PrefabLibrary> prefabs;
+    std::shared_ptr<const project::AnimationLibrary> animations;
     std::vector<std::string> warnings; // e.g. format migration notes
 };
 

@@ -4,6 +4,7 @@
 
 #include "px/assets/AssetId.hpp"
 #include "px/core/Guid.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/Project.hpp"
 #include "px/render/Camera2D.hpp"
 #include "px/render/Renderer2D.hpp"
@@ -57,8 +58,10 @@ private:
     void drawTilemapTools(StudioApp& app, scene::Scene& scene, scene::Entity entity);
     void drawScripts(StudioApp& app, scene::Scene& scene, scene::Entity entity);
     void drawAddComponent(StudioApp& app, scene::Entity entity);
+    void previewAnimator(StudioApp& app, scene::Scene& scene, scene::Entity entity);
 
     ui::EditSession m_edit;
+    scene::Entity m_entity; // the entity whose component is being drawn
     std::string m_newTag;
     int m_resizeWidth = 0;
     int m_resizeHeight = 0;
@@ -132,6 +135,10 @@ private:
     assets::AssetId m_showUses;
     std::string m_newScriptName = "New Behaviour";
     std::string m_newSceneName = "New Scene";
+    std::string m_newAnimationName = "Walk";
+    assets::AssetId m_newAnimationImage;
+    int m_newAnimationCell[2] = {16, 16};
+    bool m_openNewAnimation = false;
     std::string m_importPath;
     bool m_openNewScript = false;
     bool m_openNewScene = false;
@@ -169,6 +176,30 @@ private:
         bool changedOnDisk = false;
     };
     std::vector<OpenScript> m_open;
+};
+
+// Edits one animation clip: frames picked from a sprite sheet on a grid,
+// their order, speed and looping, with a live preview. Saves as it goes.
+class AnimationEditorPanel {
+public:
+    void draw(StudioApp& app);
+    void open(StudioApp& app, assets::AssetId clip);
+    void close();
+    [[nodiscard]] bool isOpen() const { return m_open; }
+    [[nodiscard]] assets::AssetId clip() const { return m_id; }
+    [[nodiscard]] static const char* windowId() { return "###animation-editor"; }
+
+private:
+    void drawContents(StudioApp& app);
+    void changed();
+
+    assets::AssetId m_id;
+    project::AnimationClip m_clip;
+    int m_selected = -1;
+    bool m_open = false;
+    bool m_focus = false;
+    bool m_pendingSave = false;
+    double m_previewStart = 0.0;
 };
 
 class ProjectSettingsPanel {

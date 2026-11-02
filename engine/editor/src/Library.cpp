@@ -4,10 +4,12 @@
 #include "px/core/FileSystem.hpp"
 #include "px/editor/EditorProject.hpp"
 #include "px/editor/SceneDocument.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/scene/ComponentInfo.hpp"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <format>
 #include <fstream>
@@ -80,6 +82,17 @@ Result<Library> Library::load(const std::filesystem::path& folder) {
     }
 
     const assets::AssetRegistry registry = library.m_manifest.registry();
+    // Animation clips need their sprite sheet.
+    std::map<assets::AssetId, assets::AssetId> clipTextures;
+    for (const project::LibraryAsset& asset : library.m_manifest.assets) {
+        if (asset.entry.type != assets::AssetType::Animation) continue;
+        auto clipText = readText(library.assetFile(asset.entry.id));
+        if (!clipText) return clipText.error();
+        auto clip = project::parseAnimation(clipText.value(), asset.entry.path, &registry);
+        if (!clip) return makeError(ErrorCode::InvalidData, "Library animation '{}': {}", asset.entry.name,
+                                    clip.error().message);
+        clipTextures[asset.entry.id] = clip.value().texture;
+    }
     for (const project::LibraryObject& object : library.m_manifest.objects) {
         auto objectText = readText(folder / std::filesystem::path(object.path));
         if (!objectText) return makeError(objectText.error().code, "Library object '{}': {}", object.name,
@@ -96,11 +109,21 @@ Result<Library> Library::load(const std::filesystem::path& folder) {
         }
         ObjectData data;
         data.text = std::move(objectText.value());
+        const auto addAsset = [&data](const assets::AssetId& id) {
+            if (std::find(data.assets.begin(), data.assets.end(), id) == data.assets.end()) data.assets.push_back(id);
+        };
+        std::vector<assets::AssetId> clips;
         for (const Entity e : pasted.value()) {
             for (const assets::AssetId& id : assetReferences(scratch, e)) {
-                if (std::find(data.assets.begin(), data.assets.end(), id) == data.assets.end()) data.assets.push_back(id);
+                if (const auto it = clipTextures.find(id); it != clipTextures.end()) {
+                    addAsset(it->second);
+                    clips.push_back(id);
+                } else {
+                    addAsset(id);
+                }
             }
         }
+        for (const assets::AssetId& id : clips) addAsset(id); // after their sprite sheets
         library.m_objects.push_back(std::move(data));
     }
     return library;

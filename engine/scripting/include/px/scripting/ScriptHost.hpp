@@ -1,5 +1,6 @@
 #pragma once
 
+#include "px/assets/AssetId.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Math.hpp"
 #include "px/core/Result.hpp"
@@ -64,6 +65,11 @@ public:
     }
     // Names of the prefabs that can be spawned (for "did you mean" hints).
     [[nodiscard]] virtual std::vector<std::string> prefabNames() const { return {}; }
+
+    // --- Animation clips, by asset name (nil / empty when unknown) ---------------
+    [[nodiscard]] virtual assets::AssetId findAnimation(std::string_view /*name*/) const { return {}; }
+    [[nodiscard]] virtual std::string animationName(assets::AssetId /*clip*/) const { return {}; }
+    [[nodiscard]] virtual std::vector<std::string> animationNames() const { return {}; }
 
     // --- Reporting --------------------------------------------------------------
     virtual void scriptLog(log::Level level, std::string_view script, std::string_view message) = 0;

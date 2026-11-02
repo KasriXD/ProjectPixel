@@ -78,7 +78,7 @@ def main():
     for sub in ("assets", "scripts", "scenes", "tests"):
         (OUT / sub).mkdir(parents=True, exist_ok=True)
 
-    textures = ["topdown_tiles", "hero", "gem", "key", "lock_block", "spike_trap", "beetle", "stairs", "tree",
+    textures = ["topdown_tiles", "hero", "hero_sheet", "gem", "key", "lock_block", "spike_trap", "beetle", "stairs", "tree",
                 "rock", "shrub", "scenery"]
     scripts = ["coin", "level_rules", "key", "lock_block", "hazard", "patrol", "goal", "sign"]
     assets = []
@@ -91,6 +91,13 @@ def main():
         file, name, _ = lib.SHARED_SCRIPTS.get(key) or lib.LIBRARY_SCRIPTS[key]
         shutil.copyfile(lib.LIB / "scripts" / file, OUT / "scripts" / file)
         assets.append({"id": lib.SCRIPT[key], "type": "script", "name": name, "path": "scripts/" + file})
+    # The hero's animation clips come from the library (same ids).
+    (OUT / "animations").mkdir(parents=True, exist_ok=True)
+    for key in ("idle", "walk"):
+        file = f"hero_{key}.anim.json"
+        shutil.copyfile(lib.LIB / "animations" / file, OUT / "animations" / file)
+        assets.append({"id": lib.CLIP["hero_" + key], "type": "animation", "name": f"Hero {key.title()}",
+                       "path": "animations/" + file})
     # The sparkle effect comes from the platformer example; gems spawn it (prefabs below).
     shutil.copyfile(ROOT / "examples" / "platformer" / "scripts" / "sparkle.luau", OUT / "scripts" / "sparkle.luau")
     sparkle_script = gid("script/sparkle")
@@ -198,7 +205,8 @@ def main():
             "Transform": {"position": centre(cx, cy)}, "Sprite": sprite("shrub", [16, 16], layer=4)},
             parent="nature"))
     entities.append(e("hero", "Hero", {
-        "Transform": {"position": centre(2, 12)}, "Sprite": sprite("hero", [16, 16], layer=10),
+        "Transform": {"position": centre(2, 12)}, "Sprite": sprite("hero_sheet", [16, 16], [0, 0, 16, 16], layer=10),
+        "Animator": {"idle": lib.CLIP["hero_idle"], "run": lib.CLIP["hero_walk"]},
         "BoxCollider": {"size": [10, 8], "offset": [0, 4]}, "KinematicBody": {}, "TopDownController": {},
         "Player": {}}))
     assert entities[-1]["id"] == hero_id

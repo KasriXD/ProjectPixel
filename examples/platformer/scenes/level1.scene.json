@@ -1253,8 +1253,8 @@
           "scale": [1, 1]
         },
         "Sprite": {
-          "texture": "2e723cc5-e1d9-5ea1-8b39-72e1274823fd",
-          "source": [0, 0, 0, 0],
+          "texture": "78cddc51-970f-5787-844d-64f8b0a63b47",
+          "source": [0, 0, 16, 16],
           "size": [16, 16],
           "pivot": [0.5, 0.5],
           "tint": "#ffffff",
@@ -1262,6 +1262,14 @@
           "flipX": false,
           "flipY": false,
           "visible": true
+        },
+        "Animator": {
+          "idle": "2ae5af57-b8e8-5c4a-828d-27d1f2bc3cb7",
+          "run": "b06c5f65-8242-5a0d-877d-ee540ef85653",
+          "jump": "8afde020-038c-5090-bad5-c12ef9f10ec1",
+          "fall": "15f94181-d26a-5287-9f68-e4ba0f617e79",
+          "speed": 1,
+          "playing": true
         },
         "BoxCollider": {
           "size": [10, 14],

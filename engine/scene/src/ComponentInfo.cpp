@@ -236,6 +236,34 @@ struct Tables {
             .withCount(0, kMaxTags)
             .withLength(1, kMaxTagLength),
     };
+    std::vector<FieldInfo> animator{
+        field<&Animator::clip>("clip", "Plays when no other clip applies (no controller, or its clip is not set).")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldOptional),
+        field<&Animator::idle>("idle", "With a controller: standing still.")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldOptional),
+        field<&Animator::run>("run", "With a controller: moving (on the ground).")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldOptional),
+        field<&Animator::jump>("jump", "With a PlatformerController: going up in the air.")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldOptional),
+        field<&Animator::fall>("fall", "With a PlatformerController: coming down in the air.")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldOptional),
+        field<&Animator::speed>("speed", "Playback speed: 1 plays the clips at their own speed, 2 twice as fast.")
+            .withRange(0.0, 16.0)
+            .withStep(0.05f),
+        field<&Animator::playing>("playing", "Whether clips advance (false holds the current frame)."),
+        field<&Animator::current>("current", "The clip playing now.")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldRuntime),
+        field<&Animator::scripted>("scripted", "The clip a script chose with entity:playAnimation (none: automatic).")
+            .ofAsset(assets::AssetType::Animation)
+            .withFlags(kFieldRuntime),
+        field<&Animator::time>("time", "Seconds into the current clip.").withFlags(kFieldRuntime),
+    };
     std::vector<FieldInfo> prefabInstance{
         field<&PrefabInstance::prefab>("prefab", "The prefab this entity and its children were made from.")
             .ofAsset(assets::AssetType::Prefab)
@@ -250,6 +278,7 @@ struct Tables {
     // Only requirements whose absence makes a scene invalid are listed;
     // adding one rejects files that loaded before.
     std::vector<std::string_view> characterRequires{"Transform", "BoxCollider", "KinematicBody"};
+    std::vector<std::string_view> spriteRequires{"Sprite"};
 
     std::vector<ComponentInfo> components;
 
@@ -261,6 +290,10 @@ struct Tables {
             component<SpriteAnimation>("SpriteAnimation", "Rendering",
                                        "Plays frames on the entity's Sprite by changing its source rectangle.",
                                        spriteAnimation),
+            component<Animator>("Animator", "Rendering",
+                                "Plays animation clips on the Sprite: idle, run, jump and fall follow a "
+                                "controller's movement; scripts can play any clip.",
+                                animator, spriteRequires),
             component<Tilemap>("Tilemap", "Rendering", "A grid of tiles from a tileset image; can be solid ground.",
                                tilemap),
             component<BoxCollider>("BoxCollider", "Physics",

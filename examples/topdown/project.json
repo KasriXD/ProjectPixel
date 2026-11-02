@@ -53,6 +53,13 @@
       "filter": "nearest"
     },
     {
+      "id": "0d39aac6-9f20-56f7-bf48-5a2e76fb138d",
+      "type": "texture",
+      "name": "Top-down Hero Sheet",
+      "path": "assets/hero_sheet.png",
+      "filter": "nearest"
+    },
+    {
       "id": "6d4ead8e-1a76-5dfb-9133-4694be46d722",
       "type": "texture",
       "name": "Gem",
@@ -169,6 +176,18 @@
       "type": "script",
       "name": "Sign",
       "path": "scripts/sign.luau"
+    },
+    {
+      "id": "530d7592-cf63-5d15-863b-9c4b8cc895b4",
+      "type": "animation",
+      "name": "Hero Idle",
+      "path": "animations/hero_idle.anim.json"
+    },
+    {
+      "id": "83658bcb-d424-5b51-85db-c57635302f52",
+      "type": "animation",
+      "name": "Hero Walk",
+      "path": "animations/hero_walk.anim.json"
     },
     {
       "id": "2cb435ea-f474-5122-8b13-1ceedb546227",

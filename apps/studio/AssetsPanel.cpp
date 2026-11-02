@@ -18,6 +18,7 @@ bool matches(const assets::AssetEntry& entry, int typeFilter, const std::string&
     if (typeFilter == 2 && entry.type != assets::AssetType::Script) return false;
     if (typeFilter == 3 && entry.type != assets::AssetType::Scene) return false;
     if (typeFilter == 4 && entry.type != assets::AssetType::Prefab) return false;
+    if (typeFilter == 5 && entry.type != assets::AssetType::Animation) return false;
     if (filter.empty()) return true;
     const auto lower = [](std::string s) {
         for (char& c : s) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
@@ -33,6 +34,7 @@ const char* typeLabel(assets::AssetType type) {
         case assets::AssetType::Script: return "script";
         case assets::AssetType::Scene: return "scene";
         case assets::AssetType::Prefab: return "prefab";
+        case assets::AssetType::Animation: return "animation";
     }
     return "?";
 }
@@ -49,6 +51,9 @@ void AssetsPanel::drawAssetMenu(StudioApp& app, const assets::AssetEntry& entry)
     }
     if (entry.type == assets::AssetType::Script) {
         if (ImGui::MenuItem("Edit Script")) app.openScript(entry.id);
+    }
+    if (entry.type == assets::AssetType::Animation) {
+        if (ImGui::MenuItem("Edit Animation")) app.openAnimation(entry.id);
     }
     if (entry.type == assets::AssetType::Prefab) {
         if (ImGui::MenuItem("Place In Scene", nullptr, false, !app.playing() && app.document() != nullptr)) {
@@ -102,16 +107,17 @@ void AssetsPanel::draw(StudioApp& app) {
                 "drop files onto the Studio window.");
     flow(buttonWidth("+ New"));
     if (ImGui::Button("+ New")) ImGui::OpenPopup("NewAsset");
-    ui::tooltip("Create a script or a scene");
+    ui::tooltip("Create a script, a scene or an animation");
     if (ImGui::BeginPopup("NewAsset")) {
         if (ImGui::MenuItem("Script...")) m_openNewScript = true;
         if (ImGui::MenuItem("Scene...")) m_openNewScene = true;
+        if (ImGui::MenuItem("Animation...")) m_openNewAnimation = true;
         ImGui::EndPopup();
     }
-    const char* types[] = {"All", "Images", "Scripts", "Scenes", "Prefabs"};
+    const char* types[] = {"All", "Images", "Scripts", "Scenes", "Prefabs", "Animations"};
     flow(em * 6.0f);
     ImGui::SetNextItemWidth(em * 6.0f);
-    ImGui::Combo("##type", &m_typeFilter, types, 5);
+    ImGui::Combo("##type", &m_typeFilter, types, 6);
     flow(em * 8.0f);
     ImGui::SetNextItemWidth(std::min(em * 12.0f, lineEnd - ImGui::GetCursorScreenPos().x));
     ImGui::InputTextWithHint("##filter", "Search", &m_filter);
@@ -150,6 +156,9 @@ void AssetsPanel::draw(StudioApp& app) {
             } else if (entry.type == assets::AssetType::Prefab) {
                 bg = IM_COL32(105, 70, 130, 255);
                 glyph = "PREFAB";
+            } else if (entry.type == assets::AssetType::Animation) {
+                bg = IM_COL32(130, 95, 45, 255);
+                glyph = "ANIM";
             }
             dl->AddRectFilled({cursor.x + 6, cursor.y + 4}, {cursor.x + tile - 6, cursor.y + tile * 0.75f - 4}, bg, 6.0f);
             const ImVec2 ts = ImGui::CalcTextSize(glyph);
@@ -160,6 +169,7 @@ void AssetsPanel::draw(StudioApp& app) {
         if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
             if (entry.type == assets::AssetType::Scene) openScene = entry.id;
             if (entry.type == assets::AssetType::Prefab && !app.playing()) app.placePrefab(entry.id, std::nullopt);
+            if (entry.type == assets::AssetType::Animation) app.openAnimation(entry.id);
             if (entry.type == assets::AssetType::Script) app.openScript(entry.id);
         }
         if (ImGui::BeginDragDropSource()) {
@@ -168,6 +178,7 @@ void AssetsPanel::draw(StudioApp& app) {
             if (entry.type == assets::AssetType::Texture) ImGui::TextDisabled("Drop in the Scene view to create a sprite");
             if (entry.type == assets::AssetType::Script) ImGui::TextDisabled("Drop on an entity to attach it");
             if (entry.type == assets::AssetType::Prefab) ImGui::TextDisabled("Drop in the Scene view to place a copy");
+            if (entry.type == assets::AssetType::Animation) ImGui::TextDisabled("Drop on an entity to play it there");
             ImGui::EndDragDropSource();
         }
         if (ImGui::BeginPopupContextItem("menu")) {
@@ -226,8 +237,12 @@ void AssetsPanel::draw(StudioApp& app) {
         ImGui::Text("'%s' is used by %zu entit%s", entry != nullptr ? entry->name.c_str() : "?", uses.size(),
                     uses.size() == 1 ? "y" : "ies");
         for (const auto& use : uses) {
-            ImGui::BulletText("%s  (%s %s)", use.entityName.c_str(), use.inPrefab ? "prefab" : "scene",
-                              use.sceneName.c_str());
+            if (use.where == assets::AssetType::Animation) {
+                ImGui::BulletText("animation %s", use.sceneName.c_str());
+            } else {
+                ImGui::BulletText("%s  (%s %s)", use.entityName.c_str(),
+                                  use.where == assets::AssetType::Prefab ? "prefab" : "scene", use.sceneName.c_str());
+            }
         }
         if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
             m_showUses = {};
@@ -282,6 +297,46 @@ void AssetsPanel::draw(StudioApp& app) {
             }
             ImGui::CloseCurrentPopup();
         }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+        ImGui::EndPopup();
+    }
+    if (m_openNewAnimation) {
+        ImGui::OpenPopup("New Animation");
+        m_openNewAnimation = false;
+        if (project->asset(m_newAnimationImage) == nullptr) m_newAnimationImage = {};
+    }
+    if (ImGui::BeginPopupModal("New Animation", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextUnformatted("An animation plays frames from an image (a sprite sheet).");
+        if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+        ImGui::InputText("Name", &m_newAnimationName);
+        const auto* image = project->asset(m_newAnimationImage);
+        if (ImGui::BeginCombo("Image", image != nullptr ? image->name.c_str() : "(choose)")) {
+            for (const auto& a : project->assets().entries()) {
+                if (a.type == assets::AssetType::Texture && ImGui::Selectable(a.name.c_str(), a.id == m_newAnimationImage)) {
+                    m_newAnimationImage = a.id;
+                }
+            }
+            ImGui::EndCombo();
+        }
+        ImGui::DragInt2("Frame size", m_newAnimationCell, 0.2f, 1, 1024);
+        ImGui::TextDisabled("Starts with the frames of the image's first row; change them in the editor.");
+        ImGui::BeginDisabled(image == nullptr);
+        if (ImGui::Button("Create")) {
+            const Vec2 cell{static_cast<float>(std::max(1, m_newAnimationCell[0])),
+                            static_cast<float>(std::max(1, m_newAnimationCell[1]))};
+            auto clip = project->clipFromSheet(m_newAnimationImage, cell);
+            auto id = clip ? project->createAnimation(m_newAnimationName, clip.value())
+                           : Result<assets::AssetId>(clip.error());
+            if (!id) {
+                app.notify(id.error().message, true);
+            } else {
+                app.assetsChanged();
+                app.openAnimation(id.value());
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndDisabled();
         ImGui::SameLine();
         if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();

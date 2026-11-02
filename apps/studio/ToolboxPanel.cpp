@@ -192,6 +192,7 @@ void ToolboxPanel::draw(StudioApp& app) {
     std::vector<Tile> images;
     std::vector<Tile> behaviours;
     for (const auto& a : manifest.assets) {
+        if (a.entry.type == assets::AssetType::Animation) continue; // come with the objects that use them
         if (!matches(a.entry.name, a.description, a.fits(type))) continue;
         Tile tile{a.entry.name, a.description, {}, {}, {}};
         tile.payload.asset = a.entry.id;

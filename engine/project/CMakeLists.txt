@@ -1,5 +1,6 @@
 px_add_module(project
     SOURCES
+        src/Animation.cpp
         src/JsonUtil.cpp
         src/LibraryFormat.cpp
         src/Prefab.cpp

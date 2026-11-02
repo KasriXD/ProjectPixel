@@ -2,8 +2,9 @@
 """Generates the example platformer project in examples/platformer/.
 
 Produces:
-  assets/tiles.png, assets/player.png, assets/coin.png, assets/scenery.png,
-  assets/platform.png
+  assets/tiles.png, assets/player.png, assets/player_sheet.png, assets/coin.png,
+  assets/scenery.png, assets/platform.png
+  animations/player_{idle,run,jump,fall}.anim.json
   scenes/level1.scene.json
   prefabs/coin.prefab.json, prefabs/sparkle.prefab.json
   project.json
@@ -158,6 +159,72 @@ def make_player():
     img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
     draw_grid(img, 0, 0, PLAYER, PLAYER_PALETTE)
     return img
+
+
+# Legs of the player (rows 13-15) in each pose.
+PLAYER_LEGS = {
+    "stand": ["....oFFo.oFFo...", "....oFFo.oFFo...", "....oooo.oooo..."],
+    "stride": ["...oFFo...oFFo..", "..oFFo.....oFFo.", "..oooo.....oooo."],
+    "pass": [".....oFFooFFo...", ".....oFFooFFo...", ".....oooooooo..."],
+    "stride2": ["....oFFooFFo....", "...oFFo..oFFo...", "..oooo....oooo.."],
+    "tuck": ["...oFFo..oFFo...", "...oooo..oooo...", "................"],
+    "dangle": ["...oFFo..oFFo...", "..oFFo....oFFo..", "..oooo....oooo.."],
+}
+
+
+def player_frame(legs="stand", bob=0, eyes="ahead", mouth=False):
+    """The player drawn in a pose: body moved by `bob` rows, legs, eyes, mouth."""
+    body = PLAYER[2:13]
+    rows = ["." * 16] * 16
+    for i, row in enumerate(body):
+        y = 2 + i + bob
+        if 0 <= y < 13:
+            rows[y] = row
+    for i, row in enumerate(PLAYER_LEGS[legs]):
+        rows[13 + i] = row
+    rows = list(rows)
+    eye_top, eye_bottom = 6 + bob, 7 + bob
+    if eyes == "up":
+        rows[eye_top], rows[eye_bottom] = rows[eye_bottom], rows[eye_top]
+    elif eyes == "closed":
+        rows[eye_top] = rows[eye_top].replace("W", "B")
+        rows[eye_bottom] = rows[eye_bottom].replace("W", "o").replace("K", "o")
+    if mouth:
+        rows[9 + bob] = "..oBBBmmmmBBBo.."
+    return rows
+
+
+# The player's sprite sheet: 16x16 frames in one row.
+PLAYER_SHEET = [
+    player_frame(),                                   # 0 idle
+    player_frame(eyes="closed"),                      # 1 idle (blink)
+    player_frame("stride"),                           # 2 run
+    player_frame("pass", bob=-1),                     # 3
+    player_frame("stride2"),                          # 4
+    player_frame("pass", bob=-1),                     # 5
+    player_frame("tuck", bob=-1, eyes="up"),          # 6 jump
+    player_frame("dangle", mouth=True),               # 7 fall
+]
+# Clips over the sheet: name -> (frames, frames per second, loop).
+PLAYER_CLIPS = {
+    "idle": ([0, 0, 0, 0, 0, 1], 4, True),
+    "run": ([2, 3, 4, 5], 10, True),
+    "jump": ([6], 1, True),
+    "fall": ([7], 1, True),
+}
+
+
+def make_player_sheet():
+    img = Image.new("RGBA", (16 * len(PLAYER_SHEET), 16), (0, 0, 0, 0))
+    for i, frame in enumerate(PLAYER_SHEET):
+        draw_grid(img, i * 16, 0, frame, PLAYER_PALETTE)
+    return img
+
+
+def clip_document(texture, frames, fps, loop, cell=(16, 16)):
+    return {"format": "px.animation", "formatVersion": 1, "texture": texture,
+            "frames": [[i * cell[0], 0, cell[0], cell[1]] for i in frames],
+            "framesPerSecond": fps, "loop": loop, "cellSize": list(cell)}
 
 
 COIN_FRAMES = [
@@ -390,11 +457,17 @@ def main():
     (ROOT / "scenes").mkdir(parents=True, exist_ok=True)
     make_tiles().save(ROOT / "assets" / "tiles.png")
     make_player().save(ROOT / "assets" / "player.png")
+    make_player_sheet().save(ROOT / "assets" / "player_sheet.png")
     make_coin().save(ROOT / "assets" / "coin.png")
     make_scenery().save(ROOT / "assets" / "scenery.png")
     make_platform().save(ROOT / "assets" / "platform.png")
 
-    tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery", "platform")}
+    tex = {name: gid("asset/" + name) for name in ("tiles", "player", "coin", "scenery", "platform", "player_sheet")}
+    clips = {name: gid("asset/animation/player_" + name) for name in PLAYER_CLIPS}
+    (ROOT / "animations").mkdir(parents=True, exist_ok=True)
+    for name, (frames, fps, loop) in PLAYER_CLIPS.items():
+        doc = clip_document(tex["player_sheet"], frames, fps, loop)
+        (ROOT / "animations" / f"player_{name}.anim.json").write_text(dump_pretty(doc) + "\n")
     script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle")}
     prefab = {name: gid("asset/prefab/" + name) for name in ("coin", "sparkle")}
     scene_id = gid("asset/level1")
@@ -460,7 +533,8 @@ def main():
 
     entities.append({"id": player_id, "name": "Player", "components": {
         "Transform": {"position": spawn},
-        "Sprite": {"texture": tex["player"], "size": [16, 16], "layer": 10},
+        "Sprite": {"texture": tex["player_sheet"], "source": [0, 0, 16, 16], "size": [16, 16], "layer": 10},
+        "Animator": {"idle": clips["idle"], "run": clips["run"], "jump": clips["jump"], "fall": clips["fall"]},
         "BoxCollider": {"size": [10, 14], "offset": [0, 1]},
         "KinematicBody": {},
         "PlatformerController": {"maxSpeed": 110, "jumpSpeed": 300, "gravity": 900},
@@ -511,6 +585,10 @@ def main():
             {"id": tex["coin"], "type": "texture", "name": "Coin", "path": "assets/coin.png", "filter": "nearest"},
             {"id": tex["scenery"], "type": "texture", "name": "Scenery", "path": "assets/scenery.png", "filter": "nearest"},
             {"id": tex["platform"], "type": "texture", "name": "Platform", "path": "assets/platform.png", "filter": "nearest"},
+            {"id": tex["player_sheet"], "type": "texture", "name": "Player Sheet", "path": "assets/player_sheet.png",
+             "filter": "nearest"},
+            *[{"id": clips[name], "type": "animation", "name": f"Player {name.title()}",
+               "path": f"animations/player_{name}.anim.json"} for name in PLAYER_CLIPS],
             {"id": script["coin"], "type": "script", "name": "Coin", "path": "scripts/coin.luau"},
             {"id": script["level_rules"], "type": "script", "name": "Level Rules", "path": "scripts/level_rules.luau"},
             {"id": script["moving_platform"], "type": "script", "name": "Moving Platform",

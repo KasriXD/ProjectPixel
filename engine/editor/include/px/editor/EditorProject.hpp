@@ -3,6 +3,7 @@
 #include "px/assets/AssetRegistry.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/Library.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
@@ -26,10 +27,10 @@ namespace px::editor {
 
 // Where an asset is used, for "find references" and safe deletion.
 struct AssetUse {
-    assets::AssetId scene; // the scene (or prefab) that uses it
+    assets::AssetId scene; // the scene, prefab or animation that uses it
     std::string sceneName;
-    std::string entityName;
-    bool inPrefab = false; // `scene` is a prefab
+    std::string entityName; // empty for an animation
+    assets::AssetType where = assets::AssetType::Scene;
 };
 
 // A script's compile result and what it declares (for the inspector).
@@ -87,7 +88,8 @@ public:
 
     // Copies a file from outside the project into it and registers it.
     // The type comes from the extension: .png .jpg .jpeg .bmp .tga (texture),
-    // .luau (script), .scene.json (scene), .prefab.json (prefab). Files are
+    // .luau (script), .scene.json (scene), .prefab.json (prefab), .anim.json
+    // (animation). Files are
     // checked first (images decoded, scenes and prefabs parsed), so a broken
     // file is refused.
     [[nodiscard]] Result<assets::AssetId> importFile(const std::filesystem::path& source);
@@ -123,6 +125,16 @@ public:
     [[nodiscard]] Status savePrefab(assets::AssetId id, const scene::Scene& content);
     // Every prefab as saved, for play mode.
     [[nodiscard]] Result<std::shared_ptr<const project::PrefabLibrary>> buildPrefabLibrary() const;
+
+    // --- Animation clips ----------------------------------------------------------------
+    // Creates animations/<name>.anim.json. Written at once, like prefabs.
+    [[nodiscard]] Result<assets::AssetId> createAnimation(std::string_view name, const project::AnimationClip& clip);
+    [[nodiscard]] Result<project::AnimationClip> loadAnimation(assets::AssetId id) const;
+    [[nodiscard]] Status saveAnimation(assets::AssetId id, const project::AnimationClip& clip);
+    [[nodiscard]] Result<std::shared_ptr<const project::AnimationLibrary>> buildAnimationLibrary() const;
+    // A clip of `texture` cut into `cellSize` cells: the cells of the first
+    // row that are not fully transparent (a sprite strip), at 8 frames per second.
+    [[nodiscard]] Result<project::AnimationClip> clipFromSheet(assets::AssetId texture, Vec2 cellSize) const;
 
     // --- Scenes ----------------------------------------------------------------------------
     [[nodiscard]] Result<scene::Scene> loadScene(assets::AssetId id, std::vector<std::string>* warnings = nullptr) const;

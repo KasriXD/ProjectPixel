@@ -65,9 +65,10 @@ LibraryManifest readLibrary(Json& root) {
             std::string typeName;
             a.required("type", typeName);
             const auto type = assets::assetTypeFromName(typeName);
-            if (!type || *type == assets::AssetType::Scene) {
+            if (!type || *type == assets::AssetType::Scene || *type == assets::AssetType::Prefab) {
                 fail(detail::childPath(itemPath, "type"),
-                     std::format("'{}' cannot be in a library; use \"texture\" or \"script\"", typeName));
+                     std::format("'{}' cannot be in a library; use \"texture\", \"script\" or \"animation\"",
+                                 typeName));
             }
             asset.entry.type = *type;
             a.required("path", asset.entry.path);

@@ -252,6 +252,7 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     m_assets = std::make_unique<AssetsPanel>();
     m_console = std::make_unique<ConsolePanel>();
     m_scripts = std::make_unique<ScriptEditorPanel>();
+    m_animationEditor = std::make_unique<AnimationEditorPanel>();
     m_projectSettings = std::make_unique<ProjectSettingsPanel>();
     m_toolbox = std::make_unique<ToolboxPanel>();
     if (m_options.resetLayout) m_layoutBuilt = false;
@@ -382,6 +383,7 @@ void StudioApp::closeProjectNow() {
     m_project.reset();
     m_viewport->resetCamera();
     *m_scripts = ScriptEditorPanel{};
+    m_animationEditor->close();
     showProjectSettings = false;
     updateTitle();
 }
@@ -554,6 +556,42 @@ void StudioApp::advancePlay(double elapsed) {
 // --- Misc commands -------------------------------------------------------------------------------------
 
 void StudioApp::openScript(assets::AssetId script, int line) { m_scripts->open(*this, script, line); }
+
+void StudioApp::openAnimation(assets::AssetId clip) { m_animationEditor->open(*this, clip); }
+
+void StudioApp::useAnimation(assets::AssetId clip, scene::Entity entity) {
+    if (!m_project || !m_document || m_play || !m_document->scene().isAlive(entity)) return;
+    auto loaded = m_project->loadAnimation(clip);
+    if (!loaded) {
+        notify(loaded.error().message, true);
+        return;
+    }
+    const auto* animator = scene::findComponentType("Animator");
+    m_document->beginEdit("Use Animation");
+    if (m_document->scene().tryGet<scene::Animator>(entity) == nullptr) {
+        if (auto added = m_document->addComponent(entity, *animator); !added) {
+            m_document->cancelEdit();
+            notify(added.error().message, true);
+            return;
+        }
+    }
+    scene::Scene& scene = m_document->sceneForEdit();
+    auto& a = scene.get<scene::Animator>(entity);
+    // A character gets the clip as its idle animation; anything else plays it always.
+    const bool character = scene.tryGet<scene::PlatformerController>(entity) != nullptr ||
+                           scene.tryGet<scene::TopDownController>(entity) != nullptr;
+    (character ? a.idle : a.clip) = clip;
+    if (auto* sprite = scene.tryGet<scene::Sprite>(entity); sprite != nullptr && !loaded.value().frames.empty()) {
+        sprite->texture = loaded.value().texture;
+        sprite->source = loaded.value().frames.front();
+    }
+    m_document->markChanged();
+    m_document->endEdit();
+    m_document->select(entity);
+    const auto* entry = m_project->asset(clip);
+    notify(std::format("{} plays {}{}", scene.get<scene::EntityInfo>(entity).name, entry != nullptr ? entry->name : "it",
+                       character ? " when standing still (set run, jump and fall in Properties)" : ""));
+}
 
 namespace {
 
@@ -950,6 +988,7 @@ void StudioApp::drawUi() {
         m_assets->draw(*this);
         m_console->draw(*this);
         m_scripts->draw(*this);
+        m_animationEditor->draw(*this);
         if (showProjectSettings) m_projectSettings->draw(*this, showProjectSettings);
         if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
     }
@@ -990,6 +1029,7 @@ void StudioApp::buildDefaultLayout(unsigned int dockspace) {
     }
     ImGui::DockBuilderDockWindow(kSceneWindow, center);
     for (const std::string& script : m_scripts->windowIds()) ImGui::DockBuilderDockWindow(script.c_str(), center);
+    ImGui::DockBuilderDockWindow(AnimationEditorPanel::windowId(), center);
     ImGui::DockBuilderFinish(dockspace);
 }
 

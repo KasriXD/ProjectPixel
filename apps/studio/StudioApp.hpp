@@ -37,6 +37,7 @@ class ViewportPanel;
 class AssetsPanel;
 class ConsolePanel;
 class ScriptEditorPanel;
+class AnimationEditorPanel;
 class ProjectSettingsPanel;
 class ToolboxPanel;
 
@@ -132,6 +133,9 @@ public:
     void stepOnce();
 
     void openScript(assets::AssetId script, int line = 0);
+    void openAnimation(assets::AssetId clip);
+    // Puts the clip on the entity's Animator (adding one), as one undo step.
+    void useAnimation(assets::AssetId clip, scene::Entity entity);
     void importFiles(const std::vector<std::filesystem::path>& files);
     void assetsChanged(); // textures and script info must be refreshed
     void notify(std::string text, bool error = false);
@@ -237,6 +241,7 @@ private:
     std::unique_ptr<AssetsPanel> m_assets;
     std::unique_ptr<ConsolePanel> m_console;
     std::unique_ptr<ScriptEditorPanel> m_scripts;
+    std::unique_ptr<AnimationEditorPanel> m_animationEditor;
     std::unique_ptr<ProjectSettingsPanel> m_projectSettings;
     std::unique_ptr<ToolboxPanel> m_toolbox;
 

@@ -80,6 +80,37 @@
       "filter": "nearest"
     },
     {
+      "id": "78cddc51-970f-5787-844d-64f8b0a63b47",
+      "type": "texture",
+      "name": "Player Sheet",
+      "path": "assets/player_sheet.png",
+      "filter": "nearest"
+    },
+    {
+      "id": "2ae5af57-b8e8-5c4a-828d-27d1f2bc3cb7",
+      "type": "animation",
+      "name": "Player Idle",
+      "path": "animations/player_idle.anim.json"
+    },
+    {
+      "id": "b06c5f65-8242-5a0d-877d-ee540ef85653",
+      "type": "animation",
+      "name": "Player Run",
+      "path": "animations/player_run.anim.json"
+    },
+    {
+      "id": "8afde020-038c-5090-bad5-c12ef9f10ec1",
+      "type": "animation",
+      "name": "Player Jump",
+      "path": "animations/player_jump.anim.json"
+    },
+    {
+      "id": "15f94181-d26a-5287-9f68-e4ba0f617e79",
+      "type": "animation",
+      "name": "Player Fall",
+      "path": "animations/player_fall.anim.json"
+    },
+    {
       "id": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
       "type": "script",
       "name": "Coin",

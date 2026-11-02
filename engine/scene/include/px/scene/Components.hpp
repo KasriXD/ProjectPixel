@@ -192,6 +192,23 @@ struct Camera {
     Vec2 position{};            // runtime: world point at the centre of the view
 };
 
+// Plays animation clips (assets, "*.anim.json") on the entity's Sprite.
+// With a PlatformerController or TopDownController the idle/run/jump/fall
+// clips follow the movement; a script can play any clip
+// (entity:playAnimation), and `clip` plays when nothing else applies.
+struct Animator {
+    assets::AssetId clip;
+    assets::AssetId idle;
+    assets::AssetId run;
+    assets::AssetId jump;
+    assets::AssetId fall;
+    float speed = 1.0f;          // playback speed (1 = the clips' own speed)
+    bool playing = true;
+    assets::AssetId current;     // runtime: the clip playing
+    assets::AssetId scripted;    // runtime: chosen by a script (nil: automatic)
+    float time = 0.0f;           // runtime: seconds into the current clip
+};
+
 // The root of an entity tree made from a prefab: placed in Studio or
 // spawned by a script (World.spawn). Studio uses it to update instances when
 // the prefab changes (docs/prefabs.md). The ids of the other entities of an

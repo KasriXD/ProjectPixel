@@ -387,9 +387,26 @@ void InspectorPanel::drawAddComponent(StudioApp& app, Entity entity) {
     }
 }
 
+// Shows the Animator's clip in the Scene view: the Sprite takes the first
+// frame of the clip it would start with.
+void InspectorPanel::previewAnimator(StudioApp& app, Scene& scene, Entity entity) {
+    auto* animator = scene.tryGet<Animator>(entity);
+    auto* sprite = scene.tryGet<Sprite>(entity);
+    if (animator == nullptr || sprite == nullptr || app.project() == nullptr || app.playing()) return;
+    for (const assets::AssetId& id : {animator->clip, animator->idle, animator->run}) {
+        if (id.isNil()) continue;
+        auto clip = app.project()->loadAnimation(id);
+        if (!clip || clip.value().frames.empty()) return;
+        sprite->texture = clip.value().texture;
+        sprite->source = clip.value().frames.front();
+        return;
+    }
+}
+
 void InspectorPanel::drawComponent(StudioApp& app, Scene& scene, Entity entity, const ComponentInfo& info) {
     void* data = info.get(scene, entity);
     if (data == nullptr) return;
+    m_entity = entity;
     const bool playing = app.playing();
     if (info.name == "Scripts") {
         drawScripts(app, scene, entity);
@@ -413,6 +430,24 @@ void InspectorPanel::drawComponent(StudioApp& app, Scene& scene, Entity entity, 
         ImGui::EndTable();
     }
     if (info.name == "Tilemap") drawTilemapTools(app, scene, entity);
+    if (info.name == "Animator" && !playing) {
+        // A button per clip, flowing onto the next line when the panel is narrow.
+        const auto* a = static_cast<const Animator*>(data);
+        const float right = ImGui::GetCursorScreenPos().x + ImGui::GetContentRegionAvail().x;
+        bool first = true;
+        for (const assets::AssetId& id : {a->clip, a->idle, a->run, a->jump, a->fall}) {
+            const auto* entry = id.isNil() || app.project() == nullptr ? nullptr : app.project()->asset(id);
+            if (entry == nullptr) continue;
+            const std::string label = std::format("Edit {}", entry->name);
+            const float width = ImGui::CalcTextSize(label.c_str()).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+            if (!first && ImGui::GetItemRectMax().x + ImGui::GetStyle().ItemSpacing.x + width <= right) ImGui::SameLine();
+            first = false;
+            ImGui::PushID(entry->id.toString().c_str());
+            if (ImGui::SmallButton(label.c_str())) app.openAnimation(entry->id);
+            ui::tooltip("Open the clip in the animation editor");
+            ImGui::PopID();
+        }
+    }
 }
 
 bool InspectorPanel::drawField(StudioApp& app, Scene& scene, const ComponentInfo& info, const FieldInfo& f,
@@ -480,6 +515,10 @@ bool InspectorPanel::drawField(StudioApp& app, Scene& scene, const ComponentInfo
             const std::string preview = v.isNil() ? std::string("(none)") : (entry != nullptr ? entry->name : "(missing)");
             bool picked = false;
             if (ImGui::BeginCombo("##v", preview.c_str())) {
+                if (!f.isRequired() && ImGui::Selectable("(none)", v.isNil())) {
+                    v = {};
+                    picked = true;
+                }
                 if (project != nullptr) {
                     for (const auto& a : project->assets().entries()) {
                         if (a.type != f.assetType) continue;
@@ -491,7 +530,10 @@ bool InspectorPanel::drawField(StudioApp& app, Scene& scene, const ComponentInfo
                 }
                 ImGui::EndCombo();
             }
-            changed = m_edit.commit(picked, undoLabel, [&] { f.ref<assets::AssetId>(data) = v; });
+            changed = m_edit.commit(picked, undoLabel, [&] {
+                f.ref<assets::AssetId>(data) = v;
+                if (info.name == "Animator" && !readOnly) previewAnimator(app, scene, m_entity);
+            });
             if (ImGui::BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(ui::kAssetPayload)) {
                     assets::AssetId dropped;

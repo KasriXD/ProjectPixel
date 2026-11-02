@@ -277,6 +277,47 @@ def make_hero():
     return img
 
 
+# Legs of the hero (rows 13-15) while walking.
+HERO_LEGS = {
+    "stand": ["....oNNooNNo....", "....oFFo.oFFo...", "....ooo..ooo...."],
+    "left": ["....oNNooNNo....", "...oFFo..oNo....", "...ooo...oFo...."],
+    "pass": ["....oNNooNNo....", "....oFFooFFo....", "....oooooooo...."],
+    "right": ["....oNNooNNo....", "....oNo..oFFo...", "....oFo...ooo..."],
+}
+
+
+def hero_frame(legs="stand", bob=0, blink=False):
+    rows = ["." * 16] * 16
+    for i, row in enumerate(HERO[:13]):
+        y = i + bob
+        if 0 <= y < 13:
+            rows[y] = row
+    for i, row in enumerate(HERO_LEGS[legs]):
+        rows[13 + i] = row
+    rows = list(rows)
+    if blink:
+        rows[7 + bob] = rows[7 + bob].replace("K", "o")
+    return rows
+
+
+# The top-down hero's sprite sheet (16x16 frames in a row) and its clips.
+HERO_SHEET = [
+    hero_frame(), hero_frame(blink=True),
+    hero_frame("left"), hero_frame("pass", bob=-1), hero_frame("right"), hero_frame("pass", bob=-1),
+]
+HERO_CLIPS = {
+    "idle": ([0, 0, 0, 0, 0, 1], 4, True),
+    "walk": ([2, 3, 4, 5], 8, True),
+}
+
+
+def make_hero_sheet():
+    img = Image.new("RGBA", (16 * len(HERO_SHEET), 16), (0, 0, 0, 0))
+    for i, frame in enumerate(HERO_SHEET):
+        draw_grid(img, i * 16, 0, frame, HERO_PALETTE)
+    return img
+
+
 SLIME = [
     [
         "................",
@@ -663,6 +704,7 @@ def make_all():
     return {
         "topdown_tiles.png": make_topdown_tiles(),
         "hero.png": make_hero(),
+        "hero_sheet.png": make_hero_sheet(),
         "slime.png": make_frames(SLIME, SLIME_PALETTE),
         "beetle.png": make_frames(BEETLE, BEETLE_PALETTE),
         "gem.png": make_gem(),

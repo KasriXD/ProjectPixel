@@ -45,6 +45,31 @@ Guid spawnedRootId(std::uint64_t seed, std::uint64_t count) {
 
 const InputFrame kNoInput{};
 
+const assets::AssetId& firstSet(std::initializer_list<const assets::AssetId*> clips) {
+    for (const assets::AssetId* c : clips) {
+        if (!c->isNil()) return *c;
+    }
+    return **clips.begin();
+}
+
+// The clip an Animator's movement calls for (nil if none applies).
+assets::AssetId movementClip(const Registry& reg, Entity e, const Animator& a) {
+    const auto* body = reg.tryGet<KinematicBody>(e);
+    if (body == nullptr) return {};
+    constexpr float kMoving = 1.0f; // units per second
+    if (reg.tryGet<PlatformerController>(e) != nullptr) {
+        if (!body->onGround) {
+            return body->velocity.y < 0.0f ? firstSet({&a.jump, &a.fall, &a.idle}) : firstSet({&a.fall, &a.jump, &a.idle});
+        }
+        return std::abs(body->velocity.x) > kMoving ? firstSet({&a.run, &a.idle}) : a.idle;
+    }
+    if (reg.tryGet<TopDownController>(e) != nullptr) {
+        const bool moving = std::abs(body->velocity.x) > kMoving || std::abs(body->velocity.y) > kMoving;
+        return moving ? firstSet({&a.run, &a.idle}) : a.idle;
+    }
+    return {};
+}
+
 // Moves an entity by a world-space offset. Root entities (the common case)
 // are moved exactly; children are moved through their parent's transform.
 void moveWorld(Scene& scene, Entity e, Transform& t, Vec2 delta) {
@@ -118,6 +143,7 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
     }
 
     session->m_prefabs = options.prefabs;
+    session->m_animations = options.animations;
     session->m_spawnCount = options.seed;
 
     scripting::ScriptSystemOptions scriptOptions;
@@ -546,11 +572,46 @@ void GameSession::updateAnimations() {
         }
         sprite.source = anim.frames[static_cast<std::size_t>(frame)];
     });
+
+    // Animators: a script's clip, else the one the movement calls for, else the default.
+    if (m_animations == nullptr) return;
+    auto& reg = m_scene.registry();
+    reg.each<Animator, Sprite>([&](Entity e, Animator& a, Sprite& sprite) {
+        assets::AssetId wanted = a.scripted;
+        if (wanted.isNil()) wanted = movementClip(reg, e, a);
+        if (wanted.isNil()) wanted = a.clip;
+        if (wanted != a.current) {
+            a.current = wanted;
+            a.time = 0.0f;
+        }
+        const auto* entry = m_animations->find(a.current);
+        if (entry == nullptr || entry->clip.frames.empty()) return;
+        const project::AnimationClip& clip = entry->clip;
+        if (a.playing) a.time += dt * a.speed;
+        sprite.texture = clip.texture;
+        sprite.source = clip.frames[clip.frameAt(a.time)];
+        // A clip that does not loop, played by a script, hands back to the automatic choice when done.
+        if (!a.scripted.isNil() && clip.finishedAt(a.time)) a.scripted = {};
+    });
 }
 
 void GameSession::updateCameras() { runtime::updateCameras(m_scene, m_worldBounds, m_viewSize); }
 
 // --- IScriptHost -----------------------------------------------------------------------------
+
+assets::AssetId GameSession::findAnimation(std::string_view name) const {
+    const auto* entry = m_animations != nullptr ? m_animations->findByName(name) : nullptr;
+    return entry != nullptr ? entry->id : assets::AssetId{};
+}
+
+std::string GameSession::animationName(assets::AssetId clip) const {
+    const auto* entry = m_animations != nullptr ? m_animations->find(clip) : nullptr;
+    return entry != nullptr ? entry->name : std::string();
+}
+
+std::vector<std::string> GameSession::animationNames() const {
+    return m_animations != nullptr ? m_animations->names() : std::vector<std::string>{};
+}
 
 int GameSession::findAction(std::string_view name) const {
     const ActionId id = m_actions.find(name);

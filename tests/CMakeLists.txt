@@ -12,7 +12,8 @@ add_executable(px_tests
     test_multiplayer.cpp
     test_net.cpp
     test_netgame.cpp
-    test_prefabs.cpp)
+    test_prefabs.cpp
+    test_animation.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest

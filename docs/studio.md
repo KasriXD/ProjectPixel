@@ -179,7 +179,11 @@ in `px-player` and `px-headless`.)
    Adding *PlatformerController* or *TopDownController* also adds the
    components it needs.
    A component that another one needs cannot be removed until that one is.
-7. **Reuse with prefabs**: right-click an entity in Explorer, *Save As
+7. **Animate**: *Assets > + New > Animation...* makes a clip from a sprite
+   sheet and opens the animation editor (click cells to add frames, watch
+   the preview). Give a character an *Animator* with idle, run, jump and
+   fall clips, or drop a clip onto an entity. See [animation.md](animation.md).
+8. **Reuse with prefabs**: right-click an entity in Explorer, *Save As
    Prefab...*; drag the prefab from Assets into the Scene view to place
    copies (shown in purple in Explorer). Change a copy and press *Apply To
    Prefab* in Properties to update every copy in every scene; each keeps its

@@ -43,7 +43,7 @@ enum FieldFlags : std::uint32_t {
     kFieldNone = 0,
     kFieldRuntime = 1u << 0,  // simulation state: not saved; Studio shows it read-only while playing
     kFieldRequired = 1u << 1, // must be present in files
-    kFieldOptional = 1u << 2, // written only when it has a value (EntityRef that is not nil)
+    kFieldOptional = 1u << 2, // written only when it has a value (EntityRef or Asset that is not nil)
 };
 
 inline constexpr double kUnbounded = std::numeric_limits<double>::infinity();

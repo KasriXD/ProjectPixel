@@ -19,6 +19,7 @@
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
+#include "px/project/Animation.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/runtime/GameLoader.hpp"
@@ -69,8 +70,8 @@ void printUsage() {
                  "usage: px-headless <project-dir> [--ticks N] [--input-script FILE]\n"
                  "                   [--expect-level-complete] [--expect-no-script-errors]\n"
                  "                   [--log-events] [--trace-every N] [--verbose]\n"
-                 "       px-headless <project-dir> --resave   (rewrite project.json, scenes and prefabs in\n"
-                 "                                             the current format, as Studio saves them)\n"
+                 "       px-headless <project-dir> --resave   (rewrite project.json, scenes, prefabs and\n"
+                 "                                             animations as Studio saves them)\n"
                  "       px-headless <project-dir> --connect ADDRESS[:PORT] [--name NAME]\n"
                  "                   [--input-script FILE] [--ticks N] [--expect-joined]\n"
                  "                                            (join a px-server as a scripted bot)\n"
@@ -189,6 +190,22 @@ int resaveProject(DirectoryFileSystem& files) {
         return 1;
     }
     for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type == assets::AssetType::Animation) {
+            auto clip = project::loadAnimation(files, manifest.value(), entry.id);
+            if (!clip) {
+                log::error("{}", clip.error().message);
+                return 1;
+            }
+            const std::string saved = project::serializeAnimation(clip.value());
+            if (auto current = files.readText(entry.path); current && current.value() != saved) {
+                if (auto written = files.writeText(entry.path, saved); !written) {
+                    log::error("{}", written.error().message);
+                    return 1;
+                }
+                log::info("Rewrote {}", entry.path);
+            }
+            continue;
+        }
         if (entry.type != assets::AssetType::Scene && entry.type != assets::AssetType::Prefab) continue;
         auto text = files.readText(entry.path);
         if (!text) {

@@ -360,6 +360,15 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                 }
                 case assets::AssetType::Scene: app.requestOpenScene(id); break;
                 case assets::AssetType::Prefab: app.placePrefab(id, world); break;
+                case assets::AssetType::Animation: {
+                    const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));
+                    if (target.isNull()) {
+                        app.notify("Drop an animation onto an entity with a sprite", true);
+                    } else {
+                        app.useAnimation(id, target);
+                    }
+                    break;
+                }
             }
         }
     }
