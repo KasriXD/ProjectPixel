@@ -14,7 +14,8 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | Luau | 0.743 (`9d7748a4`) | MIT (`third_party/luau/LICENSE.txt`; Lua 5.1 parts: `lua_LICENSE.txt`) | Vendored subset in `third_party/luau` (Common, Ast, Bytecode, Compiler, VM), see [ADR 0009](adr/0009-luau-integration.md) | `scripting` (private) |
 | Dear ImGui | 1.92.9b, docking branch (`b48d1afb`) | MIT (`third_party/imgui/LICENSE.txt`) | Vendored in `third_party/imgui` (core, SDL3 platform backend, SDL_Renderer backend, `std::string` helpers), see [ADR 0013](adr/0013-studio-ui-dear-imgui.md) | Studio only (`apps/studio`) |
 | ENet | 1.3.18 (`2662c0de`) | MIT (`third_party/enet/LICENSE`) | Vendored unmodified in `third_party/enet` with our own CMake target; not built for WebAssembly (`PX_ENABLE_ENET`) | `net` (private): the UDP transport |
-| cpp-httplib | 0.62.0 (`74ef3c42`) | MIT (`third_party/httplib/LICENSE`) | Vendored in `third_party/httplib`, split by its own `split.py` into `httplib.h` + `httplib.cc`; plain HTTP (no OpenSSL) | `online` (client), `services/platform` (server); desktop only |
+| cpp-httplib | 0.62.0 (`74ef3c42`) | MIT (`third_party/httplib/LICENSE`) | Vendored in `third_party/httplib`, split by its own `split.py` into `httplib.h` + `httplib.cc`; TLS through Mbed TLS | `online` (client), `services/platform` (server), `net` (WebSockets); desktop only |
+| Mbed TLS | 3.6.7 | Apache-2.0 | Downloaded release tarball, SHA-256 pinned, static libraries; only with the platform (`PX_ENABLE_TLS`) | HTTPS and `wss://` in cpp-httplib ([ADR 0025](adr/0025-tls-with-mbed-tls.md)) |
 | SQLite | 3.54.1 (`57520227`) | Public domain | Amalgamation (`sqlite3.c`/`sqlite3.h`) built from the official source tag with its own `make sqlite3.c`, vendored in `third_party/sqlite` | `services/platform` |
 | Monocypher | 4.0.3 (`ab2b16dd`) | BSD-2-Clause or CC0 (`third_party/monocypher/LICENCE.md`) | Vendored `monocypher.c`/`.h` | `crypto` (private): Argon2id, EdDSA, BLAKE2b |
 | stb_image_write | 1.16, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file, PNG to memory only | `online` (private): re-encoding uploaded images |
@@ -122,10 +123,22 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
   `_WIN32_WINNT=0x0A00`, set by our CMake target).
 - **Alternatives:** Boost.Beast (large dependency), libcurl + a separate
   server library (two libraries, libcurl's build), civetweb (C, server only).
-- **Not provided:** TLS. cpp-httplib supports it through OpenSSL, which the
-  clients do not ship yet; see [platform.md](platform.md#security).
+- **TLS:** through Mbed TLS (below), with the system's certificates on each
+  OS. Also provides the WebSocket server and client for browser players
+  ([ADR 0024](adr/0024-websockets-for-browsers.md)).
 - **Update:** clone a tag, run `python3 split.py -o out`, copy `out/httplib.h`,
   `out/httplib.cc` and `LICENSE`, run the platform tests on every OS.
+
+### Mbed TLS
+- **Why:** TLS for HTTPS and secure WebSockets that builds the same way on
+  Windows, macOS and Linux, with no system library to install; cpp-httplib
+  supports it directly. Built with its programs and tests off.
+- **Alternatives:** OpenSSL (not on Windows by default, large build), the
+  systems' own TLS (Schannel, Secure Transport, OpenSSL on Linux: three
+  implementations). See [ADR 0025](adr/0025-tls-with-mbed-tls.md).
+- **Update:** change the URL and SHA-256 in `cmake/PxDependencies.cmake`;
+  follow its security advisories (3.6 is a long-term support branch).
+- **Build impact:** about 30 seconds.
 
 ### SQLite
 - **Why:** an embedded, transactional database in one C file; nothing to

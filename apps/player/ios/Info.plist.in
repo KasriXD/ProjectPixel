@@ -38,6 +38,8 @@
         <string>UIInterfaceOrientationLandscapeLeft</string>
         <string>UIInterfaceOrientationLandscapeRight</string>
     </array>
+    <key>UIApplicationSupportsIndirectInputEvents</key>
+    <true/>
     <key>GCSupportsControllerUserInteraction</key>
     <true/>
 </dict>

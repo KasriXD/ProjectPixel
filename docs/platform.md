@@ -40,12 +40,36 @@ px-platform --data platform-data --make-admin YourName
 | `--server-ports FIRST:COUNT` | 27960:100 | UDP ports for game servers |
 | `--max-servers N` | 20 | game servers at once |
 | `--headless FILE`, `--server FILE` | next to px-platform, else the build's | the programs it runs |
+| `--https-port N`, `--tls-cert FILE`, `--tls-key FILE` | off | HTTPS on a second port ([below](#https)) |
+| `--https-bind ADDRESS` | `--bind` | listen address for HTTPS |
+| `--web-player DIR` | `web-player/` next to px-platform | the WebAssembly player: play in browsers at `/play` ([below](#browsers)) |
 | `--no-rate-limits` | | for testing |
 
 To let other computers on your network play, start it with
 `--bind 0.0.0.0 --public-host <this computer's address>` and allow the HTTP
-port and the server ports through the firewall. Read [Security](#security)
-first.
+(or HTTPS) port and the server ports, UDP and TCP, through the firewall.
+Read [Security](#security) first.
+
+### HTTPS
+
+```sh
+px-platform --data platform-data --dev-certificate localhost,127.0.0.1   # a self-signed certificate, for testing
+px-platform --https-port 8731 --tls-cert platform-data/tls/dev-cert.pem --tls-key platform-data/tls/dev-key.pem
+```
+
+The same API is then served on both ports; game servers on the platform's
+computer keep using the plain HTTP port. Game servers get the certificate
+too, so browsers on an HTTPS page join them over secure WebSockets
+(`wss://`). For other computers, use a certificate for the platform's public
+name (for example from Let's Encrypt; `--tls-cert` takes the full chain).
+
+Clients (Studio, px-player, px-headless) accept `https://` platform
+addresses and check certificates against the system's store (Windows
+certificate store, macOS keychain, Linux CA bundles). To trust a development
+certificate, set `PX_PLATFORM_CA=/path/to/dev-cert.pem`; without it they
+refuse the connection with a message saying so. Built with Mbed TLS
+([ADR 0025](adr/0025-tls-with-mbed-tls.md)); `-DPX_ENABLE_TLS=OFF` builds
+without it.
 
 ## Accounts
 
@@ -106,12 +130,39 @@ downloaded once) and connects to the game server with the ticket it got.
 Every game runs on a server, even for one player: that is what makes saved
 data trustworthy.
 
+### Browsers
+
+With `--web-player DIR` (the `px-player.js`, `.wasm` and `.data` files of
+the WebAssembly build, `cmake --preset wasm`), the platform serves a page at
+**`/play`**: log in or make an account, pick a game, play. Browser players
+join the **same game servers** as desktop players, over WebSockets
+([ADR 0024](adr/0024-websockets-for-browsers.md)); keyboard, gamepads and
+touch screens work ([input-devices.md](input-devices.md)).
+
+```sh
+px-platform --web-player build/wasm/apps/player       # then open http://127.0.0.1:8730/play
+```
+
+The page asks for a join ticket, downloads the game package while the
+player loads, and starts the player with the ticket's `ws://` (or `wss://`)
+address and token. `/play#game=ID` opens a game directly (the home page
+links there). The page and its scripts are built into px-platform
+(`services/platform/web`); the player files are revalidated with an ETag, so
+browsers download them again only when they change.
+
+Tested in CI: headless Chromium plays the top-down example through this
+page while a desktop bot joins the same server over UDP; both see two
+players and the level completed, over HTTP and over HTTPS with `wss://`
+(`tools/browser/crossplay.sh`).
+
 ## Game servers
 
 When someone joins a game, the platform gives them a seat on a running
 server of the game's latest version that has room, or starts a new
 `px-server` process for it (on the next free port), and waits until it
-reports that it is listening. A server:
+reports that it is listening. A server listens on its UDP port for desktop
+players and on the TCP port with the same number for browsers (WebSockets;
+`wss://` when the platform has a certificate). A server:
 
 - only lets in players with a valid **connect ticket** (below);
 - loads each player's saved data before they join, saves changes every
@@ -210,7 +261,7 @@ game server when it starts it.
 
 | Method and path | Auth | |
 |---|---|---|
-| `GET /platform` | | name, engine version, API version, public key |
+| `GET /platform` | | name, engine version, API version, public key, `webPlayer` (browser play available) |
 | `POST /accounts` | | register `{username, password}` → `{user, token}` |
 | `POST /sessions` | | log in → `{user, token}` |
 | `DELETE /sessions/current` | Bearer | log out |
@@ -222,7 +273,7 @@ game server when it starts it.
 | `POST /games/{id}/versions?notes=` | Bearer | publish: the package as the body |
 | `GET /games/{id}/versions` | Bearer | versions (owner) |
 | `GET /packages/{hash}` | (Bearer) | download a package of a game you may play |
-| `POST /games/{id}/join` | Bearer | a ticket `{token, host, port, session, expires, version, packageHash}` |
+| `POST /games/{id}/join` | Bearer | a ticket `{token, host, port, webSocket, session, expires, version, packageHash}` |
 | `POST /games/{id}/reports` | Bearer | `{reason}` |
 | `GET /games/{id}/data/{username}` | Bearer | a player's saved data (owner) |
 | `GET /admin/reports?state=open\|all` | admin | reports |
@@ -233,6 +284,10 @@ game server when it starts it.
 | `POST /server/ready`, `POST /server/heartbeat` | Server | `{port}`; `{players}` → `{stop}` |
 | `GET /server/data/{userId}`, `PUT /server/data/{userId}` | Server | load; save `{data, release}` |
 | `POST /server/release/{userId}`, `POST /server/ended` | Server | a player left before loading; the server stops |
+
+Outside `/api/v1`: `GET /` (a list of games), `GET /play` and
+`/play/play.js`, `/play/play.css` (the browser page), `GET
+/play/player/px-player.{js,wasm,data}` (the WebAssembly player, with `ETag`).
 
 Rate limits (per address and account): 600 requests a minute, 20 log-ins a
 minute (10 per name), 10 new accounts an hour, 20 new games and 30
@@ -258,14 +313,22 @@ What protects what (see also [security.md](security.md)):
 - **The signing key** (`<data>/platform.key`) is readable only by the
   account running the platform. Anyone with it can let anyone join as
   anyone: back it up and keep it private.
+- **HTTPS** ([above](#https)): with a certificate, passwords, session tokens
+  and tickets travel encrypted, and browsers use `wss://` to game servers.
+  Without one, run the platform on one computer or a trusted network only.
+- **The browser page** sends a strict Content Security Policy (scripts only
+  from the platform, WebAssembly allowed, no inline scripts, no framing),
+  `X-Frame-Options: DENY` and `Referrer-Policy: no-referrer`; every answer
+  has `X-Content-Type-Options: nosniff`. Text from games and accounts is
+  inserted as text, never as HTML. The page never takes player arguments
+  from its address (a link must not decide which server the player connects
+  to with your ticket). The session token is kept in the tab's
+  `sessionStorage`.
 
 Not yet (planned):
 
-- **No HTTPS.** The platform speaks plain HTTP; run it on one computer or a
-  trusted network, or put it behind a TLS-terminating proxy (clients then
-  still need HTTPS support, which they lack). Passwords and tokens travel
-  unencrypted otherwise.
-- **Game traffic is not encrypted** (UDP), only authenticated at joining.
+- **UDP game traffic is not encrypted**, only authenticated at joining
+  (browser players on `wss://` are encrypted).
 - **Servers are processes, not containers:** they run as the platform's
   account with a memory limit, not in an isolated container with CPU and
   network limits.
@@ -282,6 +345,8 @@ Not yet (planned):
 | `px-headless <project> --platform URL --user NAME --password TEXT [--register] --publish [--game ID] [--title T] [--notes N]` | publish |
 | `px-headless --platform URL --user ... --play ID [--input-script FILE] [--expect-level-complete]` | join as a scripted bot |
 | `px-player --platform URL --play ID [--user ... --password ... --register]` | play |
+| `px-player --package FILE.pxpkg --connect ws://HOST:PORT/play --token TEXT` | what the browser page runs (any player can) |
+| `tools/browser/crossplay.sh BUILD WEB_PLAYER OUT [http\|https]` | the browser cross-play test |
 | `px-server FILE.pxpkg --platform URL --session ID --platform-key HEX` | how the platform starts servers (`PX_SERVER_KEY` in the environment) |
 
 `PX_PLATFORM_DIR` overrides where programs keep the login and the package
@@ -292,8 +357,8 @@ cache (tests use it).
 - One process with one SQLite database: fine for a small community, not for
   millions of players. Game servers run on the same computer as the
   platform.
-- No player launcher yet: browsing happens in Studio's Platform panel, the
-  web page lists games with the command to play them.
+- No player launcher in the desktop and mobile apps yet: browsing happens in
+  Studio's Platform panel and on the browser page (`/play`).
 - No profiles, avatars, friends or invitations; no thumbnails; no
   leaderboards or data shared between players (only per-player data).
 - Players cannot pick a server or play with friends on purpose: seats are

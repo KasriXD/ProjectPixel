@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.6.0). Planned parts are
+This describes the system **as it exists now** (v0.7.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -23,12 +23,12 @@ marked as such. Decisions and their alternatives are recorded in
 
             ┌───────────────────────────┐        ┌─────────────────────────┐
             │  apps/player (px-player)  │        │ apps/server (px-server) │
-            │  desktop client           │        │ apps/headless           │
+            │  desktop, browser, mobile │        │ apps/headless           │
             └──┬──────────┬─────────┬───┘        └──────┬──────────────────┘
                │          │         │                   │
      ┌─────────▼───┐ ┌────▼──────┐  │   ┌───────────────▼───────────────┐
      │platform_sdl │ │  render   │  ├──▶│ net: GameServer, GameClient,  │  ENet (UDP),
-     │ SDL3 window,│ │ interface,│  │   │ protocol, snapshots, loopback │  vendored
+     │ SDL3 window,│ │ interface,│  │   │ protocol, snapshots, loopback │  WebSockets
      │ input, GPU  │─▶ camera,   │  │   └───────────────┬───────────────┘
      │ backend     │ │ scene draw│  │                   │
      └─────────────┘ └────┬──────┘  │                   │
@@ -71,17 +71,21 @@ not link SDL.
 | `scripting` | `ScriptLibrary` (compiles Luau and visual scripts at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference, visual scripts (`Graph`: node catalog generated from the API reference, compiler to Luau) | core, assets, scene, Luau (private), nlohmann/json (private) |
 | `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, saved player data (`PlayerData`), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
-| `platform_sdl` | SDL3 window, keyboard events, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
-| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional) |
+| `platform_sdl` | SDL3 window, keyboard, gamepads and touch (fingers in virtual pixels), vsync and scaling changes, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
+| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
 | `crypto` | Secure random numbers from the OS, BLAKE2b, Argon2id passwords, EdDSA signatures, hex/base64url | core, Monocypher (private) |
-| `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP), `PlatformPlayerStore`, package cache, saved login. Desktop only | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
+| `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS), `PlatformPlayerStore`, package cache, saved login. Desktop only | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
 | `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
 Applications compose modules:
 
 - **px-player** = project + runtime + render + platform_sdl. Uses SDL3's main
   callbacks (`SDL_AppInit/Iterate/Event/Quit`) instead of owning a blocking
-  loop, which is what browser and iOS builds require.
+  loop, which is what browser and iOS builds require. The same target is the
+  browser player (WebAssembly, `apps/player/web`), the Android app
+  (`libmain.so`, `platforms/android`) and the iOS app (an app bundle); on
+  phones it plays the game package that comes with the app
+  ([ADR 0026](docs/adr/0026-mobile-apps.md)).
 - **px-headless** = project + runtime + net. Runs games with no graphics
   (automated playthroughs), joins servers as a scripted bot (`--connect`),
   and runs a server with several clients in one process over a simulated
@@ -90,8 +94,10 @@ Applications compose modules:
   multiplayer server; with `--platform` it is started by the platform,
   checks tickets and saves players' data. No graphics, no window.
 - **px-platform** = `services/platform` (+ online, net, crypto, SQLite,
-  cpp-httplib): the platform service ([docs/platform.md](docs/platform.md),
-  [ADR 0021](docs/adr/0021-platform-service.md)). It runs untrusted content
+  cpp-httplib, Mbed TLS): the platform service ([docs/platform.md](docs/platform.md),
+  [ADR 0021](docs/adr/0021-platform-service.md)), over HTTP and HTTPS. It
+  also serves the browser page (`/play`, built into it from
+  `services/platform/web`) and the WebAssembly player. It runs untrusted content
   only in child processes (px-headless for upload checks, px-server for
   games).
 - **px-studio** = editor + render + platform_sdl + Dear ImGui. Panels draw
@@ -128,8 +134,9 @@ one authoritative `GameSession` (all scripts) and sends delta snapshots of
 the replicated components. Clients draw other entities interpolated and
 predict their own character with the same movement functions the server
 uses ([multiplayer.md](docs/multiplayer.md), [ADR 0018](docs/adr/0018-multiplayer-networking.md)).
-The protocol only needs reliable and unreliable messages, so the transport
-(UDP today) can be swapped for a browser-friendly one.
+The protocol only needs reliable and unreliable messages, so servers serve
+UDP (desktop, mobile) and WebSockets (browsers) at once, to the same game
+([ADR 0024](docs/adr/0024-websockets-for-browsers.md)).
 
 **Content vs code.** Games are data: a project folder with a manifest,
 scenes and assets. Assets are referenced by GUID, never by path; paths appear

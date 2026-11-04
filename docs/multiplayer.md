@@ -57,16 +57,37 @@ to the server; matchmaking and hosted servers come with the platform
 | `--name TEXT` | server name shown to players |
 | `--snapshot-rate HZ` | world updates per second (default 30) |
 | `--restart-delay S` | seconds after the level is complete before it starts again (default 8; -1: never) |
+| `--websocket-port N` | TCP port for browser players (default: the UDP port's number) |
+| `--no-websocket` | UDP only |
+| `--tls-cert FILE --tls-key FILE` | secure WebSockets (`wss://`), for pages served over HTTPS |
 
 | `px-player` option | Meaning |
 |---|---|
-| `--connect ADDRESS[:PORT]` | join a server |
+| `--connect ADDRESS[:PORT]` | join a server over UDP; `ws://HOST:PORT/play` or `wss://...` over WebSockets |
 | `--host [--port N]` | run a server in this window and play on it |
 | `--name NAME` | the name others see above your character (default: your login name; at most 24 characters) |
 
 In a game, the top right shows how many are playing and names float above
 the other players; F1 adds ping, bandwidth and prediction statistics. If
 the connection ends, the window says why.
+
+### Browsers
+
+Browsers cannot use UDP, so every server also listens for **WebSockets** on
+the TCP port with the same number (path `/play`). Browser and desktop
+players are in the same game, with the same protocol and checks
+([ADR 0024](adr/0024-websockets-for-browsers.md)). Desktop players can use
+WebSockets too:
+
+```sh
+px-server examples/topdown                                   # UDP 7777 and WebSockets on TCP 7777
+px-player examples/topdown --connect ws://localhost:7777/play
+```
+
+The usual way to play in a browser is the platform's `/play` page
+([platform.md](platform.md#browsers)). Over WebSockets everything arrives
+in order: a lost packet delays the ones after it, so browser players notice
+a lossy network more than UDP players.
 
 ## Making games for several players
 
@@ -226,8 +247,10 @@ the hash by itself.
 
 The transport (`net/Transport.hpp`) is an interface with reliable and
 unreliable messages. Desktop builds use UDP through ENet
-([ADR 0018](adr/0018-multiplayer-networking.md)); browser builds have no UDP,
-so they cannot join yet.
+([ADR 0018](adr/0018-multiplayer-networking.md)); servers also accept
+WebSockets, which browser builds use: each WebSocket message is a type
+byte (0 data, 1 disconnect with a 32-bit reason) and the payload
+([ADR 0024](adr/0024-websockets-for-browsers.md)).
 
 ## Testing
 
@@ -239,6 +262,8 @@ so they cannot join yet.
 | `net_simulated_playthrough` | three clients, 60 ms latency, 15 ms jitter, 5 % loss; client 1 plays the top-down route; the server must see the level completed |
 | `net_udp_localhost` | the same machinery over real UDP sockets |
 | `server_starts_and_stops` | `px-server` runs and exits cleanly |
+| `unit_tests` (`test_websocket.cpp`) | the WebSocket transport: messages both ways, disconnect reasons, a full server; a UDP player and a WebSocket player in one game |
+| CI *Browser cross-play* | headless Chromium plays the top-down route on a platform game server while a desktop bot is there over UDP (`tools/browser/crossplay.sh`) |
 
 Two tools help with networking work:
 
@@ -269,7 +294,11 @@ server's (`--udp` uses real sockets instead of the simulation).
 - Every client receives every entity; very large levels will need interest
   management.
 - Players do not collide with each other.
-- The browser build cannot join games (no UDP in browsers).
+- Browser players use WebSockets (TCP): over a lossy network they stutter
+  more than UDP players. Encrypted only with `wss://`.
+- `--frames N` online counts ticks played on the server; scripted routes
+  (`--input-script`) are reliable for the top-down example, not for the
+  platformer's tight jumps.
 - Studio's test uses the start scene of the saved project, not unsaved
   changes; a server already using port 7777 makes the test fail (its error
   is shown in Output).

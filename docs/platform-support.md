@@ -15,7 +15,8 @@ testing. This page states what is verified and what work remains.
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |
 | Windows x64 (MSVC 2022) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `windows-2022`. Not yet run interactively on real hardware |
 | macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
-| Android, iOS | No | No | Planned, Milestone 7 |
+| Android (arm64-v8a, x86_64) | Yes: APK from Gradle + NDK, plays a bundled game | **Not tested on a device or emulator** | GitHub Actions *Android app* ([below](#android)) |
+| iOS (simulator, arm64) | Yes: app bundle from Xcode | On a simulated iPhone 16 Pro in CI: loads the bundled game from the app bundle, opens with SDL's `uikit` driver and `metal` renderer, runs 900 frames; **not tested on a device** | GitHub Actions *iOS app (simulator)* ([below](#ios)) |
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
 | Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
 
@@ -28,7 +29,8 @@ Multiplayer (`px-server`, `px-player --connect/--host`, UDP via ENet):
 | Windows x64 (MinGW-w64) | Yes, `-O3 -Werror` | Under Wine 9: network tests pass; joined a Linux `px-server` as a bot (level completed, no prediction corrections) and as a game window next to a Linux window | Cross-compiled on Linux |
 | Windows x64 (MSVC 2022) | Yes | Network tests pass, including real UDP on localhost | GitHub Actions. Not yet played across computers |
 | macOS arm64 | Yes | Network tests pass, including real UDP on localhost | GitHub Actions |
-| Browser | No UDP | Cannot join games | A WebSocket/WebTransport transport is planned ([ADR 0018](adr/0018-multiplayer-networking.md)) |
+| Browser | Yes: WebSockets (`ws://`, `wss://`) | Joins platform game servers from the `/play` page and plays with desktop players | CI *Browser cross-play*: headless Chromium and a desktop bot in one game server, over HTTP and HTTPS ([ADR 0024](adr/0024-websockets-for-browsers.md)) |
+| Android, iOS | Yes (UDP) | Not tested | The apps have no screen to choose a server yet |
 
 Not verified yet: play between different computers (home network,
 internet, Wi-Fi), firewalls and NAT.
@@ -58,25 +60,68 @@ Direct3D 11/12 or Metal for `SDL_Renderer`. Known requirements:
 - macOS: Xcode 15.3+, deployment target 13.3 (Apple's libc++ gates
   floating-point `std::to_chars`/`std::format` on it).
 
-## Mobile (planned)
+## Mobile
 
-Work required:
+**Status: built in CI; not tested on devices.** Decision: [ADR 0026](adr/0026-mobile-apps.md).
+The apps are px-player playing one game that comes with them
+(`game.pxpkg`), with touch controls generated from the game's actions and
+gamepad support ([input-devices.md](input-devices.md)). The back button
+(Android) opens the menu; leaving the app pauses the game.
 
-- Android: Gradle project wrapping the CMake build (SDL ships an Android
-  project template), APK asset access through an `IFileSystem` implementation
-  using `SDL_IOStream` (project files live inside the APK, not on a normal
-  filesystem), lifecycle handling (pause/resume, losing the GPU context).
-- iOS: Xcode project, code signing, app bundle file access, no JIT (Luau
-  native code generation must be disabled), App Store review rules for
-  user-generated content.
-- Both: touch controls mapped to actions, safe areas and notches, aspect
-  ratios (virtual resolution + letterbox), performance budgets, background
+### Android
+
+`platforms/android` is a Gradle project around the CMake build: px-player
+becomes `libmain.so` with SDL linked in, SDL's Java side is downloaded from
+the same SDL release, and the game goes into the APK's assets.
+
+```sh
+px-headless examples/platformer --pack game.pxpkg
+cd platforms/android
+gradle assembleRelease -PpxGamePackage=$PWD/../../game.pxpkg \
+    -PpxNdkVersion=27.2.12479018 -PpxCmakeVersion=3.31.6   # the NDK and CMake you have in the Android SDK
+adb install app/build/outputs/apk/release/app-release.apk
+```
+
+Needs JDK 17, Gradle 8.12 (or later), the Android SDK with an NDK (r26 or
+later, for C++20 `<format>`) and a CMake 3.24+ package. The release APK is
+signed with the development key; publishing needs your own key. The APK
+built by CI (arm64-v8a and x86_64) is attached to each run as
+`android-apk`. Logs: `adb logcat -s SDL`.
+
+### iOS
+
+```sh
+px-headless examples/platformer --pack game.pxpkg
+cmake -S . -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
+    -DCMAKE_OSX_ARCHITECTURES=arm64 -DPX_BUILD_STUDIO=OFF -DPX_BUILD_TESTS=OFF \
+    -DPX_ENABLE_PLATFORM=OFF -DPX_GAME_PACKAGE=$PWD/game.pxpkg
+cmake --build build/ios --config Release --target px_player -- -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO
+xcrun simctl install booted build/ios/apps/player/Release-iphonesimulator/px-player.app
+xcrun simctl launch --console-pty booted dev.px.player
+```
+
+Needs Xcode 15.3+ (iOS 16.3 or later on the device, for C++20 `<format>`).
+For a device, open `build/ios/px.xcodeproj` in Xcode, choose your team for
+signing and build `px_player` for the device. CI builds the simulator app,
+runs it on a simulated iPhone (screenshot and log attached as
+`ios-simulator-app`).
+
+### Not done yet on mobile
+
+- Testing on real phones and tablets: performance, touch feel, safe areas
+  (the on-screen controls ignore notches today), losing the GPU context,
   audio rules.
+- Choosing and joining platform games from the apps (needs a launcher
+  screen; the platform client is not enabled in the apps yet).
+- Store builds: signing keys, app icons for every size, store rules for
+  user-generated content.
 
 ## Browser
 
-**Status: experimental, verified in CI; not a supported product yet.**
-Decision and reasoning: [ADR 0012](adr/0012-browser-runtime.md).
+**Status: plays platform games with desktop players, verified in CI; not
+yet played by a person.** Decisions: [ADR 0012](adr/0012-browser-runtime.md),
+[ADR 0024](adr/0024-websockets-for-browsers.md). The platform serves the
+browser player at `/play` ([platform.md](platform.md#browsers)).
 
 ### What was verified
 
@@ -118,19 +163,26 @@ cd build/wasm/apps/player && python3 -m http.server 8000
 
 `cmake --preset wasm-headless` builds the engine and tests for Node.js
 (`ctest --preset wasm-headless`). URL parameters become command-line
-arguments: `px-player.html?arg=--debug`.
+arguments: `px-player.html?arg=--debug` (not on the platform's page).
+To play platform games, give the folder to the platform:
+`px-platform --web-player build/wasm/apps/player`.
 
-### Remaining work for a real browser runtime
+### Cross-play
 
-- Loading projects from the platform (an `IFileSystem` over downloaded,
-  validated packages) instead of files baked into `.data`.
-- Download size: compression, `-Oz`, excluding unused SDL subsystems.
+CI job *Browser cross-play* (`tools/browser/crossplay.sh`): a platform with
+the browser player, the top-down example published, headless Chromium logs
+in on `/play`, starts the game and plays its route over WebSockets while a
+desktop bot joins the same game server over UDP. Both must see two players
+and the level completed; then the same over HTTPS with `wss://`.
+
+### Remaining work for the browser
+
+- Download size: compression (the platform serves files uncompressed),
+  `-Oz`, excluding unused SDL subsystems.
 - Graphics: SDL_Renderer's WebGL path today; WebGL2/WebGPU when a custom
   GPU renderer exists.
-- Networking via WebSockets or WebTransport only (no raw UDP): the
-  multiplayer transport is an interface with reliable and unreliable
-  messages, so a browser endpoint can be added beside the UDP one
-  ([ADR 0018](adr/0018-multiplayer-networking.md)).
+- WebTransport (unreliable datagrams) instead of WebSockets, for lossy
+  networks.
 - Threads only with cross-origin isolation (`SharedArrayBuffer`); the
   engine is single-threaded today.
-- Page integration: loading screen, fullscreen, audio unlock on first input.
+- Settings last only until the tab closes; audio unlock on first input.

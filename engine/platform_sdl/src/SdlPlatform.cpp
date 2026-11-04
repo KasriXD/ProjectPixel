@@ -13,6 +13,9 @@ namespace px::platform {
 
 Result<std::unique_ptr<SdlPlatform>> SdlPlatform::create(const WindowSettings& settings) {
     SDL_SetAppMetadata(version::productName, version::string, "dev.px.player");
+    // Android's back button reaches the game (it opens the menu) instead of
+    // closing the app.
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         return makeError(ErrorCode::Unsupported, "Could not initialise SDL video: {}", SDL_GetError());
     }

@@ -25,5 +25,8 @@
 | [0021](0021-platform-service.md) | The platform is a C++ service in this repository, on HTTP and SQLite | Accepted |
 | [0022](0022-connect-tokens-and-game-sessions.md) | Signed connect tokens and platform-managed game sessions | Accepted |
 | [0023](0023-saved-player-data.md) | Saved player data is loaded before joining and accessed synchronously | Accepted |
+| [0024](0024-websockets-for-browsers.md) | Browsers join game servers over WebSockets | Accepted |
+| [0025](0025-tls-with-mbed-tls.md) | HTTPS and secure WebSockets with Mbed TLS | Accepted |
+| [0026](0026-mobile-apps.md) | Android and iOS apps from the same player | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

@@ -35,21 +35,25 @@ untrusted. This page lists what is protected today and what is planned.
 | Scripts filling the database | Saved data limits: 200 values, 1000-character text, 64 KiB per player and game; keys checked | `runtime/PlayerData.cpp` |
 | Abuse of the API | Rate limits per address and account; request size limits; private and hidden games invisible to others | `services/platform` |
 | Harmful games | Reports; administrators hide games (servers stop) and ban accounts; every action in the audit log | `services/platform`, Studio's Moderation tab |
+| Eavesdropping on passwords, tokens and tickets | HTTPS (Mbed TLS) on the platform; clients check certificates against the system's store (or `PX_PLATFORM_CA`) and refuse untrusted ones; browsers reach game servers over `wss://` when the platform has a certificate | `third_party/CMakeLists.txt`, `online/PlatformClient.cpp`, `services/platform` (ADR 0025) |
+| Script injection and clickjacking on the browser page | Strict Content Security Policy (scripts only from the platform, no inline scripts, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff` on every answer; game and account text inserted with `textContent` only; tested | `services/platform/web`, `PlatformService.cpp` |
+| A link steering the browser player to another server with your ticket | The `/play` page builds the player's arguments itself and ignores arguments in its address (only a few test options are read, checked against patterns) | `services/platform/web/play.js`, `apps/player/web/pre.js` |
+| Hostile WebSocket clients | The same message checks and limits as UDP; frames over 9 MiB refused; players limit per server | `net/WebSocketNative.cpp`, `GameServer` |
 
 ## Planned
 
 - **Scripts**: per-tick total CPU budget for servers, fuzzing the script
   loader and bindings, keeping Luau current. Known gaps are listed in
   [scripting.md](scripting.md#what-the-sandbox-does-not-yet-protect-against).
-- **HTTPS**: the platform and its clients speak plain HTTP today; run the
-  platform on one computer or a trusted network. Planned: TLS in the
-  clients (and behind a TLS proxy on the server side).
+- **HTTPS**: implemented (above). Still to do: automatic certificate
+  renewal (Let's Encrypt), HSTS once deployments always use HTTPS.
 - **Game servers**: today separate processes with a memory limit, running
   as the platform's account. Planned: isolated containers with CPU, memory
   and network limits and no access to the platform's files.
 - **Multiplayer connections**: game traffic is authenticated at joining
-  (platform servers) but not encrypted; servers without `--platform` (LAN,
-  Studio tests) still accept anyone. Planned: keys in the connect token and
+  (platform servers) but not encrypted over UDP or `ws://` (it is over
+  `wss://`); servers without `--platform` (LAN, Studio tests) still accept
+  anyone. Planned: keys in the connect token and
   encrypted transport, per-client message and bandwidth limits, kicking
   from the server.
 - **Platform**: email verification and password reset, two-factor
