@@ -100,6 +100,7 @@ struct JoinTicket {
     std::int64_t expires = 0;
     int version = 0;
     std::string packageHash; // the game version the server runs
+    std::string webSocket;   // "wss://host:port/play" (or ws://): the same server, for browsers
 };
 
 struct ReportInfo {

@@ -17,7 +17,8 @@ add_executable(px_tests
     test_animation.cpp
     test_tilesets.cpp
     test_graphs.cpp
-    test_packages.cpp)
+    test_packages.cpp
+    test_websocket.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest

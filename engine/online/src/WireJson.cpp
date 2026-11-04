@@ -97,7 +97,7 @@ void from_json(const nlohmann::json& j, GameInfo& v) {
 void to_json(nlohmann::json& j, const JoinTicket& v) {
     j = {{"token", v.token},     {"host", v.host},       {"port", v.port},
          {"session", v.session}, {"expires", v.expires}, {"version", v.version},
-         {"packageHash", v.packageHash}};
+         {"packageHash", v.packageHash}, {"webSocket", v.webSocket}};
 }
 void from_json(const nlohmann::json& j, JoinTicket& v) {
     v.token = j.at("token").get<std::string>();
@@ -107,6 +107,7 @@ void from_json(const nlohmann::json& j, JoinTicket& v) {
     v.expires = j.at("expires").get<std::int64_t>();
     v.version = j.at("version").get<int>();
     v.packageHash = j.at("packageHash").get<std::string>();
+    v.webSocket = j.value("webSocket", std::string());
 }
 
 void to_json(nlohmann::json& j, const ReportInfo& v) {

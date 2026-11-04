@@ -8,6 +8,7 @@
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
 #include "px/net/Udp.hpp"
+#include "px/net/WebSocket.hpp"
 #include "px/render/SceneRenderer.hpp"
 #include "px/runtime/GameLoader.hpp"
 
@@ -56,7 +57,8 @@ const char* playerUsage() {
            "                 [--connect ADDRESS[:PORT] | --host [--port N]] [--name NAME]\n"
            "\n"
            "  project-dir         folder containing project.json (default: the bundled example)\n"
-           "  --connect ADDRESS   join a multiplayer server (px-server or another player's --host);\n"
+           "  --connect ADDRESS   join a multiplayer server (px-server or another player's --host),\n"
+           "                      over UDP (HOST[:PORT]) or WebSockets (ws://HOST:PORT/play, wss://...);\n"
            "                      you need the same project; the port defaults to 7777\n"
            "  --host              start a server in this window and play on it; others --connect\n"
            "  --port N            with --host: the UDP port to use (default 7777)\n"
@@ -334,8 +336,11 @@ px::Status PlayerApp::restart() {
 }
 
 px::Status PlayerApp::startNetwork() {
-    if (!net::udpSupported()) return makeError(ErrorCode::Unsupported, "Multiplayer is not available in this build");
-    std::string host = "127.0.0.1";
+    std::string target = m_ticketAddress.empty() ? m_options.connectAddress : m_ticketAddress;
+    const bool webSocket = target.starts_with("ws://") || target.starts_with("wss://");
+    if (!webSocket && !net::udpSupported()) {
+        return makeError(ErrorCode::Unsupported, "This build joins games over WebSockets only (ws:// or wss:// addresses)");
+    }
     std::uint16_t port = net::kDefaultPort;
     if (m_options.host) {
         if (m_options.port > 0) port = static_cast<std::uint16_t>(m_options.port);
@@ -349,15 +354,10 @@ px::Status PlayerApp::startNetwork() {
         m_hostServer = std::move(server.value());
         log::info("Hosting '{}' on UDP port {}. Others join with: px-player --connect <this computer's address>:{}",
                   m_game.manifest.name, port, port);
-    } else {
-        auto address = net::parseAddress(m_ticketAddress.empty() ? m_options.connectAddress : m_ticketAddress,
-                                         net::kDefaultPort);
-        if (!address) return address.error();
-        host = address->first;
-        port = address->second;
+        target = std::format("127.0.0.1:{}", port);
     }
-    m_connectTarget = std::format("{}:{}", host, port);
-    auto endpoint = net::connectUdp(host, port);
+    m_connectTarget = target;
+    auto endpoint = net::connectToServer(target, net::kDefaultPort);
     if (!endpoint) return endpoint.error();
     net::ClientOptions clientOptions;
     clientOptions.playerName = !m_platformName.empty() ? m_platformName

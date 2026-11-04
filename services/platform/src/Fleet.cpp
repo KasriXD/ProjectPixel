@@ -80,6 +80,9 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
                     session->id,
                     "--platform-key",
                     m_config.platformKeyHex};
+    if (!m_config.tlsCert.empty()) {
+        options.args.insert(options.args.end(), {"--tls-cert", m_config.tlsCert, "--tls-key", m_config.tlsKey});
+    }
     options.env = {{"PX_SERVER_KEY", key.value()}}; // not on the command line, where other users could read it
     options.outputFile = m_config.logDir / std::format("server-{}.log", session->id);
     options.memoryLimitMiB = m_config.memoryLimitMiB;
@@ -143,7 +146,11 @@ Result<Seat> Fleet::reserve(const GameRef& game, const std::string& userId) {
             if (m_userSession.contains(userId) && m_userSession[userId] == id) m_userSession.erase(userId);
             return makeError(ErrorCode::IoError, "The game server stopped before it was ready; try again");
         }
-        if (s->state == Session::State::Ready) return Seat{s->id, m_config.publicHost, s->port};
+        if (s->state == Session::State::Ready) {
+            const std::string ws = std::format("{}://{}:{}/play", m_config.tlsCert.empty() ? "ws" : "wss",
+                                               m_config.publicHost, s->port);
+            return Seat{s->id, m_config.publicHost, s->port, ws};
+        }
         if (s->process->exitCode()) {
             endSession(*s, "exited while starting");
             continue;

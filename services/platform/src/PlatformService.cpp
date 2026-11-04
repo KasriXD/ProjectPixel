@@ -698,6 +698,7 @@ struct PlatformService::Impl {
         ticket.expires = token.expires;
         ticket.version = row.info.latestVersion;
         ticket.packageHash = row.info.packageHash;
+        ticket.webSocket = seat->webSocket;
         {
             std::lock_guard lock(s.m_dbMutex);
             auto st = db().prepare("UPDATE games SET plays = plays + 1 WHERE id = ?1");
@@ -1220,6 +1221,10 @@ Status PlatformService::start() {
     fleet.maxServers = m_config.maxServers;
     fleet.memoryLimitMiB = m_config.serverMemoryMiB;
     fleet.platformKeyHex = crypto::toHex(m_key.publicKey);
+    if (m_https) {
+        fleet.tlsCert = m_config.tlsCert.string();
+        fleet.tlsKey = m_config.tlsKey.string();
+    }
     m_fleet = std::make_unique<Fleet>(fleet);
 
     m_running = true;

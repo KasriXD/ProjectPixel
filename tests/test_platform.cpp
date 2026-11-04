@@ -268,6 +268,7 @@ TEST_CASE("Platform: rate limits and unknown game servers") {
 
 #include "px/net/GameClient.hpp"
 #include "px/net/Udp.hpp"
+#include "px/net/WebSocket.hpp"
 
 #include <thread>
 
@@ -282,7 +283,7 @@ struct OnlinePlayer {
         return std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
     }
 
-    OnlinePlayer(PlatformClient& platform, const JoinTicket& ticket) {
+    OnlinePlayer(PlatformClient& platform, const JoinTicket& ticket, bool webSocket = false) {
         auto bytes = platform.downloadPackage(ticket.packageHash);
         REQUIRE(bytes.ok());
         auto package = project::decodePackage(bytes.value());
@@ -291,7 +292,7 @@ struct OnlinePlayer {
         auto loaded = runtime::loadGame(*fs);
         REQUIRE(loaded.ok());
         game = std::move(loaded.value());
-        auto endpoint = net::connectUdp(ticket.host, ticket.port);
+        auto endpoint = webSocket ? net::connectWebSocket(ticket.webSocket) : net::connectUdp(ticket.host, ticket.port);
         REQUIRE(endpoint.ok());
         net::ClientOptions options;
         options.token = ticket.token;
@@ -372,7 +373,9 @@ TEST_CASE("Platform: joining starts a game server; players play there and their 
     auto bobTicket = bob.join(game->id);
     REQUIRE(bobTicket.ok());
     CHECK(bobTicket->session == ticket->session);
-    OnlinePlayer bobPlays(bob, bobTicket.value());
+    // Bob joins the way a browser does: over the ticket's WebSocket address.
+    CHECK(bobTicket->webSocket == std::format("ws://127.0.0.1:{}/play", bobTicket->port));
+    OnlinePlayer bobPlays(bob, bobTicket.value(), true);
     REQUIRE(bobPlays.waitUntilPlaying());
     CHECK(eventually([&] { return p.service->fleet().playing(game->id) == 2; }, {&adaPlays, &bobPlays}));
     CHECK(eventually([&] { return p.client().game(game->id)->playing == 2; }, {&adaPlays, &bobPlays}));

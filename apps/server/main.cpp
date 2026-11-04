@@ -5,6 +5,10 @@
 //   px-server <project-dir or FILE.pxpkg> [--port N] [--max-players N] [--name TEXT]
 //             [--snapshot-rate HZ] [--restart-delay SECONDS] [--ticks N] [--verbose]
 //             [--platform URL --session ID --platform-key HEX] [--empty-timeout SECONDS]
+//             [--websocket-port N | --no-websocket] [--tls-cert FILE --tls-key FILE]
+//
+// Players join over UDP (desktop) or WebSockets (browsers) on the same port
+// number (TCP for WebSockets), into the same game.
 //
 // With --platform the server was started by the platform (docs/platform.md):
 // players need connect tokens, their saved data is loaded and saved through
@@ -19,6 +23,7 @@
 #include "px/crypto/Encoding.hpp"
 #include "px/net/GameServer.hpp"
 #include "px/net/Udp.hpp"
+#include "px/net/WebSocket.hpp"
 #include "px/project/Package.hpp"
 #include "px/runtime/GameLoader.hpp"
 #if defined(PX_HAVE_PLATFORM)
@@ -38,6 +43,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
@@ -66,6 +72,9 @@ struct Options {
     std::string sessionId;
     std::string platformKey; // hex
     double emptyTimeout = -1.0; // seconds without players before stopping (platform default 30)
+    int webSocketPort = -1;     // -1: the same number as the UDP port; 0: none
+    std::string tlsCert;        // wss:// for browsers on https:// pages
+    std::string tlsKey;
 };
 
 void printUsage() {
@@ -84,6 +93,9 @@ void printUsage() {
                  "  --platform URL       started by the platform at URL (with --session and\n"
                  "                       --platform-key; the server key is in PX_SERVER_KEY)\n"
                  "  --empty-timeout S    stop after S seconds without players\n"
+                 "  --websocket-port N   TCP port for browsers (WebSockets; default: the UDP port number)\n"
+                 "  --no-websocket       UDP only\n"
+                 "  --tls-cert FILE      with --tls-key: secure WebSockets (wss://), for https:// pages\n"
                  "\n"
                  "Players join with: px-player --connect <address>[:port] [project-dir]\n"
                  "Stop the server with Ctrl+C.\n",
@@ -129,6 +141,14 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
             (arg == "--platform" ? o.platformUrl : arg == "--session" ? o.sessionId : o.platformKey) = v;
+        } else if (arg == "--websocket-port") {
+            if (!parseNumber(value(), o.webSocketPort) || o.webSocketPort < 1 || o.webSocketPort > 65535) return std::nullopt;
+        } else if (arg == "--no-websocket") {
+            o.webSocketPort = 0;
+        } else if (arg == "--tls-cert" || arg == "--tls-key") {
+            const char* v = value();
+            if (v == nullptr) return std::nullopt;
+            (arg == "--tls-cert" ? o.tlsCert : o.tlsKey) = v;
         } else if (arg == "--empty-timeout") {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
@@ -179,12 +199,36 @@ int main(int argc, char** argv) {
     }
     for (const auto& w : game->warnings) log::warn("{}", w);
 
-    auto endpoint = net::listenUdp(static_cast<std::uint16_t>(options->port),
-                                   static_cast<std::size_t>(options->maxPlayers));
-    if (!endpoint) {
-        log::error("{}", endpoint.error().message);
+    std::vector<std::unique_ptr<net::INetEndpoint>> endpoints;
+    if (net::udpSupported()) {
+        auto udp = net::listenUdp(static_cast<std::uint16_t>(options->port),
+                                  static_cast<std::size_t>(options->maxPlayers));
+        if (!udp) {
+            log::error("{}", udp.error().message);
+            return 1;
+        }
+        endpoints.push_back(std::move(udp.value()));
+    }
+    const int wsPort = options->webSocketPort < 0 ? options->port : options->webSocketPort;
+    if (wsPort > 0 && net::webSocketServerSupported()) {
+        net::WebSocketServerOptions ws;
+        ws.port = static_cast<std::uint16_t>(wsPort);
+        ws.maxPeers = static_cast<std::size_t>(options->maxPlayers) + 4; // room to refuse politely
+        ws.tlsCert = options->tlsCert;
+        ws.tlsKey = options->tlsKey;
+        auto listening = net::listenWebSocket(ws);
+        if (!listening) {
+            log::error("{}", listening.error().message);
+            return 1;
+        }
+        endpoints.push_back(std::move(listening.value()));
+        log::info("Browsers join with {}://<this computer's address>:{}/play", ws.tlsCert.empty() ? "ws" : "wss", wsPort);
+    }
+    if (endpoints.empty()) {
+        log::error("This build can listen neither for UDP nor for WebSockets");
         return 1;
     }
+    auto endpoint = Result<std::unique_ptr<net::INetEndpoint>>(net::combineEndpoints(std::move(endpoints)));
     net::ServerOptions serverOptions;
     serverOptions.name = options->name.empty() ? game->manifest.name : options->name;
     serverOptions.maxPlayers = static_cast<std::size_t>(options->maxPlayers);

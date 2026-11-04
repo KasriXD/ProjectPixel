@@ -5,6 +5,7 @@
 #include "px/net/GameServer.hpp"
 #include "px/net/Loopback.hpp"
 #include "px/net/Udp.hpp"
+#include "px/net/WebSocket.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -31,12 +32,7 @@ const char* statusName(net::GameClient::Status s) {
 } // namespace
 
 int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
-    auto address = net::parseAddress(options.connectAddress, net::kDefaultPort);
-    if (!address) {
-        log::error("{}", address.error().message);
-        return 2;
-    }
-    auto endpoint = net::connectUdp(address->first, address->second);
+    auto endpoint = net::connectToServer(options.connectAddress, net::kDefaultPort);
     if (!endpoint) {
         log::error("{}", endpoint.error().message);
         return 1;

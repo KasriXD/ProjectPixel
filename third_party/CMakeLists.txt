@@ -33,6 +33,8 @@ if(PX_ENABLE_PLATFORM)
     target_include_directories(px_httplib SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/httplib")
     target_compile_features(px_httplib PUBLIC cxx_std_17)
     target_link_libraries(px_httplib PUBLIC Threads::Threads)
+    # WebSocket messages are game messages: snapshots stay below 8 MiB.
+    target_compile_definitions(px_httplib PRIVATE CPPHTTPLIB_WEBSOCKET_MAX_PAYLOAD_LENGTH=9437184)
     if(WIN32)
         # cpp-httplib needs the Windows 10 API.
         target_compile_definitions(px_httplib PUBLIC _WIN32_WINNT=0x0A00 WIN32_LEAN_AND_MEAN NOMINMAX)

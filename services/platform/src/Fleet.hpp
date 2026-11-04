@@ -32,6 +32,8 @@ struct FleetConfig {
     std::size_t maxServers = 20;
     std::size_t memoryLimitMiB = 1024;
     std::string platformKeyHex;       // public key servers check tokens with
+    std::string tlsCert;              // given to servers for wss:// (browsers on https pages)
+    std::string tlsKey;
     double readySeconds = 30.0;       // a new server must report ready within this
     double heartbeatSeconds = 30.0;   // and then say something at least this often
     double seatSeconds = 60.0;        // a reserved seat waits this long for its player
@@ -40,7 +42,8 @@ struct FleetConfig {
 struct Seat {
     std::string session;
     std::string host;
-    std::uint16_t port = 0;
+    std::uint16_t port = 0;   // UDP, and TCP for WebSockets
+    std::string webSocket;    // ws:// or wss:// URL of the same server
 };
 
 struct SessionInfo {
