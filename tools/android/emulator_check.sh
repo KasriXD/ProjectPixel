@@ -28,9 +28,9 @@ if ! grep -q "Loaded project" "$out/android-log.txt"; then
   echo "FAILED: the app did not load its game"
   exit 1
 fi
-if [ -z "$alive" ]; then
-  echo "FAILED: the app is not running after the back button"
+if [ -z "$alive" ] || ! grep -q "Menu opened" "$out/android-log.txt"; then
+  echo "FAILED: the back button did not open the menu (app pid: ${alive:-none})"
   cat "$out/android-crash.txt"
   exit 1
 fi
-echo "PASSED: the app loaded its game and is running (pid $alive)"
+echo "PASSED: the app loaded its game, the back button opened the menu, it is running (pid $alive)"

@@ -830,6 +830,7 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
                 if (networked() && m_net->status() == net::GameClient::Status::Disconnected) return Status::Success;
                 m_menuOpen = !m_menuOpen;
                 m_menuItem = 0;
+                log::info("Menu {}", m_menuOpen ? "opened" : "closed");
                 break;
             case SDL_SCANCODE_UP:
                 if (m_menuOpen) menuMove(-1);

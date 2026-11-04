@@ -5,24 +5,25 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-6 are done. Milestone 6 built the platform's core loop: a
-`px-platform` service with accounts, publishing from Studio (versions,
-upload checks), a catalog, game servers started on demand with signed join
-tickets, saved player data for scripts, and reports and moderation. CI builds
-and tests on Linux, Windows (MSVC), macOS and (experimentally) WebAssembly.
-Recommended next: run a platform for a few friends on a home network,
-publish and play each other's games, then decide between HTTPS and a player
-launcher first (see "Recommended adjustments" below).
+Milestones 0-7 are done. Milestone 7 made the clients cross-platform:
+browsers play platform games on the same game servers as desktop players
+(WebSockets, `wss://`), the platform and its clients speak HTTPS, every game
+works with gamepads and touch screens, the player has settings, and Android
+and iOS apps are built in CI. CI builds and tests on Linux, Windows (MSVC),
+macOS, WebAssembly, Android and iOS, and plays a browser and a desktop
+player together. Recommended next: people play it on real devices (a phone,
+a gamepad, a browser on another computer), then a player launcher (see
+"Recommended adjustments" below).
 
 ## Blockers and open items
 
 | Item | Impact | Resolution |
 |---|---|---|
 | Not yet run on real macOS hardware (CI passes) | Rendering/input on Macs unconfirmed | A Mac check when one is available. Windows: played on a Windows 11 PC (2026-10-23) |
-| Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
-| Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
+| No real gamepad, touch screen or phone tried yet (Milestone 7 checks are automated) | Feel of the controls, layouts on real screens, notches, performance on phones unconfirmed | Founder: a gamepad on the PC; the CI-built APK on an Android phone; `/play` on a phone's browser |
+| Browser play not yet tried by a person | Input feel, audio policies, page integration unconfirmed | Founder: start px-platform with `--web-player` (the CI artifact `px-player-web`) and open `/play` |
 | Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
-| The platform has no HTTPS and runs game servers as plain processes | Not safe on the internet (passwords and tokens in clear text) | Use it on one computer or a trusted network; HTTPS is the next platform item |
+| Game servers run as plain processes; UDP game traffic is not encrypted | Not ready for the internet | HTTPS is in place; containers and encrypted UDP are the next platform items |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
@@ -296,10 +297,45 @@ Next for the platform (not part of the milestone):
       account deletion; text filtering
 - [ ] Data shared between players (leaderboards), data of offline players
 
-## Milestone 7: Cross-platform clients (**Planned**)
+## Milestone 7: Cross-platform clients (**Done**: browser cross-play, HTTPS, input devices, mobile builds)
 
-Android, iOS, browser runtime (Emscripten + WebGL/WebGPU), touch and gamepad,
-per-client performance settings, cross-platform multiplayer.
+Scope agreed with the founder: browser cross-play first, with HTTPS; Android
+and iOS apps built in CI, not tested on devices. Verified in CI on Linux
+(GCC, Clang, AddressSanitizer + UBSan, headless), Windows (MSVC), macOS,
+WebAssembly, Android and iOS, and with the MinGW-w64 build under Wine 9 (all
+186 unit tests, including HTTPS, WebSockets and the browser page).
+
+- [x] HTTPS ([ADR 0025](docs/adr/0025-tls-with-mbed-tls.md)): Mbed TLS in
+      the platform (`--https-port`, `--dev-certificate`) and every client,
+      with the system's certificate stores; tested with a development
+      certificate
+- [x] WebSockets for browsers ([ADR 0024](docs/adr/0024-websockets-for-browsers.md)):
+      game servers listen for UDP and WebSockets at once (`wss://` with
+      TLS); desktop players can use either
+- [x] Browser play on the platform: the `/play` page (log in, catalog,
+      play) and the WebAssembly player loading the game package; strict
+      content security policy. CI: headless Chromium plays the top-down
+      route on a platform server while a desktop bot is there over UDP,
+      over HTTP and HTTPS
+- [x] Gamepads ([input-devices.md](docs/input-devices.md)): buttons stand for
+      the usual keys, so every game works with a pad; the stick in 8 sectors
+- [x] Touch controls generated from a game's actions (direction pad, up to
+      four buttons, pause); shown on touch; `--touch` to try with a mouse
+- [x] Player settings menu (Esc, Start, pause button): VSync, frame limit,
+      scaling, FPS, touch controls; saved per device; pauses when alone
+- [x] Android app ([ADR 0026](docs/adr/0026-mobile-apps.md)): Gradle + NDK,
+      the player as `libmain.so`, the game in the APK's assets; CI builds a
+      release APK (arm64-v8a, x86_64) and starts it on an emulated phone
+- [x] iOS app: an app bundle from Xcode with the game inside; CI runs it on a
+      simulated iPhone (UIKit, Metal)
+
+Next for the clients (not part of the milestone):
+
+- [ ] A launcher in the desktop and mobile apps (log in, browse, play), the
+      platform client enabled on phones
+- [ ] Testing on real phones, gamepads and browsers by people; safe areas
+- [ ] Store builds (signing, icons, review rules); compressed web downloads
+- [ ] WebTransport for browsers on lossy networks; encrypted UDP
 
 ## Milestone 8: Creator ecosystem and scaling (**Planned**)
 
@@ -310,22 +346,20 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: a small real platform, then HTTPS or a launcher.** Run
-   px-platform on one computer of a home network (`--bind 0.0.0.0
-   --public-host <address>`), let two or three people publish and play each
-   other's games, and fix what they hit. Before anything faces the
-   internet, HTTPS in the clients and encrypted game traffic are required;
-   for people who only play, a launcher matters more than Studio's panel.
+1. **Next: people on real devices, then a launcher.** Run px-platform on
+   one computer of a home network (`--bind 0.0.0.0 --public-host <address>
+   --web-player ...`), let a few people play from PCs, phones' browsers and
+   the Android app, with gamepads, and fix what they hit. For people who
+   only play, a launcher in the apps matters more than Studio's panel.
+   Before anything faces the internet: game servers in containers and
+   encrypted UDP traffic.
 2. **Client-side behaviours before more visual effects**: decorative motion
    (the drifting clouds) currently runs on the server and is replicated
    (about 60 bytes per snapshot for 8 clouds). Client-realm behaviours
    (ADR 0011) would run it locally for free.
-3. **Keep the WebAssembly job in CI, but defer the browser runtime itself**
-   (ADR 0012): it already builds and runs, so regressions are caught for
-   free; productising it (loading projects over the network, asset
-   streaming, page integration, size budgets) belongs with the platform
-   work in Milestones 6-7.
-4. **Add gamepad support early** (small, and platformers need it to feel right).
-5. **Keep the simulation deterministic** (fixed ticks, input frames, no
+3. **Keep the browser and mobile builds in CI**: they catch regressions on
+   every change; download size (compression, `-Oz`) is the next browser
+   item.
+4. **Keep the simulation deterministic** (fixed ticks, input frames, no
    wall-clock reads in gameplay). It is already tested and makes replays,
    automated playtests and server reconciliation much easier.
