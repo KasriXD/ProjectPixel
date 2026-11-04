@@ -1,6 +1,8 @@
 #pragma once
 
 #include "px/core/Result.hpp"
+#include "px/crypto/Crypto.hpp"
+#include "px/net/PlayerStore.hpp"
 #include "px/net/Protocol.hpp"
 #include "px/net/Replication.hpp"
 #include "px/net/Transport.hpp"
@@ -10,6 +12,8 @@
 #include <cstdint>
 #include <deque>
 #include <map>
+#include <optional>
+#include <set>
 #include <memory>
 #include <string>
 #include <vector>
@@ -28,12 +32,23 @@ struct ServerOptions {
     std::size_t inputBufferFrames = 2;   // frames a client's input is kept ahead, to absorb jitter
     std::size_t maxInputBufferFrames = 8; // the buffer grows up to this for clients with uneven links
     std::uint64_t seed = 1;              // session randomness (math.random)
+
+    // Platform servers (docs/platform.md#joining-a-game): every player must
+    // present a connect token signed with this key for this session; their
+    // name and account come from the token.
+    std::optional<crypto::PublicKey> platformKey;
+    std::string sessionId;
+    // Saved player data (nullptr: none is loaded or saved).
+    std::shared_ptr<IPlayerStore> playerStore;
+    double saveIntervalSeconds = 30.0;
+    double loadTimeoutSeconds = 15.0;
 };
 
 struct ServerClientInfo {
     PeerId peer = kNoPeer;
-    runtime::PlayerId player = runtime::kNoPlayer;
+    runtime::PlayerId player = runtime::kNoPlayer; // kNoPlayer while their data loads
     std::string name;
+    std::string userId; // platform account (empty without a platform)
     std::string address;
     PeerStats stats;
     std::size_t queuedInputs = 0;
@@ -74,6 +89,9 @@ private:
         std::uint64_t connectedAtTick = 0;
         runtime::PlayerId player = runtime::kNoPlayer;
         std::string name;
+        std::string userId;          // platform account
+        bool loading = false;        // waiting for saved data before joining
+        std::uint64_t loadStarted = 0;
         std::map<std::uint32_t, runtime::InputFrame> inputs; // by sequence number
         std::uint32_t lastSequence = 0; // newest input used
         bool inputStarted = false;
@@ -92,6 +110,9 @@ private:
     void handleMessage(Client& client, const std::vector<std::uint8_t>& data);
     void handleHello(Client& client, const std::vector<std::uint8_t>& data);
     void handleInput(Client& client, const std::vector<std::uint8_t>& data);
+    void completeJoin(Client& client, runtime::PlayerData data);
+    void pollLoads();
+    void saveChangedData(bool now);
     void reject(Client& client, DisconnectReason reason, const std::string& text);
     void dropClient(PeerId peer, const char* why);
     void applyInputs();
@@ -118,6 +139,9 @@ private:
     int m_restartCountdown = -1;
     std::size_t m_lastSnapshotBytes = 0;
     std::vector<NetEvent> m_events;
+    std::map<std::string, std::int64_t> m_usedNonces; // connect tokens seen, until they expire
+    std::set<std::string> m_unsaved;                  // accounts whose data changed since the last save
+    std::uint64_t m_lastSaveTick = 0;
 };
 
 } // namespace px::net

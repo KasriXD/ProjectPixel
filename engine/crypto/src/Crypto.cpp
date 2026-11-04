@@ -15,8 +15,11 @@
 #elif defined(__linux__)
 #include <sys/random.h>
 #include <cerrno>
+#elif defined(__APPLE__)
+#include <sys/random.h> // getentropy
+#include <unistd.h>
 #else
-#include <unistd.h> // getentropy (macOS, BSDs, Emscripten)
+#include <unistd.h> // getentropy (BSDs, Emscripten)
 #endif
 
 namespace px::crypto {

@@ -99,6 +99,7 @@ void GameClient::receive(double now) {
                 hello.engineVersion = version::string;
                 hello.contentHash = m_contentHash;
                 hello.playerName = m_options.playerName;
+                hello.token = m_options.token;
                 (void)m_endpoint->send(m_server, Delivery::Reliable, encode(hello));
                 m_endpoint->flush();
                 break;

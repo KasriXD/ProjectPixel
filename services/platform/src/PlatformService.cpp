@@ -928,6 +928,13 @@ struct PlatformService::Impl {
         sendJson(res, 200, json::object());
     }
 
+    void serverRelease(const httplib::Request& req, httplib::Response& res) {
+        const std::string session = requireServer(req);
+        const std::int64_t user = serverPlayer(req, session);
+        s.m_fleet->release(session, std::to_string(user));
+        sendJson(res, 200, json::object());
+    }
+
     void serverEnded(const httplib::Request& req, httplib::Response& res) {
         const std::string session = requireServer(req);
         sendJson(res, 200, json::object());
@@ -1145,6 +1152,7 @@ void PlatformService::registerRoutes() {
     http.Post("/api/v1/server/heartbeat", bind(&Impl::serverHeartbeat));
     http.Get(R"(/api/v1/server/data/(\d{1,19}))", bind(&Impl::serverLoadData));
     http.Put(R"(/api/v1/server/data/(\d{1,19}))", bind(&Impl::serverSaveData));
+    http.Post(R"(/api/v1/server/release/(\d{1,19}))", bind(&Impl::serverRelease));
     http.Post("/api/v1/server/ended", bind(&Impl::serverEnded));
     http.set_error_handler([](const httplib::Request&, httplib::Response& res) {
         if (res.body.empty()) {

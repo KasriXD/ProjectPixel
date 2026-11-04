@@ -304,6 +304,12 @@ Status PlatformClient::serverSaveData(const std::string& userId, const runtime::
     return {};
 }
 
+Status PlatformClient::serverRelease(const std::string& userId) {
+    auto body = call("POST", "/server/release/" + encodeQuery(userId), "{}", Auth::Server);
+    if (!body) return body.error();
+    return {};
+}
+
 Status PlatformClient::serverEnded() {
     auto body = call("POST", "/server/ended", "{}", Auth::Server);
     if (!body) return body.error();

@@ -24,6 +24,7 @@ namespace px::net {
 
 struct ClientOptions {
     std::string playerName;
+    std::string token; // connect token from the platform (online::JoinTicket), for platform servers
     // How far in the past other entities are drawn. Negative: automatic
     // (two snapshot intervals plus two ticks, about 100 ms by default).
     double interpolationDelaySeconds = -1.0;

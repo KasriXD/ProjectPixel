@@ -4,10 +4,12 @@
 #include "px/core/Log.hpp"
 #include "px/core/Math.hpp"
 #include "px/core/Result.hpp"
+#include "px/scene/Components.hpp"
 #include "px/scene/Registry.hpp"
 #include "px/scripting/ScriptTypes.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -77,6 +79,18 @@ public:
     [[nodiscard]] virtual const std::vector<std::string>* tileTags(assets::AssetId /*tileset*/, Vec2 /*tileSize*/,
                                                                    int /*tile*/) const {
         return nullptr;
+    }
+
+    // --- Saved player data (authority realm only) ---------------------------------------
+    // `player` is a character (an entity with a Player component). Errors are
+    // shown to the script author.
+    [[nodiscard]] virtual Result<std::optional<scene::ScriptValue>> playerDataGet(scene::Entity /*player*/,
+                                                                                std::string_view /*key*/) const {
+        return makeError(ErrorCode::Unsupported, "saved data is not available here");
+    }
+    [[nodiscard]] virtual Status playerDataSet(scene::Entity /*player*/, std::string_view /*key*/,
+                                               std::optional<scene::ScriptValue> /*value*/) {
+        return makeError(ErrorCode::Unsupported, "saved data is not available here");
     }
 
     // --- Reporting --------------------------------------------------------------

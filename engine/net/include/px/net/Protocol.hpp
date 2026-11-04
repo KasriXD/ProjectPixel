@@ -18,7 +18,7 @@
 namespace px::net {
 
 inline constexpr std::uint32_t kProtocolMagic = 0x31584E50; // "PNX1" in memory order
-inline constexpr std::uint16_t kProtocolVersion = 1;
+inline constexpr std::uint16_t kProtocolVersion = 2; // 2: Hello carries a connect token
 inline constexpr std::uint16_t kDefaultPort = 7777;
 
 // Clients only ever send small messages; anything larger is refused.
@@ -49,6 +49,8 @@ enum class DisconnectReason : std::uint8_t {
     ShuttingDown = 6,
     Timeout = 7,         // no Hello in time
     Left = 8,            // the client said goodbye
+    NotAuthorized = 9,   // no valid connect token (platform servers)
+    DataUnavailable = 10, // the player's saved data could not be loaded
 };
 [[nodiscard]] const char* describeReason(DisconnectReason reason);
 // Text for a transport disconnect code (game reasons or kReasonRefused/kReasonLost).
@@ -58,7 +60,8 @@ struct HelloMessage {
     std::uint16_t protocol = kProtocolVersion;
     std::string engineVersion;
     std::uint64_t contentHash = 0; // see contentHash() in Replication.hpp
-    std::string playerName;
+    std::string playerName; // ignored by platform servers, which use the token's name
+    std::string token;      // connect token from the platform (protocol 2; empty elsewhere)
 };
 
 // The client's newest input frames: frames[i] has sequence number

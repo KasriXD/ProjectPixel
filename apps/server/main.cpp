@@ -2,23 +2,38 @@
 // start scene as the only authoritative simulation and lets players join
 // over UDP (docs/multiplayer.md). No graphics, no window.
 //
-//   px-server <project-dir> [--port N] [--max-players N] [--name TEXT]
+//   px-server <project-dir or FILE.pxpkg> [--port N] [--max-players N] [--name TEXT]
 //             [--snapshot-rate HZ] [--restart-delay SECONDS] [--ticks N] [--verbose]
+//             [--platform URL --session ID --platform-key HEX] [--empty-timeout SECONDS]
+//
+// With --platform the server was started by the platform (docs/platform.md):
+// players need connect tokens, their saved data is loaded and saved through
+// the platform (the server key comes in the PX_SERVER_KEY environment
+// variable), and the server stops by itself once nobody is playing.
 //
 // Exit codes: 0 stopped normally, 1 could not start, 2 bad arguments.
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
+#include "px/crypto/Encoding.hpp"
 #include "px/net/GameServer.hpp"
 #include "px/net/Udp.hpp"
+#include "px/project/Package.hpp"
 #include "px/runtime/GameLoader.hpp"
+#if defined(PX_HAVE_PLATFORM)
+#include "px/online/PlatformClient.hpp"
+#include "px/online/PlatformPlayerStore.hpp"
+#endif
 
 #include <atomic>
 #include <charconv>
 #include <chrono>
 #include <csignal>
 #include <cstdio>
+#include <cstdlib>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -46,6 +61,11 @@ struct Options {
     double restartDelay = 8.0;
     long long ticks = 0; // 0: run until stopped
     bool verbose = false;
+    // Started by the platform.
+    std::string platformUrl;
+    std::string sessionId;
+    std::string platformKey; // hex
+    double emptyTimeout = -1.0; // seconds without players before stopping (platform default 30)
 };
 
 void printUsage() {
@@ -61,6 +81,9 @@ void printUsage() {
                  "  --restart-delay S    seconds after the level is complete before it restarts\n"
                  "                       (default 8; -1: never)\n"
                  "  --ticks N            stop after N simulation ticks (for tests)\n"
+                 "  --platform URL       started by the platform at URL (with --session and\n"
+                 "                       --platform-key; the server key is in PX_SERVER_KEY)\n"
+                 "  --empty-timeout S    stop after S seconds without players\n"
                  "\n"
                  "Players join with: px-player --connect <address>[:port] [project-dir]\n"
                  "Stop the server with Ctrl+C.\n",
@@ -102,6 +125,18 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             if (!parseNumber(value(), o.ticks) || o.ticks < 1) return std::nullopt;
         } else if (arg == "--verbose") {
             o.verbose = true;
+        } else if (arg == "--platform" || arg == "--session" || arg == "--platform-key") {
+            const char* v = value();
+            if (v == nullptr) return std::nullopt;
+            (arg == "--platform" ? o.platformUrl : arg == "--session" ? o.sessionId : o.platformKey) = v;
+        } else if (arg == "--empty-timeout") {
+            const char* v = value();
+            if (v == nullptr) return std::nullopt;
+            try {
+                o.emptyTimeout = std::stod(v);
+            } catch (...) {
+                return std::nullopt;
+            }
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -112,6 +147,7 @@ std::optional<Options> parseArgs(int argc, char** argv) {
         }
     }
     if (o.projectDir.empty()) return std::nullopt;
+    if (!o.platformUrl.empty() && (o.sessionId.empty() || o.platformKey.empty())) return std::nullopt;
     return o;
 }
 
@@ -125,8 +161,18 @@ int main(int argc, char** argv) {
     }
     if (options->verbose) log::setMinLevel(log::Level::Debug);
 
-    DirectoryFileSystem files(options->projectDir);
-    auto game = runtime::loadGame(files);
+    std::unique_ptr<IFileSystem> files;
+    if (options->projectDir.ends_with(".pxpkg")) {
+        auto package = project::readPackageFile(options->projectDir);
+        if (!package) {
+            log::error("{}", package.error().message);
+            return 1;
+        }
+        files = package->toFileSystem();
+    } else {
+        files = std::make_unique<DirectoryFileSystem>(options->projectDir);
+    }
+    auto game = runtime::loadGame(*files);
     if (!game) {
         log::error("{}", game.error().message);
         return 1;
@@ -145,6 +191,33 @@ int main(int argc, char** argv) {
     const int tickRate = std::max(1, game->manifest.settings.tickRate);
     serverOptions.snapshotInterval = std::max(1, tickRate / std::min(options->snapshotRate, tickRate));
     serverOptions.restartDelaySeconds = options->restartDelay;
+
+    // Platform mode: tokens, saved data, heartbeats.
+    const bool managed = !options->platformUrl.empty();
+#if defined(PX_HAVE_PLATFORM)
+    std::unique_ptr<online::PlatformClient> platform;
+    if (managed) {
+        const auto key = crypto::fromHex(options->platformKey);
+        const char* serverKey = std::getenv("PX_SERVER_KEY");
+        if (!key || key->size() != 32 || serverKey == nullptr || *serverKey == 0) {
+            log::error("--platform needs --platform-key (64 hex digits) and the PX_SERVER_KEY environment variable");
+            return 2;
+        }
+        crypto::PublicKey publicKey{};
+        std::copy(key->begin(), key->end(), publicKey.begin());
+        serverOptions.platformKey = publicKey;
+        serverOptions.sessionId = options->sessionId;
+        platform = std::make_unique<online::PlatformClient>(options->platformUrl);
+        platform->setServerKey(serverKey);
+        platform->setTimeoutSeconds(10);
+        serverOptions.playerStore = std::make_shared<online::PlatformPlayerStore>(*platform);
+    }
+#else
+    if (managed) {
+        log::error("This build has no platform support");
+        return 2;
+    }
+#endif
     auto created = net::GameServer::create(game.value(), std::move(endpoint.value()), serverOptions);
     if (!created) {
         log::error("{}", created.error().message);
@@ -154,8 +227,58 @@ int main(int argc, char** argv) {
     log::info("{} server {}: '{}' on UDP port {}, up to {} players, {} ticks/s, {} snapshots/s",
               version::productName, version::string, game->manifest.name, options->port, options->maxPlayers,
               tickRate, tickRate / serverOptions.snapshotInterval);
-    log::info("Players join with: px-player --connect <this computer's address>:{} <project>. Ctrl+C stops.",
-              options->port);
+    if (!managed) {
+        log::info("Players join with: px-player --connect <this computer's address>:{} <project>. Ctrl+C stops.",
+                  options->port);
+    }
+
+#if defined(PX_HAVE_PLATFORM)
+    // Tell the platform the server is ready, then report who is playing every
+    // few seconds on a separate thread (the simulation never waits for HTTP).
+    std::mutex playersMutex;
+    std::vector<std::string> playing;
+    std::atomic<bool> linkStop{false};
+    std::thread link;
+    if (managed) {
+        Status ready = makeError(ErrorCode::IoError, "not tried");
+        for (int attempt = 0; attempt < 5 && !ready; ++attempt) {
+            ready = platform->serverReady(static_cast<std::uint16_t>(options->port));
+            if (!ready) std::this_thread::sleep_for(std::chrono::milliseconds(300));
+        }
+        if (!ready) {
+            log::error("Cannot reach the platform: {}", ready.error().message);
+            return 1;
+        }
+        link = std::thread([&] {
+            online::PlatformClient beat(*platform);
+            int failures = 0;
+            while (!linkStop && !g_stop) {
+                std::vector<std::string> ids;
+                {
+                    std::lock_guard lock(playersMutex);
+                    ids = playing;
+                }
+                auto stop = beat.serverHeartbeat(ids);
+                if (stop && stop.value()) {
+                    log::info("The platform asked this server to stop");
+                    g_stop = true;
+                } else if (!stop) {
+                    // A platform that stays unreachable means nobody can save; stop cleanly.
+                    if (++failures >= 6) {
+                        log::error("Lost the platform: {}", stop.error().message);
+                        g_stop = true;
+                    }
+                } else {
+                    failures = 0;
+                }
+                for (int i = 0; i < 25 && !linkStop && !g_stop; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+        });
+    }
+#endif
+    const double emptyTimeout = options->emptyTimeout >= 0.0 ? options->emptyTimeout : (managed ? 30.0 : -1.0);
+    long long emptyTicks = 0;
+    bool hadPlayers = false;
 
     std::signal(SIGINT, onSignal);
     std::signal(SIGTERM, onSignal);
@@ -181,6 +304,29 @@ int main(int argc, char** argv) {
                       std::chrono::duration<double>(now - next).count());
             next = now;
         }
+        if (emptyTimeout >= 0.0) {
+            if (server.playerCount() > 0) {
+                hadPlayers = true;
+                emptyTicks = 0;
+            } else {
+                ++emptyTicks;
+                // Before anyone arrives the first player gets twice as long.
+                const double limit = hadPlayers ? emptyTimeout : 2.0 * emptyTimeout;
+                if (static_cast<double>(emptyTicks) / tickRate > limit) {
+                    log::info("Nobody is playing; stopping");
+                    break;
+                }
+            }
+        }
+#if defined(PX_HAVE_PLATFORM)
+        if (managed && ticks % tickRate == 0) {
+            std::lock_guard lock(playersMutex);
+            playing.clear();
+            for (const auto& c : server.clients()) {
+                if (!c.userId.empty()) playing.push_back(c.userId);
+            }
+        }
+#endif
         if (Clock::now() - lastReport > std::chrono::minutes(1)) {
             lastReport = Clock::now();
             log::info("{} playing, tick {}, largest snapshot {} bytes", server.playerCount(), server.ticksRun(),
@@ -191,6 +337,14 @@ int main(int argc, char** argv) {
     timeEndPeriod(1);
 #endif
     log::info("Stopping after {} ticks", ticks);
-    server.shutdown();
+    server.shutdown(); // saves everyone's data first
+#if defined(PX_HAVE_PLATFORM)
+    if (managed) {
+        linkStop = true;
+        if (link.joinable()) link.join();
+        serverOptions.playerStore.reset();
+        (void)platform->serverEnded();
+    }
+#endif
     return 0;
 }

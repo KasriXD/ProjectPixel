@@ -2,6 +2,7 @@
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
+#include "px/net/ConnectToken.hpp"
 
 #include <algorithm>
 #include <format>
@@ -62,6 +63,20 @@ Status GameServer::startSession() {
 
 void GameServer::shutdown() {
     if (!m_endpoint) return;
+    // Everyone's progress is saved before the server goes away.
+    if (m_options.playerStore) {
+        for (const auto& [peer, client] : m_clients) {
+            if (client.userId.empty()) continue;
+            if (client.joined) {
+                if (const auto* slot = m_session->findPlayer(client.player)) {
+                    m_options.playerStore->save(client.userId, slot->data, true);
+                }
+            } else if (client.loading) {
+                m_options.playerStore->release(client.userId);
+            }
+        }
+        m_options.playerStore->flush(10.0);
+    }
     for (auto& [peer, client] : m_clients) {
         const auto reject = encode(RejectMessage{DisconnectReason::ShuttingDown, "The server is shutting down"});
         (void)m_endpoint->send(peer, Delivery::Reliable, reject);
@@ -72,18 +87,20 @@ void GameServer::shutdown() {
 }
 
 std::size_t GameServer::playerCount() const {
-    return static_cast<std::size_t>(
-        std::count_if(m_clients.begin(), m_clients.end(), [](const auto& c) { return c.second.joined; }));
+    // Players whose saved data is loading already hold a seat.
+    return static_cast<std::size_t>(std::count_if(m_clients.begin(), m_clients.end(),
+                                                  [](const auto& c) { return c.second.joined || c.second.loading; }));
 }
 
 std::vector<ServerClientInfo> GameServer::clients() const {
     std::vector<ServerClientInfo> out;
     for (const auto& [peer, c] : m_clients) {
-        if (!c.joined) continue;
+        if (!c.joined && !c.loading) continue;
         ServerClientInfo info;
         info.peer = peer;
         info.player = c.player;
         info.name = c.name;
+        info.userId = c.userId;
         info.address = m_endpoint->describe(peer);
         info.stats = m_endpoint->stats(peer);
         info.queuedInputs = c.inputs.size();
@@ -96,6 +113,7 @@ std::vector<ServerClientInfo> GameServer::clients() const {
 
 void GameServer::tick() {
     receive();
+    pollLoads();
 
     // Connections that never introduce themselves are closed.
     const auto helloTicks = static_cast<std::uint64_t>(std::max(0.0, m_options.helloTimeoutSeconds) * m_tickRate);
@@ -122,8 +140,56 @@ void GameServer::tick() {
         }
     }
 
+    saveChangedData(false);
     if (m_session->tickCount() % static_cast<std::uint64_t>(m_options.snapshotInterval) == 0) sendSnapshots();
     m_endpoint->flush();
+}
+
+void GameServer::pollLoads() {
+    if (!m_options.playerStore) return;
+    const auto timeoutTicks = static_cast<std::uint64_t>(std::max(1.0, m_options.loadTimeoutSeconds) * m_tickRate);
+    std::vector<PeerId> peers;
+    for (const auto& [peer, c] : m_clients) {
+        if (c.loading) peers.push_back(peer);
+    }
+    for (const PeerId peer : peers) {
+        Client& c = m_clients.at(peer);
+        auto loaded = m_options.playerStore->takeLoaded(c.userId);
+        if (!loaded) {
+            if (m_ticksRun - c.loadStarted > timeoutTicks) {
+                m_options.playerStore->release(c.userId);
+                c.loading = false;
+                reject(c, DisconnectReason::DataUnavailable, "Your saved data could not be loaded in time; try again");
+            }
+            continue;
+        }
+        c.loading = false;
+        if (!*loaded) {
+            log::warn("Could not load the saved data of {}: {}", c.name, loaded->error().message);
+            m_options.playerStore->release(c.userId);
+            reject(c, DisconnectReason::DataUnavailable,
+                   "Your saved data could not be loaded, so you cannot play now (nothing was lost); try again later");
+            continue;
+        }
+        completeJoin(c, std::move(loaded->value()));
+    }
+}
+
+void GameServer::saveChangedData(bool now) {
+    if (!m_options.playerStore) return;
+    for (const runtime::PlayerId id : m_session->takeChangedPlayerData()) {
+        for (const auto& [peer, c] : m_clients) {
+            if (c.joined && c.player == id && !c.userId.empty()) m_unsaved.insert(c.userId);
+        }
+    }
+    const auto interval = static_cast<std::uint64_t>(std::max(1.0, m_options.saveIntervalSeconds) * m_tickRate);
+    if (m_unsaved.empty() || (!now && m_ticksRun - m_lastSaveTick < interval)) return;
+    m_lastSaveTick = m_ticksRun;
+    for (const auto& [peer, c] : m_clients) {
+        if (!c.joined || !m_unsaved.contains(c.userId)) continue;
+        if (const auto* slot = m_session->findPlayer(c.player)) m_options.playerStore->save(c.userId, slot->data, false);
+    }
+    m_unsaved.clear();
 }
 
 void GameServer::receive() {
@@ -192,12 +258,53 @@ void GameServer::handleHello(Client& client, const std::vector<std::uint8_t>& da
         reject(client, DisconnectReason::ServerFull, std::format("The server is full ({} players)", m_options.maxPlayers));
         return;
     }
+    if (m_options.platformKey) {
+        // Only players the platform sent here, as who the platform says they are.
+        auto token = verifyConnectToken(hello->token, *m_options.platformKey, unixTimeNow());
+        if (!token) {
+            reject(client, DisconnectReason::NotAuthorized, token.error().message);
+            return;
+        }
+        if (token->session != m_options.sessionId) {
+            reject(client, DisconnectReason::NotAuthorized, "The join ticket is for another game server");
+            return;
+        }
+        const std::int64_t now = unixTimeNow();
+        std::erase_if(m_usedNonces, [now](const auto& n) { return n.second < now; });
+        if (!m_usedNonces.emplace(token->nonce, token->expires).second) {
+            reject(client, DisconnectReason::NotAuthorized, "This join ticket was already used; join again");
+            return;
+        }
+        const bool present = std::any_of(m_clients.begin(), m_clients.end(), [&](const auto& c) {
+            return c.second.peer != client.peer && (c.second.joined || c.second.loading) && c.second.userId == token->userId;
+        });
+        if (present) {
+            reject(client, DisconnectReason::NotAuthorized, "You are already playing on this server");
+            return;
+        }
+        client.userId = token->userId;
+        client.name = token->username;
+    } else {
+        client.name = sanitizePlayerName(hello->playerName);
+    }
+    if (m_options.playerStore && !client.userId.empty()) {
+        client.loading = true;
+        client.loadStarted = m_ticksRun;
+        m_options.playerStore->beginLoad(client.userId);
+        log::info("{} is joining; loading their saved data", client.name);
+        return;
+    }
+    completeJoin(client, {});
+}
+
+void GameServer::completeJoin(Client& client, runtime::PlayerData data) {
     const runtime::PlayerId id = allocatePlayerId();
-    std::string name = sanitizePlayerName(hello->playerName);
+    std::string name = client.name;
     if (name.empty()) name = std::format("Player {}", id);
     name = uniqueName(std::move(name));
-    auto character = m_session->addPlayer(id, name);
+    auto character = m_session->addPlayer(id, name, std::move(data));
     if (!character) {
+        if (m_options.playerStore && !client.userId.empty()) m_options.playerStore->release(client.userId);
         reject(client, DisconnectReason::ServerFull, character.error().message);
         return;
     }
@@ -286,16 +393,18 @@ void GameServer::restartLevel() {
     struct Joined {
         runtime::PlayerId id;
         std::string name;
+        runtime::PlayerData data; // saved data carries over to the new round
     };
+    saveChangedData(true);
     std::vector<Joined> players;
-    for (const auto& p : m_session->players()) players.push_back({p.id, p.name});
+    for (const auto& p : m_session->players()) players.push_back({p.id, p.name, p.data});
     if (auto started = startSession(); !started) {
         log::error("Could not restart the level: {}", started.error().message);
         return;
     }
     ++m_epoch;
     for (const Joined& p : players) {
-        if (auto added = m_session->addPlayer(p.id, p.name); !added) log::error("{}", added.error().message);
+        if (auto added = m_session->addPlayer(p.id, p.name, p.data); !added) log::error("{}", added.error().message);
     }
     log::info("Level restarted ({} playing)", players.size());
 }
@@ -357,6 +466,17 @@ void GameServer::reject(Client& client, DisconnectReason reason, const std::stri
 void GameServer::dropClient(PeerId peer, const char* why) {
     const auto it = m_clients.find(peer);
     if (it == m_clients.end()) return;
+    if (m_options.playerStore && !it->second.userId.empty()) {
+        // Their data is saved one last time; then the platform may send them elsewhere.
+        if (it->second.joined) {
+            if (const auto* slot = m_session->findPlayer(it->second.player)) {
+                m_options.playerStore->save(it->second.userId, slot->data, true);
+            }
+            m_unsaved.erase(it->second.userId);
+        } else if (it->second.loading) {
+            m_options.playerStore->release(it->second.userId);
+        }
+    }
     if (it->second.joined) {
         m_session->removePlayer(it->second.player);
         log::info("{} left ({}); {} playing", it->second.name, why, playerCount() - 1);

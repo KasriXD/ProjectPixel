@@ -1,5 +1,7 @@
 #include "px/net/Protocol.hpp"
 
+#include "px/net/ConnectToken.hpp"
+
 #include "px/net/Transport.hpp"
 
 #include <format>
@@ -39,6 +41,8 @@ const char* describeReason(DisconnectReason reason) {
         case DisconnectReason::ShuttingDown: return "the server shut down";
         case DisconnectReason::Timeout: return "the connection timed out";
         case DisconnectReason::Left: return "left the game";
+        case DisconnectReason::NotAuthorized: return "the server did not accept the join ticket";
+        case DisconnectReason::DataUnavailable: return "your saved data could not be loaded";
     }
     return "disconnected";
 }
@@ -46,7 +50,7 @@ const char* describeReason(DisconnectReason reason) {
 std::string describeDisconnect(std::uint32_t code) {
     if (code == kReasonRefused) return "could not connect (no server there, or it is full)";
     if (code == kReasonLost) return "the connection was lost";
-    if (code <= static_cast<std::uint32_t>(DisconnectReason::Left)) {
+    if (code <= static_cast<std::uint32_t>(DisconnectReason::DataUnavailable)) {
         return describeReason(static_cast<DisconnectReason>(code));
     }
     return std::format("disconnected (code {})", code);
@@ -59,6 +63,7 @@ std::vector<std::uint8_t> encode(const HelloMessage& m) {
     w.string(m.engineVersion);
     w.u64(m.contentHash);
     w.string(m.playerName);
+    if (m.protocol >= 2) w.string(m.token);
     return std::move(w.data());
 }
 
@@ -123,6 +128,8 @@ Result<HelloMessage> decodeHello(std::span<const std::uint8_t> data) {
     m.engineVersion = r->string(64);
     m.contentHash = r->u64();
     m.playerName = r->string(256);
+    // Older clients have no token; the server then reports the version difference.
+    if (m.protocol >= 2) m.token = r->string(kMaxConnectTokenLength);
     if (!r->ok() || !r->atEnd() || magic != kProtocolMagic) return malformed("hello");
     return m;
 }

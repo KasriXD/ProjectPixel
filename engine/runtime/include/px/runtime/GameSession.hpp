@@ -7,6 +7,7 @@
 #include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/Input.hpp"
+#include "px/runtime/PlayerData.hpp"
 #include "px/runtime/Movement.hpp"
 #include "px/scene/Scene.hpp"
 #include "px/scripting/ScriptHost.hpp"
@@ -58,6 +59,9 @@ struct SessionOptions {
     std::shared_ptr<const project::PrefabLibrary> prefabs;       // scripts can spawn these (World.spawn)
     std::shared_ptr<const project::AnimationLibrary> animations; // clips Animators play
     std::shared_ptr<const project::TilesetLibrary> tilesets;     // what tiles are (collision, tags)
+    // Playing alone: the saved data every character shares (Studio keeps one
+    // between plays). nullptr: a fresh, empty one.
+    std::shared_ptr<PlayerData> localData;
 };
 
 // Entities scripts may create in one tick (World.spawn; a prefab's
@@ -76,6 +80,8 @@ struct PlayerSlot {
     std::string name;
     InputFrame input;               // this tick's input
     scene::Entity character;        // their copy of a Player template (null if the scene has none)
+    PlayerData data;                // saved data (Data.get / Data.set)
+    bool dataChanged = false;       // since takeChangedPlayerData
 };
 
 // The scene's Player entities, removed from it to be copied for each player.
@@ -126,13 +132,18 @@ public:
     // Adds a player with a free id: copies a Player template (players take
     // turns over the templates) to its spawn point. Their character's scripts
     // start, and PlayerJoined is delivered, in the next tick.
-    [[nodiscard]] Result<scene::Entity> addPlayer(PlayerId id, std::string name);
+    // `data` is the player's saved data (loaded from the platform).
+    [[nodiscard]] Result<scene::Entity> addPlayer(PlayerId id, std::string name, PlayerData data = {});
     // Removes a player: PlayerLeft is delivered and their character is
     // destroyed at the start of the next tick. Unknown ids are ignored.
     void removePlayer(PlayerId id);
     void setPlayerInput(PlayerId id, const InputFrame& input);
     [[nodiscard]] std::span<const PlayerSlot> players() const { return m_players; }
     [[nodiscard]] const PlayerSlot* findPlayer(PlayerId id) const;
+    // Players whose saved data scripts changed since the last call.
+    [[nodiscard]] std::vector<PlayerId> takeChangedPlayerData();
+    // Playing alone: the shared saved data.
+    [[nodiscard]] const std::shared_ptr<PlayerData>& localData() const { return m_localData; }
 
     [[nodiscard]] scene::Scene& scene() { return m_scene; }
     [[nodiscard]] const scene::Scene& scene() const { return m_scene; }
@@ -200,6 +211,9 @@ private:
     std::string animationName(assets::AssetId clip) const override;
     std::vector<std::string> animationNames() const override;
     const std::vector<std::string>* tileTags(assets::AssetId tileset, Vec2 tileSize, int tile) const override;
+    Result<std::optional<scene::ScriptValue>> playerDataGet(scene::Entity player, std::string_view key) const override;
+    Status playerDataSet(scene::Entity player, std::string_view key, std::optional<scene::ScriptValue> value) override;
+    [[nodiscard]] const PlayerData* dataOf(scene::Entity player) const;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -224,6 +238,7 @@ private:
     bool m_multiplayer = false;
     PlayerTemplates m_templates;
     std::vector<PlayerSlot> m_players;          // in join order
+    std::shared_ptr<PlayerData> m_localData;    // playing alone
     std::vector<scene::Entity> m_pendingJoins;  // characters whose PlayerJoined is due
     std::vector<scene::Entity> m_pendingLeaves; // characters whose PlayerLeft is due
     physics::CollisionWorld m_collision;

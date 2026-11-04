@@ -7,6 +7,7 @@
 #include "px/scripting/ScriptLibrary.hpp"
 
 #include <fstream>
+#include <limits>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -308,4 +309,110 @@ TEST_CASE("Multiplayer: the examples in docs/multiplayer.md work") {
     s.tick();
     CHECK(s.state().objective == "Bo LEFT");
     CHECK(s.state().scriptErrors == 0);
+}
+
+TEST_CASE("Saved data: scripts keep values per player, with limits") {
+    auto library = std::make_shared<scripting::ScriptLibrary>();
+    const assets::AssetId saverId{Guid(7, 2)};
+    REQUIRE(library->add(saverId, "scripts/saver.luau", R"lua(
+        local Saver = {}
+        function Saver:PlayerJoined(player)
+            local visits = Data.increment(player, "visits")
+            Data.set(player, "name", player.playerName)
+            Game.setObjective(player.playerName .. " visit " .. visits)
+        end
+        function Saver:Tick()
+            for _, p in Players.getAll() do
+                if Input.wasPressed("use", p) then
+                    Data.set(p, "spot", Vec2(1, 2))
+                    Data.set(p, "visits", nil)
+                    Game.setObjective(tostring(Data.get(p, "spot")) .. " " .. tostring(Data.get(p, "visits")))
+                end
+                if Input.wasPressed("jump", p) then
+                    local _, a = pcall(Data.set, p, "bad key!", 1)
+                    local _, b = pcall(Data.get, self.entity, "x")
+                    local _, c = pcall(Data.set, p, "big", string.rep("x", 2000))
+                    local _, d = pcall(Data.increment, p, "name")
+                    local function has(text, part)
+                        return string.find(text, part, 1, true) and "y" or "n"
+                    end
+                    Game.setObjective(has(a, "cannot be a data key") .. has(b, "not a player's character")
+                        .. has(c, "longer than 1000") .. has(d, "'name' does not hold a number"))
+                end
+            end
+        end
+        return Saver
+    )lua"));
+    Scene scene = mpScene();
+    const Entity saver = scene.createEntity("Saver");
+    Scripts scripts;
+    scripts.items.push_back({saverId, {}});
+    scene.set(saver, scripts);
+    auto session = makeServerSession(std::move(scene), library);
+    GameSession& s = *session;
+
+    PlayerData loaded;
+    REQUIRE(loaded.set("visits", 2.0).ok());
+    REQUIRE(s.addPlayer(1, "Ada", loaded).ok());
+    s.tick();
+    CHECK(s.state().objective == "Ada visit 3");
+    const PlayerData& data = s.findPlayer(1)->data;
+    CHECK(std::get<double>(*data.get("visits")) == 3.0);
+    CHECK(std::get<std::string>(*data.get("name")) == "Ada");
+    CHECK(s.takeChangedPlayerData() == std::vector<PlayerId>{1});
+    CHECK(s.takeChangedPlayerData().empty());
+
+    s.setPlayerInput(1, holding(s, "use", true));
+    s.tick();
+    CHECK(s.state().objective == "1, 2, 0 nil");
+    CHECK(data.get("visits") == nullptr);
+    CHECK(std::get<Vec2>(*data.get("spot")) == Vec2{1, 2});
+
+    s.setPlayerInput(1, holding(s, "jump", true));
+    s.tick();
+    CHECK(s.state().objective == "yyyy"); // each misuse raised the expected error
+    CHECK(s.state().scriptErrors == 0);
+}
+
+TEST_CASE("Saved data: playing alone, sessions can share it (Studio keeps it between plays)") {
+    auto library = std::make_shared<scripting::ScriptLibrary>();
+    const assets::AssetId id{Guid(7, 3)};
+    REQUIRE(library->add(id, "scripts/count.luau", R"lua(
+        local Count = {}
+        function Count:PlayerJoined(player)
+            Game.setObjective("PLAYS " .. Data.increment(player, "plays"))
+        end
+        return Count
+    )lua"));
+    const auto play = [&](std::shared_ptr<PlayerData> shared) {
+        Scene scene = mpScene();
+        Scripts scripts;
+        scripts.items.push_back({id, {}});
+        scene.set(scene.createEntity("Count"), scripts);
+        SessionOptions options;
+        options.localData = std::move(shared);
+        auto session = GameSession::create(mpProject(), std::move(scene), library, options);
+        REQUIRE(session.ok());
+        (*session)->tick();
+        return (*session)->state().objective;
+    };
+    auto shared = std::make_shared<PlayerData>();
+    CHECK(play(shared) == "PLAYS 1");
+    CHECK(play(shared) == "PLAYS 2");
+    CHECK(play(nullptr) == "PLAYS 1");
+}
+
+TEST_CASE("Saved data: values, keys and limits") {
+    PlayerData d;
+    CHECK(d.set("a.b-c_1", 1.0).ok());
+    CHECK_FALSE(d.set("", 1.0).ok());
+    CHECK_FALSE(d.set(std::string(51, 'k'), 1.0).ok());
+    CHECK_FALSE(d.set("x", std::numeric_limits<double>::infinity()).ok());
+    CHECK_FALSE(d.set("x", std::string(1001, 'x')).ok());
+    for (int i = 0; i < 199; ++i) REQUIRE(d.set("k" + std::to_string(i), static_cast<double>(i)).ok());
+    CHECK(d.values.size() == 200);
+    CHECK_FALSE(d.set("one-more", 1.0).ok());
+    CHECK(d.set("k1", 5.0).ok()); // replacing is fine
+    CHECK(d.set("k1", std::nullopt).ok());
+    CHECK(d.values.size() == 199);
 }

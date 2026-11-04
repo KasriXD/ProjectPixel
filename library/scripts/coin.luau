@@ -1,4 +1,6 @@
--- Coin: awards points when the player touches it, then disappears.
+-- Coin: awards points when the player touches it, then disappears. Each
+-- player's lifetime coin count is saved ("coins"): on the platform it is
+-- still there the next time they play.
 --
 -- Attach to an entity with a trigger BoxCollider and the "coin" tag.
 -- Property values can be changed per coin in the scene file.
@@ -15,6 +17,7 @@ function Coin:TriggerEnter(other)
         return
     end
     Game.addScore(self.value)
+    Data.increment(other, "coins", self.value)
     Events.emit("coin_collected", self.value)
     if self.effect ~= "" then
         World.spawn(self.effect, self.entity.position)

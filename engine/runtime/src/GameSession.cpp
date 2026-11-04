@@ -143,6 +143,7 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
     }
 
     session->m_prefabs = options.prefabs;
+    session->m_localData = options.localData ? options.localData : std::make_shared<PlayerData>();
     session->m_animations = options.animations;
     session->m_tilesets = options.tilesets;
     session->m_spawnCount = options.seed;
@@ -188,7 +189,7 @@ Entity GameSession::characterOf(PlayerId id) const {
     return slot != nullptr && m_scene.isAlive(slot->character) ? slot->character : kNullEntity;
 }
 
-Result<Entity> GameSession::addPlayer(PlayerId id, std::string name) {
+Result<Entity> GameSession::addPlayer(PlayerId id, std::string name, PlayerData data) {
     if (!m_multiplayer) return makeError(ErrorCode::InvalidArgument, "Players can only be added in multiplayer");
     if (id == kNoPlayer || findPlayer(id) != nullptr) {
         return makeError(ErrorCode::InvalidArgument, "Player id {} is not free", id);
@@ -197,6 +198,7 @@ Result<Entity> GameSession::addPlayer(PlayerId id, std::string name) {
     PlayerSlot slot;
     slot.id = id;
     slot.name = std::move(name);
+    slot.data = std::move(data);
     if (!m_templates.entries.empty()) {
         // Players take turns over the templates, so several Player entities
         // in a scene are several spawn points.
@@ -608,6 +610,50 @@ assets::AssetId GameSession::findAnimation(std::string_view name) const {
 std::string GameSession::animationName(assets::AssetId clip) const {
     const auto* entry = m_animations != nullptr ? m_animations->find(clip) : nullptr;
     return entry != nullptr ? entry->name : std::string();
+}
+
+// --- saved player data ---------------------------------------------------------------------
+
+std::vector<PlayerId> GameSession::takeChangedPlayerData() {
+    std::vector<PlayerId> out;
+    for (PlayerSlot& p : m_players) {
+        if (!p.dataChanged) continue;
+        p.dataChanged = false;
+        out.push_back(p.id);
+    }
+    return out;
+}
+
+const PlayerData* GameSession::dataOf(Entity player) const {
+    if (!m_scene.isAlive(player) || m_scene.tryGet<Player>(player) == nullptr) return nullptr;
+    if (!m_multiplayer) return m_localData.get();
+    for (const PlayerSlot& p : m_players) {
+        if (p.character == player) return &p.data;
+    }
+    return nullptr;
+}
+
+Result<std::optional<scene::ScriptValue>> GameSession::playerDataGet(Entity player, std::string_view key) const {
+    const PlayerData* data = dataOf(player);
+    if (data == nullptr) return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+    if (!isValidDataKey(key)) {
+        return makeError(ErrorCode::InvalidArgument, "'{}' cannot be a data key: use 1 to {} letters, digits, '_', "
+                         "'-' or '.'", key, kMaxPlayerDataKeyLength);
+    }
+    if (const auto* v = data->get(key)) return std::optional<scene::ScriptValue>(*v);
+    return std::optional<scene::ScriptValue>();
+}
+
+Status GameSession::playerDataSet(Entity player, std::string_view key, std::optional<scene::ScriptValue> value) {
+    if (dataOf(player) == nullptr) return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+    if (!m_multiplayer) return m_localData->set(key, std::move(value));
+    for (PlayerSlot& p : m_players) {
+        if (p.character != player) continue;
+        if (auto s = p.data.set(key, std::move(value)); !s) return s;
+        p.dataChanged = true;
+        return {};
+    }
+    return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
 }
 
 const std::vector<std::string>* GameSession::tileTags(assets::AssetId tileset, Vec2 tileSize, int tile) const {

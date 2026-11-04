@@ -222,3 +222,146 @@ TEST_CASE("Platform: rate limits and unknown game servers") {
     CHECK(server.serverHeartbeat({}).error().code == ErrorCode::AccessDenied);
     CHECK(server.serverLoadData("1").error().code == ErrorCode::AccessDenied);
 }
+
+// --- Joining games: real game servers (px-server processes) ----------------------------------
+
+#include "px/net/GameClient.hpp"
+#include "px/net/Udp.hpp"
+
+#include <thread>
+
+namespace {
+
+// A player connected to a platform game server over UDP, in real time.
+struct OnlinePlayer {
+    std::unique_ptr<net::GameClient> client;
+    runtime::LoadedGame game;
+
+    OnlinePlayer(PlatformClient& platform, const JoinTicket& ticket) {
+        auto bytes = platform.downloadPackage(ticket.packageHash);
+        REQUIRE(bytes.ok());
+        auto package = project::decodePackage(bytes.value());
+        REQUIRE(package.ok());
+        auto fs = package->toFileSystem();
+        auto loaded = runtime::loadGame(*fs);
+        REQUIRE(loaded.ok());
+        game = std::move(loaded.value());
+        auto endpoint = net::connectUdp(ticket.host, ticket.port);
+        REQUIRE(endpoint.ok());
+        net::ClientOptions options;
+        options.token = ticket.token;
+        auto created = net::GameClient::create(game, std::move(endpoint.value()), options);
+        REQUIRE(created.ok());
+        client = std::move(created.value());
+    }
+
+    // Runs in real time for `seconds` (or until disconnected), holding `actions`.
+    void play(double seconds, std::initializer_list<std::string_view> actions = {}) {
+        std::uint32_t held = 0;
+        const runtime::ActionSet set(game.manifest.input);
+        for (auto a : actions) held |= 1u << set.find(a);
+        const auto start = std::chrono::steady_clock::now();
+        auto next = start;
+        while (true) {
+            const double now = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            if (now > seconds || client->status() == net::GameClient::Status::Disconnected) break;
+            client->receive(now);
+            if (client->status() == net::GameClient::Status::Playing) client->tick({held, 0});
+            client->updateView(now);
+            next += std::chrono::milliseconds(16);
+            std::this_thread::sleep_until(next);
+        }
+    }
+    bool waitUntilPlaying(double seconds = 10.0) {
+        const auto start = std::chrono::steady_clock::now();
+        double now = 0.0;
+        while (client->status() != net::GameClient::Status::Playing && now < seconds &&
+               client->status() != net::GameClient::Status::Disconnected) {
+            now = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+            client->receive(now);
+            client->tick({});
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return client->status() == net::GameClient::Status::Playing;
+    }
+};
+
+template <class F>
+bool eventually(F&& condition, double seconds = 10.0) {
+    const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
+    while (std::chrono::steady_clock::now() < end) {
+        if (condition()) return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return condition();
+}
+
+} // namespace
+
+TEST_CASE("Platform: joining starts a game server; players play there and their data is saved") {
+    TestPlatform p;
+    auto ada = p.account("Ada");
+    auto bob = p.account("Bob");
+    auto game = ada.createGame("Coin Run", "", Visibility::Public);
+    REQUIRE(game.ok());
+    REQUIRE(ada.publish(game->id, pxtest::examplePackage("platformer")).ok());
+    auto other = ada.createGame("Garden", "", Visibility::Public);
+    REQUIRE(other.ok());
+    REQUIRE(ada.publish(other->id, pxtest::examplePackage("topdown")).ok());
+
+    auto ticket = ada.join(game->id);
+    REQUIRE_MESSAGE(ticket.ok(), (ticket.ok() ? "" : ticket.error().message));
+    CHECK(ticket->host == "127.0.0.1");
+    CHECK(ticket->version == 1);
+    REQUIRE(p.service->fleet().sessions().size() == 1);
+    CHECK(p.service->fleet().sessions().front().state == "ready");
+
+    OnlinePlayer adaPlays(ada, ticket.value());
+    REQUIRE(adaPlays.waitUntilPlaying());
+    adaPlays.play(0.5);
+    REQUIRE_FALSE(adaPlays.client->game().players.empty());
+    CHECK(adaPlays.client->game().players.front().name == "Ada");
+
+    // Bob gets a seat on the same server.
+    auto bobTicket = bob.join(game->id);
+    REQUIRE(bobTicket.ok());
+    CHECK(bobTicket->session == ticket->session);
+    OnlinePlayer bobPlays(bob, bobTicket.value());
+    REQUIRE(bobPlays.waitUntilPlaying());
+    CHECK(eventually([&] { return p.service->fleet().playing(game->id) == 2; }));
+    CHECK(eventually([&] { return p.client().game(game->id)->playing == 2; }));
+    CHECK(p.client().game(game->id)->plays == 2);
+
+    // One game at a time: Ada cannot be in two games (her data is held by this one).
+    auto twice = ada.join(other->id);
+    REQUIRE_FALSE(twice.ok());
+    CHECK(contains(twice.error().message, "another game"));
+
+    // A stolen ticket does not work for someone else: tokens are single use.
+    OnlinePlayer thief(bob, ticket.value());
+    thief.play(1.5);
+    CHECK(thief.client->status() == net::GameClient::Status::Disconnected);
+
+    // Ada runs right into the first coin; when she leaves, her data is saved.
+    adaPlays.play(2.0, {"move_right"});
+    CHECK(adaPlays.client->game().score >= 1);
+    adaPlays.client->disconnect();
+    std::string saved;
+    CHECK(eventually([&] {
+        auto data = ada.playerData(game->id, "Ada");
+        saved = data ? data.value() : "";
+        return contains(saved, "\"coins\"");
+    }));
+    CHECK(contains(saved, "\"coins\":1"));
+    CHECK_FALSE(bob.playerData(game->id, "Ada").ok()); // only the owner looks at players' data
+
+    // Released: Ada can play the other game now, and her data stays per game.
+    CHECK(eventually([&] { return ada.join(other->id).ok(); }));
+
+    // Moderation stops a game's servers.
+    auto mod = p.account("Mod");
+    REQUIRE(p.service->setRole("Mod", Role::Admin).ok());
+    REQUIRE(mod.setGameHidden(game->id, true, "test").ok());
+    bobPlays.play(8.0);
+    CHECK(bobPlays.client->status() == net::GameClient::Status::Disconnected);
+}

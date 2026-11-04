@@ -71,6 +71,8 @@ public:
     [[nodiscard]] Result<runtime::PlayerData> serverLoadData(const std::string& userId);
     // `release`: the player left; the platform may let them join elsewhere.
     [[nodiscard]] Status serverSaveData(const std::string& userId, const runtime::PlayerData& data, bool release);
+    // The player left before their data was loaded.
+    [[nodiscard]] Status serverRelease(const std::string& userId);
     [[nodiscard]] Status serverEnded();
 
 private:

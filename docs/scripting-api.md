@@ -75,6 +75,16 @@ The people playing. Each has a character: a copy of the scene's Player entity in
 | `Players.getAll(): {Entity}` | function, pure | all | Every player character (entities with a Player component), in the order they joined. |
 | `Players.count(): number` | function, pure | all | How many player characters there are. |
 
+## Data
+
+Saved player data: values kept for each player between visits (docs/platform.md#saved-player-data). Loaded before PlayerJoined, saved while they play and when they leave.
+
+| Member | Kind | Available in | Description |
+|---|---|---|---|
+| `Data.get(player: Entity, key: string): any?` | function, pure | authority | The value saved for `player` (a character) under `key`, or nil. On the platform saved data is kept per game and account; played locally it lasts until the program closes. |
+| `Data.set(player: Entity, key: string, value: any?)` | function | authority | Saves a number, boolean, string or vector for `player` under `key`; nil removes it. Keys are 1-50 letters, digits, '_', '-' or '.'; a player has at most 200 values (64 KiB) per game. |
+| `Data.increment(player: Entity, key: string, amount: number?): number` | function | authority | Adds `amount` (default 1) to a saved number (missing counts as 0) and returns the new value. |
+
 ## Events
 
 Custom events between scripts. Values must be serializable.

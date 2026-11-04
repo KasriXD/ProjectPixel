@@ -6,12 +6,14 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/net/GameClient.hpp"
+#include "px/net/ConnectToken.hpp"
 #include "px/net/GameServer.hpp"
 #include "px/net/Loopback.hpp"
 #include "px/runtime/GameLoader.hpp"
 #include "px/runtime/InputScript.hpp"
 
 #include <cmath>
+#include <fstream>
 #include <optional>
 #include <stdexcept>
 
@@ -49,9 +51,10 @@ struct Harness {
     }
 
     GameClient& addClient(const std::string& name, const LinkConditions& link = {},
-                          const runtime::LoadedGame* clientGame = nullptr) {
+                          const runtime::LoadedGame* clientGame = nullptr, const std::string& token = {}) {
         ClientOptions options;
         options.playerName = name;
+        options.token = token;
         auto c = GameClient::create(clientGame != nullptr ? *clientGame : game, net.connect(kPort, link), options);
         if (!c) throw std::runtime_error(c.error().message);
         clients.push_back(std::move(c.value()));
@@ -284,4 +287,97 @@ TEST_CASE("Netgame: leaving, refusing and restarting") {
                                                          e.reason == static_cast<std::uint32_t>(DisconnectReason::Timeout));
         CHECK(closed);
     }
+}
+
+TEST_CASE("Netgame: platform servers take only valid connect tokens and keep saved data") {
+    auto key = crypto::SigningKey::generate();
+    auto otherKey = crypto::SigningKey::generate();
+    REQUIRE(key.ok());
+    REQUIRE(otherKey.ok());
+    auto store = std::make_shared<MemoryPlayerStore>();
+    runtime::PlayerData saved;
+    REQUIRE(saved.set("coins", 5.0).ok());
+    store->m_saved["42"] = saved;
+    ServerOptions options;
+    options.platformKey = key->publicKey;
+    options.sessionId = "session1";
+    options.playerStore = store;
+    options.saveIntervalSeconds = 1.0;
+    Harness h(loadExample("platformer"), options);
+    int nonce = 0;
+    const auto token = [&](const std::string& user, const std::string& name, const std::string& session = "session1",
+                           std::int64_t expiresIn = 60, const crypto::SigningKey* signer = nullptr) {
+        ConnectToken t{session, user, name, unixTimeNow() + expiresIn, "nonce-" + std::to_string(++nonce) + "-abcdefgh"};
+        return signConnectToken(t, signer != nullptr ? *signer : key.value());
+    };
+    const std::string adaToken = token("42", "Ada");
+    GameClient& ada = h.addClient("Somebody Else", {}, nullptr, adaToken);
+    GameClient& none = h.addClient("Mallory");
+    GameClient& elsewhere = h.addClient("x", {}, nullptr, token("43", "Bob", "session2"));
+    GameClient& expired = h.addClient("x", {}, nullptr, token("44", "Cy", "session1", -5));
+    GameClient& forged = h.addClient("x", {}, nullptr, token("45", "Dee", "session1", 60, &otherKey.value()));
+    GameClient& replay = h.addClient("x", {}, nullptr, adaToken);
+    h.run(90);
+    REQUIRE(ada.status() == GameClient::Status::Playing);
+    CHECK(h.server->clients().size() == 1);
+    CHECK(h.server->clients().front().userId == "42");
+    CHECK(ada.game().players.front().name == "Ada"); // the token's name, not the one sent
+    for (GameClient* refused : {&none, &elsewhere, &expired, &forged, &replay}) {
+        CHECK(refused->status() == GameClient::Status::Disconnected);
+    }
+    CHECK(none.statusText().find("join ticket") != std::string::npos);
+    CHECK(elsewhere.statusText().find("another game server") != std::string::npos);
+    CHECK(expired.statusText().find("expired") != std::string::npos);
+    CHECK(forged.statusText().find("not signed") != std::string::npos);
+    const bool replayRefused = replay.statusText().find("already") != std::string::npos;
+    CHECK(replayRefused);
+
+    // Ada's saved data was loaded before she joined; collecting coins adds to it.
+    const auto* slot = h.server->session().findPlayer(ada.player());
+    REQUIRE(slot != nullptr);
+    REQUIRE(slot->data.get("coins") != nullptr);
+    CHECK(std::get<double>(*slot->data.get("coins")) == 5.0);
+    std::ifstream route(std::string(PX_EXAMPLES_DIR) + "/platformer/tests/full_run.input");
+    const std::string text((std::istreambuf_iterator<char>(route)), std::istreambuf_iterator<char>());
+    h.play(0, text);
+    h.run(1100);
+    const int collected = h.server->session().state().score; // each coin is worth 1
+    CHECK(collected >= 5);
+    CHECK(store->saves >= 1); // saved while playing
+    CHECK(std::get<double>(*store->m_saved["42"].get("coins")) == 5.0 + collected);
+
+    // Leaving saves one last time.
+    ada.disconnect();
+    h.run(20);
+    CHECK(store->finalSaves == 1);
+    CHECK(h.server->playerCount() == 0);
+}
+
+TEST_CASE("Netgame: saved data that cannot be loaded keeps the player out") {
+    struct FailingStore final : IPlayerStore {
+        void beginLoad(const std::string&) override {}
+        std::optional<Result<runtime::PlayerData>> takeLoaded(const std::string&) override {
+            return Result<runtime::PlayerData>(makeError(ErrorCode::IoError, "platform down"));
+        }
+        void save(const std::string&, const runtime::PlayerData&, bool) override { ++saves; }
+        void release(const std::string&) override { ++releases; }
+        void flush(double) override {}
+        int saves = 0;
+        int releases = 0;
+    };
+    auto key = crypto::SigningKey::generate();
+    REQUIRE(key.ok());
+    auto store = std::make_shared<FailingStore>();
+    ServerOptions options;
+    options.platformKey = key->publicKey;
+    options.sessionId = "s";
+    options.playerStore = store;
+    Harness h(loadExample("topdown"), options);
+    ConnectToken t{"s", "7", "Eve", unixTimeNow() + 60, "abcdefghijk"};
+    GameClient& eve = h.addClient("Eve", {}, nullptr, signConnectToken(t, key.value()));
+    h.run(60);
+    CHECK(eve.status() == GameClient::Status::Disconnected);
+    CHECK(eve.statusText().find("nothing was lost") != std::string::npos);
+    CHECK(store->saves == 0); // never overwrite data that was not loaded
+    CHECK(store->releases == 1);
 }

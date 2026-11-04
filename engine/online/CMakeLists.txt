@@ -6,12 +6,14 @@ px_add_module(online
     SOURCES
         src/PackageCheck.cpp
         src/PlatformClient.cpp
+        src/PlatformPlayerStore.cpp
         src/WireJson.cpp
     DEPS
         px::core
         px::crypto
         px::project
         px::runtime
+        px::net
         nlohmann_json::nlohmann_json # WireJson.hpp: shared with the platform service
     PRIVATE_DEPS
         px_stb_image_write

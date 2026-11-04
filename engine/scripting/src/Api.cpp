@@ -21,6 +21,7 @@
 #include <cmath>
 #include <format>
 #include <optional>
+#include <variant>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -381,6 +382,90 @@ struct Bindings {
     }
     static int playersCount(lua_State* L) {
         lua_pushnumber(L, static_cast<double>(system(L).m_scene.registry().count<scene::Player>()));
+        return 1;
+    }
+
+    // --- Data: saved player data -------------------------------------------------------
+
+    static scene::ScriptValue checkDataValue(lua_State* L, int idx) {
+        switch (lua_type(L, idx)) {
+            case LUA_TNUMBER: return checkFinite(L, idx);
+            case LUA_TBOOLEAN: return lua_toboolean(L, idx) != 0;
+            case LUA_TSTRING: {
+                size_t len = 0;
+                const char* text = lua_tolstring(L, idx, &len);
+                return std::string(text, len);
+            }
+            case LUA_TVECTOR: return checkVec2(L, idx);
+            default: break;
+        }
+        luaL_errorL(L, "saved values must be a number, boolean, string or vector (got %s)", luaL_typename(L, idx));
+    }
+
+    static void pushDataValue(lua_State* L, const scene::ScriptValue& value) {
+        std::visit(
+            [L](const auto& v) {
+                using T = std::decay_t<decltype(v)>;
+                if constexpr (std::is_same_v<T, double>) {
+                    lua_pushnumber(L, v);
+                } else if constexpr (std::is_same_v<T, bool>) {
+                    lua_pushboolean(L, v);
+                } else if constexpr (std::is_same_v<T, std::string>) {
+                    lua_pushlstring(L, v.data(), v.size());
+                } else {
+                    lua_pushvector(L, v.x, v.y, 0.0f);
+                }
+            },
+            value);
+    }
+
+    static std::string checkDataKey(lua_State* L, int idx) {
+        size_t len = 0;
+        const char* key = luaL_checklstring(L, idx, &len);
+        return std::string(key, len);
+    }
+
+    static int dataGet(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string key = checkDataKey(L, 2);
+        auto value = system(L).m_host.playerDataGet(player, key);
+        if (!value) luaL_errorL(L, "Data.get: %s", value.error().message.c_str());
+        if (!value.value()) {
+            lua_pushnil(L);
+        } else {
+            pushDataValue(L, *value.value());
+        }
+        return 1;
+    }
+
+    static int dataSet(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string key = checkDataKey(L, 2);
+        std::optional<scene::ScriptValue> value;
+        if (!lua_isnoneornil(L, 3)) value = checkDataValue(L, 3);
+        auto done = system(L).m_host.playerDataSet(player, key, std::move(value));
+        if (!done) luaL_errorL(L, "Data.set: %s", done.error().message.c_str());
+        return 0;
+    }
+
+    static int dataIncrement(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string key = checkDataKey(L, 2);
+        const double amount = lua_isnoneornil(L, 3) ? 1.0 : checkFinite(L, 3);
+        IScriptHost& host = system(L).m_host;
+        auto current = host.playerDataGet(player, key);
+        if (!current) luaL_errorL(L, "Data.increment: %s", current.error().message.c_str());
+        double base = 0.0;
+        if (current.value()) {
+            const auto* number = std::get_if<double>(&*current.value());
+            if (number == nullptr) luaL_errorL(L, "Data.increment: '%s' does not hold a number", key.c_str());
+            base = *number;
+        }
+        const double next = base + amount;
+        if (!std::isfinite(next)) luaL_errorL(L, "Data.increment: the result is not a finite number");
+        auto done = host.playerDataSet(player, key, scene::ScriptValue(next));
+        if (!done) luaL_errorL(L, "Data.increment: %s", done.error().message.c_str());
+        lua_pushnumber(L, next);
         return 1;
     }
 
@@ -814,6 +899,20 @@ const Binding kBindings[] = {
       "How many player characters there are.", false, true},
      &Bindings::playersCount},
 
+    // Data: saved player data.
+    {{"Data", "get", K::Function, A::AuthorityOnly, "Data.get(player: Entity, key: string): any?",
+      "The value saved for `player` (a character) under `key`, or nil. On the platform saved data is kept per "
+      "game and account; played locally it lasts until the program closes.", false, true},
+     &Bindings::dataGet},
+    {{"Data", "set", K::Function, A::AuthorityOnly, "Data.set(player: Entity, key: string, value: any?)",
+      "Saves a number, boolean, string or vector for `player` under `key`; nil removes it. Keys are 1-50 "
+      "letters, digits, '_', '-' or '.'; a player has at most 200 values (64 KiB) per game."},
+     &Bindings::dataSet},
+    {{"Data", "increment", K::Function, A::AuthorityOnly,
+      "Data.increment(player: Entity, key: string, amount: number?): number",
+      "Adds `amount` (default 1) to a saved number (missing counts as 0) and returns the new value."},
+     &Bindings::dataIncrement},
+
     // Events: messages between scripts.
     {{"Events", "emit", K::Function, A::Everywhere, "Events.emit(name: string, value: any?)",
       "Queues an event. Listeners run after the current phase, in registration order. value must be nil, "
@@ -936,7 +1035,7 @@ void Bindings::registerApi(lua_State* L, ScriptSystem& s) {
     };
 
     // Globals and library tables.
-    for (const char* group : {"Game", "World", "Input", "Players", "Events"}) {
+    for (const char* group : {"Game", "World", "Input", "Players", "Data", "Events"}) {
         lua_createtable(L, 0, 8);
         for (const Binding& b : kBindings) {
             if (b.info.group != group || b.function == nullptr || !available(b)) continue;
@@ -1138,7 +1237,7 @@ std::string generateApiReferenceMarkdown() {
     md += "Guide and examples: [scripting.md](scripting.md). *Available in*: **all** means authority and "
           "client scripts; **authority** means only where game state is decided (single-player session, "
           "server). *Pure* members have no side effects (data nodes in visual scripting).\n";
-    const char* groups[] = {"Lifecycle", "Globals", "Game", "World", "Input", "Players", "Events", "Entity"};
+    const char* groups[] = {"Lifecycle", "Globals", "Game", "World", "Input", "Players", "Data", "Events", "Entity"};
     const char* intro[] = {
         "Functions a behaviour table may define. The engine calls them; see the lifecycle rules in scripting.md.",
         "Global functions.",
@@ -1147,6 +1246,8 @@ std::string generateApiReferenceMarkdown() {
         "Input actions defined in the project's `input.actions`.",
         "The people playing. Each has a character: a copy of the scene's Player entity in multiplayer, the "
         "scene's Player entity when playing alone.",
+        "Saved player data: values kept for each player between visits (docs/platform.md#saved-player-data). "
+        "Loaded before PlayerJoined, saved while they play and when they leave.",
         "Custom events between scripts. Values must be serializable.",
         "An `Entity` is a handle to a scene entity. Properties need the named component; accessing a "
         "destroyed entity is an error except `isValid()`. Writable properties can only be assigned by "
