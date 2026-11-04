@@ -16,11 +16,7 @@ Result<std::unique_ptr<SdlPlatform>> SdlPlatform::create(const WindowSettings& s
     // Android's back button reaches the game (it opens the menu) instead of
     // closing the app.
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
-    // Phones and tablets: hold the screen the way the game is shaped
-    // (otherwise SDL lets a resizable window turn with the device).
-    SDL_SetHint(SDL_HINT_ORIENTATIONS, settings.virtualResolution.x >= settings.virtualResolution.y
-                                           ? "LandscapeLeft LandscapeRight"
-                                           : "Portrait PortraitUpsideDown");
+
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         return makeError(ErrorCode::Unsupported, "Could not initialise SDL video: {}", SDL_GetError());
     }
@@ -33,8 +29,14 @@ Result<std::unique_ptr<SdlPlatform>> SdlPlatform::create(const WindowSettings& s
     std::unique_ptr<SdlPlatform> platform(new SdlPlatform());
     const int width = settings.virtualResolution.x * settings.windowScale;
     const int height = settings.virtualResolution.y * settings.windowScale;
-    if (!SDL_CreateWindowAndRenderer(settings.title.c_str(), width, height,
-                                     SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY, &platform->m_window,
+#if defined(SDL_PLATFORM_ANDROID) || defined(SDL_PLATFORM_IOS)
+    // Phones and tablets: full screen, held the way the game is shaped (a
+    // fixed window makes SDL keep the orientation the app declares).
+    const SDL_WindowFlags flags = SDL_WINDOW_FULLSCREEN | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#else
+    const SDL_WindowFlags flags = SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY;
+#endif
+    if (!SDL_CreateWindowAndRenderer(settings.title.c_str(), width, height, flags, &platform->m_window,
                                      &platform->m_renderer)) {
         return makeError(ErrorCode::Unsupported, "Could not create a window and renderer: {}", SDL_GetError());
     }
