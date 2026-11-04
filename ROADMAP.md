@@ -257,10 +257,11 @@ Next for these tools (not part of the milestone):
 
 Scope agreed with the founder: the core loop end to end; profiles, friends
 and fuller moderation tools later. Verified in CI on Linux (GCC, Clang,
-AddressSanitizer + UBSan, headless), Windows (MSVC) and macOS, where an
-end-to-end test publishes the examples, starts real game servers through the
-platform, plays on them over UDP and checks the saved data; used on Linux
-with px-platform, Studio's Platform panel, px-player and px-headless bots.
+AddressSanitizer + UBSan, headless), Windows (MSVC) and macOS, and with the
+MinGW-w64 build under Wine 9, where an end-to-end test publishes the
+examples, starts real game servers through the platform, plays on them over
+UDP and checks the saved data; used on Linux with px-platform, Studio's
+Platform panel, px-player and px-headless bots.
 
 - [x] `px-platform` ([docs/platform.md](docs/platform.md), ADR 0021): C++
       service in this repository, HTTP/JSON API, SQLite, rate limits

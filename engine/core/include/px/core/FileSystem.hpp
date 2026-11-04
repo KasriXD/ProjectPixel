@@ -18,6 +18,11 @@ namespace px {
 // "a/./b//c.png" -> "a/b/c.png".
 [[nodiscard]] Result<std::string> normalizeRelativePath(std::string_view path);
 
+// Reads a whole local file (a tool argument or a program's own file, not
+// project content: that goes through IFileSystem).
+[[nodiscard]] Result<std::vector<std::uint8_t>> readLocalFile(const std::filesystem::path& file,
+                                                              std::size_t maxBytes = 512u << 20);
+
 // Read access to a tree of files addressed by normalized relative paths.
 // Abstracts over disk directories today and app bundles (Android/iOS),
 // browser storage and downloaded packages later.

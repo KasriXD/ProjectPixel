@@ -166,16 +166,9 @@ Result<Package> decodePackage(std::span<const std::uint8_t> bytes) {
 }
 
 Result<Package> readPackageFile(const std::filesystem::path& file) {
-    std::error_code ec;
-    const auto size = std::filesystem::file_size(file, ec);
-    if (ec) return makeError(ErrorCode::NotFound, "Cannot read {}: {}", file.string(), ec.message());
-    if (size > kMaxPackageBytes * 2) return makeError(ErrorCode::LimitExceeded, "{} is too large", file.string());
-    std::ifstream in(file, std::ios::binary);
-    std::vector<std::uint8_t> bytes(static_cast<std::size_t>(size));
-    if (!in.read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()))) {
-        return makeError(ErrorCode::IoError, "Cannot read {}", file.string());
-    }
-    return decodePackage(bytes);
+    auto bytes = readLocalFile(file, kMaxPackageBytes * 2);
+    if (!bytes) return bytes.error();
+    return decodePackage(bytes.value());
 }
 
 Status writePackageFile(const std::filesystem::path& file, const Package& package) {

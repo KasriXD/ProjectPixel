@@ -1,5 +1,6 @@
 #include "px/online/PlatformClient.hpp"
 
+#include "px/core/FileSystem.hpp"
 #include "px/crypto/Crypto.hpp"
 #include "px/crypto/Encoding.hpp"
 #include "px/online/WireJson.hpp"
@@ -372,9 +373,8 @@ Result<std::vector<std::uint8_t>> PackageCache::get(PlatformClient& client, cons
     const auto file = pathFor(hash);
     std::error_code ec;
     if (std::filesystem::exists(file, ec)) {
-        std::ifstream in(file, std::ios::binary);
-        std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        if (crypto::constantTimeEqual(crypto::hash256(bytes), *expected)) return bytes;
+        auto bytes = readLocalFile(file);
+        if (bytes && crypto::constantTimeEqual(crypto::hash256(bytes.value()), *expected)) return bytes;
         std::filesystem::remove(file, ec); // damaged: download again
     }
     auto bytes = client.downloadPackage(hash);

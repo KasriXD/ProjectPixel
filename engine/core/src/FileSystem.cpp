@@ -82,6 +82,20 @@ std::string DirectoryFileSystem::describe(std::string_view path) const {
     return (m_root / std::filesystem::path(std::string(path))).generic_string();
 }
 
+Result<std::vector<std::uint8_t>> readLocalFile(const std::filesystem::path& file, std::size_t maxBytes) {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(file, ec);
+    if (ec) return makeError(ErrorCode::NotFound, "Cannot read {}: {}", file.generic_string(), ec.message());
+    if (size > maxBytes) return makeError(ErrorCode::LimitExceeded, "{} is too large", file.generic_string());
+    std::ifstream in(file, std::ios::binary);
+    if (!in) return makeError(ErrorCode::IoError, "Cannot open {}", file.generic_string());
+    std::vector<std::uint8_t> data(static_cast<std::size_t>(size));
+    if (size > 0 && !in.read(reinterpret_cast<char*>(data.data()), static_cast<std::streamsize>(size))) {
+        return makeError(ErrorCode::IoError, "Cannot read {}", file.generic_string());
+    }
+    return data;
+}
+
 Result<std::vector<std::uint8_t>> DirectoryFileSystem::readBinary(std::string_view path) const {
     auto normalized = normalizeRelativePath(path);
     if (!normalized) return normalized.error();

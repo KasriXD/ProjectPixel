@@ -337,8 +337,9 @@ TEST_CASE("Netgame: platform servers take only valid connect tokens and keep sav
     REQUIRE(slot != nullptr);
     REQUIRE(slot->data.get("coins") != nullptr);
     CHECK(std::get<double>(*slot->data.get("coins")) == 5.0);
-    std::ifstream route(std::string(PX_EXAMPLES_DIR) + "/platformer/tests/full_run.input");
-    const std::string text((std::istreambuf_iterator<char>(route)), std::istreambuf_iterator<char>());
+    const auto route = readLocalFile(std::string(PX_EXAMPLES_DIR) + "/platformer/tests/full_run.input");
+    REQUIRE(route.ok());
+    const std::string text(route->begin(), route->end());
     h.play(0, text);
     h.run(1100);
     const int collected = h.server->session().state().score; // each coin is worth 1

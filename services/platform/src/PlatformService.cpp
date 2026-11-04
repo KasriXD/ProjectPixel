@@ -573,9 +573,9 @@ struct PlatformService::Impl {
         }
         auto report = online::reportFromJson(run->output);
         if (!report) throw std::runtime_error(report.error().message);
-        std::ifstream in(checked, std::ios::binary);
-        const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-        if (bytes.empty()) throw std::runtime_error("the checker wrote no package");
+        auto read = readLocalFile(checked);
+        if (!read || read->empty()) throw std::runtime_error("the checker wrote no package");
+        const std::vector<std::uint8_t>& bytes = read.value();
         const std::string hash = crypto::toHex(crypto::hash256(bytes));
         const auto stored = packagePath(hash);
         if (!std::filesystem::exists(stored, ec)) {
