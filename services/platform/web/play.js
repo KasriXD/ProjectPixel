@@ -190,6 +190,8 @@
       canvas.addEventListener('contextmenu', (e) => e.preventDefault());
       window.Module = {
         canvas,
+        // px-player.wasm and .data next to px-player.js, not next to this page.
+        locateFile: (path) => '/play/player/' + path,
         noUrlArguments: true,
         pxPackage: pkg,
         arguments: ['--package', '/game.pxpkg', '--connect', ticket.webSocket, '--token', ticket.token,
