@@ -229,3 +229,66 @@ jobs:
             build/wasm/apps/player/px-player.js
             build/wasm/apps/player/px-player.wasm
             build/wasm/apps/player/px-player.data
+
+  crossplay:
+    name: Browser cross-play
+    needs: wasm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Platform, server and bot (headless build)
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+          cmake --preset headless 2>&1 | tee configure.log
+          cmake --build --preset headless --parallel --target px_platform px_server px_headless 2>&1 | tee build.log
+
+      - name: Browser player from the WebAssembly job
+        uses: actions/download-artifact@v4
+        with:
+          name: px-player-web
+          path: web-download
+
+      - name: Headless Chromium
+        shell: bash
+        run: |
+          cd tools/browser
+          npm install --no-save --no-audit --no-fund playwright@1.49.1 > ../../browser-setup.log 2>&1
+          npx playwright install --with-deps chromium >> ../../browser-setup.log 2>&1
+
+      - name: Play together over HTTP and HTTPS
+        shell: bash
+        run: |
+          set +e
+          report() { # title, file, level
+            local body
+            body=$(tail -c 6000 "$2" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            echo "::$3 title=$1::${body}"
+          }
+          web=web-download/build/wasm/apps/player
+          failed=0
+          for mode in http https; do
+            tools/browser/crossplay.sh build/headless "$web" crossplay "$mode" > "crossplay-$mode.log" 2>&1
+            status=$?
+            cat "crossplay-$mode.log"
+            if [ $status -ne 0 ]; then
+              report "Cross-play over $mode failed" "crossplay-$mode.log" error
+              failed=1
+            else
+              grep -E "PASSED|Finished|^bot:" "crossplay-$mode.log" > "crossplay-$mode-summary.log"
+              report "Cross-play over $mode" "crossplay-$mode-summary.log" notice
+            fi
+          done
+          exit $failed
+
+      - name: Upload cross-play results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crossplay
+          path: |
+            crossplay-*.log
+            crossplay/*.png
+            crossplay/*.log

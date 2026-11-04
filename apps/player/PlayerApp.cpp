@@ -68,6 +68,7 @@ const char* playerUsage() {
            "                      given with --user NAME --password TEXT [--register]\n"
            "  --window-pos X,Y    place the window at this screen position\n"
            "  --frames N          run exactly N frames, one simulation tick per frame, then exit\n"
+           "                      (online: N ticks on the server, at its pace)\n"
            "  --screenshot FILE   with --frames: save the last frame as a PNG\n"
            "  --input-script FILE play scripted input (see docs/input-scripts.md)\n"
            "  --debug             start with the debug overlay (toggle with F1)\n"
@@ -497,7 +498,10 @@ runtime::InputFrame PlayerApp::nextInput() {
 void PlayerApp::runTick() {
     if (networked()) {
         if (m_hostServer) m_hostServer->tick();
+        // Input (and a scripted route) starts once the server has let us in.
+        if (m_net->status() != net::GameClient::Status::Playing) return;
         m_net->tick(nextInput());
+        ++m_netTicks;
         return;
     }
     m_session->tick(nextInput());
@@ -527,10 +531,22 @@ PlayerApp::Status PlayerApp::iterate() {
 
     handleMenuInput();
     if (m_quitRequested) return Status::Success;
-    // Deterministic runs advance exactly one tick per frame regardless of speed.
-    int steps = m_deterministic ? 1 : m_clock.advance(elapsed);
+    // Deterministic runs alone advance exactly one tick per frame regardless
+    // of speed; online the server's clock rules, so ticks follow real time.
+    int steps = m_deterministic && !networked() ? 1 : m_clock.advance(elapsed);
     if (m_menuOpen && !networked()) steps = 0; // playing alone, the menu pauses the game
-    if (networked()) m_net->receive(now);
+    if (networked()) {
+        m_net->receive(now);
+        if (const int status = static_cast<int>(m_net->status()); status != m_netStatus) {
+            m_netStatus = status;
+            if (m_net->status() == net::GameClient::Status::Disconnected) log::warn("{}", m_net->statusText());
+        }
+        const auto& g = m_net->game();
+        m_netMostPlayers = std::max(m_netMostPlayers, g.players.size());
+        if (g.levelComplete && !m_netLevelComplete) log::info("Level complete (online), score {}", g.score);
+        m_netLevelComplete = g.levelComplete;
+        m_netCompletedOnce = m_netCompletedOnce || g.levelComplete;
+    }
     for (int i = 0; i < steps; ++i) runTick();
     if (networked()) m_net->updateView(now);
 
@@ -552,12 +568,18 @@ PlayerApp::Status PlayerApp::iterate() {
         if (spent < frame) SDL_DelayPrecise(static_cast<Uint64>((frame - spent) * 1.0e9));
     }
 #endif
-    if (m_options.frames > 0 && m_frame >= m_options.frames) {
-        if (networked()) {
-            log::info("Finished {} frames: {}, score {}, {} players", m_frame, m_net->statusText(), m_net->game().score,
-                      m_net->game().players.size());
+    if (m_options.frames > 0 && networked()) {
+        // Online, --frames counts ticks played on the server (or ends at a disconnect).
+        const bool gone = m_net->status() == net::GameClient::Status::Disconnected;
+        if (m_netTicks >= m_options.frames || gone) {
+            log::info("Finished {} ticks online: {}, score {}, level complete: {}, {} players (most at once {})",
+                      m_netTicks, m_net->statusText(), m_net->game().score, m_netCompletedOnce,
+                      m_net->game().players.size(), m_netMostPlayers);
             return Status::Success;
         }
+        return Status::Continue;
+    }
+    if (m_options.frames > 0 && m_frame >= m_options.frames) {
         const auto& state = m_session->state();
         log::info("Finished {} frames: score {}, objective \"{}\", level complete: {}, {} respawns, {} script errors",
                   m_frame, state.score, state.objective, state.levelComplete, state.respawns, state.scriptErrors);

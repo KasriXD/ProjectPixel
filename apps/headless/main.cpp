@@ -75,6 +75,7 @@ struct Options {
     bool udp = false;
     int port = 0;
     bool expectJoined = false;
+    int expectPlayers = 0;
     // Platform tools (docs/platform.md#command-line-tools).
     std::string platformUrl;
     std::string user;
@@ -97,7 +98,7 @@ void printUsage() {
                  "                                             animations, tilesets and visual scripts\n"
                  "                                             as Studio saves them)\n"
                  "       px-headless <project-dir> --connect ADDRESS[:PORT] [--name NAME]\n"
-                 "                   [--input-script FILE] [--ticks N] [--expect-joined]\n"
+                 "                   [--input-script FILE] [--ticks N] [--expect-joined] [--expect-players N]\n"
                  "                                            (join a px-server as a scripted bot)\n"
                  "       px-headless <project-dir> --net-test [--clients N] [--latency MS] [--jitter MS]\n"
                  "                   [--loss PCT] [--udp] [--port N] [--input-script FILE] [--ticks N]\n"
@@ -185,6 +186,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             if (!parseInt(needValue(), o.port) || o.port < 1 || o.port > 65535) return std::nullopt;
         } else if (arg == "--expect-joined") {
             o.expectJoined = true;
+        } else if (arg == "--expect-players") {
+            if (!parseInt(needValue(), o.expectPlayers) || o.expectPlayers < 1) return std::nullopt;
         } else if (arg == "--verbose") {
             o.verbose = true;
         } else if (arg == "--print-api-reference") {
@@ -507,6 +510,7 @@ int main(int argc, char** argv) {
             net.expectLevelComplete = options->expectLevelComplete;
             net.expectNoScriptErrors = options->expectNoScriptErrors;
             net.expectJoined = options->expectJoined;
+            net.expectPlayers = options->expectPlayers;
             return playCommand(*options, std::move(net));
         }
         log::error("--platform goes with --publish or --play ID");
@@ -566,6 +570,7 @@ int main(int argc, char** argv) {
         net.expectLevelComplete = options->expectLevelComplete;
         net.expectNoScriptErrors = options->expectNoScriptErrors;
         net.expectJoined = options->expectJoined;
+        net.expectPlayers = options->expectPlayers;
         if (!options->inputScriptPath.empty()) {
             const std::filesystem::path scriptPath(options->inputScriptPath);
             DirectoryFileSystem scriptDir(scriptPath.parent_path().empty() ? "." : scriptPath.parent_path());

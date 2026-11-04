@@ -1,12 +1,21 @@
 # px-platform: accounts, catalog, publishing, game servers, saved data and
 # moderation over HTTP (docs/platform.md). The service itself is a library
 # so the tests can run it in-process.
+include("${PROJECT_SOURCE_DIR}/cmake/EmbedFiles.cmake")
+set(_px_web "${CMAKE_CURRENT_SOURCE_DIR}/web")
+px_embed_files(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/WebFiles.generated.cpp"
+    NAMESPACE px::platform FUNCTION findWebFile HEADER WebFiles.hpp
+    FILES "play.html=${_px_web}/play.html=text/html"
+          "play.js=${_px_web}/play.js=text/javascript"
+          "play.css=${_px_web}/play.css=text/css")
+
 add_library(px_platform_service STATIC
     src/Certificates.cpp
     src/Database.cpp
     src/Fleet.cpp
     src/PlatformService.cpp
-    src/Process.cpp)
+    src/Process.cpp
+    "${CMAKE_CURRENT_BINARY_DIR}/WebFiles.generated.cpp")
 target_include_directories(px_platform_service PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(px_platform_service
     PUBLIC px::core px::crypto px::online px::net

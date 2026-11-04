@@ -29,6 +29,7 @@ struct NetToolOptions {
     bool expectLevelComplete = false;
     bool expectNoScriptErrors = false;
     bool expectJoined = false;
+    int expectPlayers = 0; // bot: at least this many players at once, at some point
 };
 
 // Exit codes as px-headless: 0 fine, 1 error, 3 an expectation failed.

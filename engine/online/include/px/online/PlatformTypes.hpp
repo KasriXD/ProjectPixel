@@ -128,6 +128,7 @@ struct PlatformInfo {
     std::string engineVersion;
     int apiVersion = kPlatformApiVersion;
     std::string publicKey; // hex: verifies connect tokens
+    bool webPlayer = false; // games can be played in a browser at /play
 };
 
 } // namespace px::online

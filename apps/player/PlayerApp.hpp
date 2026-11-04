@@ -127,6 +127,11 @@ private:
     int m_fpsFrames = 0;
     double m_fps = 0.0;
     int m_frame = 0;
+    int m_netTicks = 0;              // ticks played online (with --frames, online runs count these)
+    std::size_t m_netMostPlayers = 0;
+    bool m_netLevelComplete = false; // as last received
+    bool m_netCompletedOnce = false;
+    int m_netStatus = -1;            // last logged net::GameClient::Status
     int m_screenshotCounter = 0;
     std::filesystem::path m_pendingScreenshot;
     bool m_showDebug = false;

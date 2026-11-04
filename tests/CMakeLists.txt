@@ -30,7 +30,7 @@ target_compile_definitions(px_tests PRIVATE
 px_target_defaults(px_tests)
 if(PX_ENABLE_PLATFORM)
     target_sources(px_tests PRIVATE test_platform.cpp)
-    target_link_libraries(px_tests PRIVATE px::online px_platform_service)
+    target_link_libraries(px_tests PRIVATE px::online px_platform_service px_httplib)
     target_compile_definitions(px_tests PRIVATE PX_HAVE_PLATFORM=1
         PX_HEADLESS_EXE="$<TARGET_FILE:px_headless>"
         PX_SERVER_EXE="$<TARGET_FILE:px_server>")

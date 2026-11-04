@@ -142,13 +142,15 @@ void to_json(nlohmann::json& j, const PlatformInfo& v) {
     j = {{"name", v.name},
          {"engineVersion", v.engineVersion},
          {"apiVersion", v.apiVersion},
-         {"publicKey", v.publicKey}};
+         {"publicKey", v.publicKey},
+         {"webPlayer", v.webPlayer}};
 }
 void from_json(const nlohmann::json& j, PlatformInfo& v) {
     v.name = j.at("name").get<std::string>();
     v.engineVersion = j.at("engineVersion").get<std::string>();
     v.apiVersion = j.at("apiVersion").get<int>();
     v.publicKey = j.at("publicKey").get<std::string>();
+    v.webPlayer = j.value("webPlayer", false);
 }
 
 } // namespace px::online

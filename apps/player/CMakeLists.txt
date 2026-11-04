@@ -6,11 +6,14 @@ px_target_defaults(px_player)
 
 if(EMSCRIPTEN)
     # Browser build: the example project is packaged into px-player.data and
-    # mounted at /examples/platformer in the in-memory file system.
+    # mounted at /examples/platformer in the in-memory file system (with the
+    # top-down example's routes, for the browser cross-play test). Platform
+    # games arrive as packages (web/pre.js).
     set_target_properties(px_player PROPERTIES SUFFIX ".html")
     target_compile_definitions(px_player PRIVATE PX_DEFAULT_PROJECT_DIR="/examples/platformer")
     target_link_options(px_player PRIVATE
         "--preload-file=${PX_EXAMPLES_DIR}/platformer@/examples/platformer"
+        "--preload-file=${PX_EXAMPLES_DIR}/topdown/tests@/examples/topdown/tests"
         "--pre-js=${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
     set_property(TARGET px_player APPEND PROPERTY LINK_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/web/pre.js")
 else()

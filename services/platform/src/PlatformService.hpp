@@ -50,6 +50,10 @@ struct ServiceConfig {
     std::string httpsBindAddress;           // default: bindAddress
     std::filesystem::path tlsCert;          // PEM certificate (chain)
     std::filesystem::path tlsKey;           // PEM private key
+    // The browser player (docs/platform.md#browsers): a folder with
+    // px-player.js, px-player.wasm and px-player.data from the WebAssembly
+    // build, served at /play/player/. Empty: no browser play.
+    std::filesystem::path webPlayerDir;
     std::size_t threads = 32; // joins wait for new game servers, which call back on other threads
 };
 

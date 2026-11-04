@@ -7,6 +7,7 @@
 #include "px/net/Udp.hpp"
 #include "px/net/WebSocket.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -58,10 +59,12 @@ int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
     int played = 0;
     bool joined = false;
     bool completed = false; // the server restarts the level some seconds after it is complete
+    std::size_t mostPlayers = 0;
     while (played < playTicks && client.status() != net::GameClient::Status::Disconnected) {
         const double now = std::chrono::duration<double>(Clock::now() - start).count();
         client.receive(now);
         completed = completed || client.game().levelComplete;
+        mostPlayers = std::max(mostPlayers, client.game().players.size());
         if (client.status() == net::GameClient::Status::Playing) {
             joined = true;
             client.tick(script ? script->next() : runtime::InputFrame{});
@@ -73,11 +76,11 @@ int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
     }
     const auto stats = client.stats();
     const auto pos = client.predictedPosition();
-    std::printf("bot: %s%s%s, played %d ticks, score=%d levelCompleted=%s players=%zu snapshots=%llu "
+    std::printf("bot: %s%s%s, played %d ticks, score=%d levelCompleted=%s players=%zu mostPlayers=%zu snapshots=%llu "
                 "corrections=%llu rtt=%.0fms position=%s\n",
                 statusName(client.status()), client.status() == net::GameClient::Status::Disconnected ? ": " : "",
                 client.status() == net::GameClient::Status::Disconnected ? client.statusText().c_str() : "", played,
-                client.game().score, completed ? "true" : "false", client.game().players.size(),
+                client.game().score, completed ? "true" : "false", client.game().players.size(), mostPlayers,
                 static_cast<unsigned long long>(stats.snapshots), static_cast<unsigned long long>(stats.corrections),
                 stats.roundTripMs, pos ? std::format("({:.2f}, {:.2f})", pos->x, pos->y).c_str() : "none");
     client.disconnect();
@@ -87,6 +90,10 @@ int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
     }
     if (options.expectLevelComplete && !completed) {
         log::error("Expected the level to be completed");
+        return 3;
+    }
+    if (options.expectPlayers > 0 && mostPlayers < static_cast<std::size_t>(options.expectPlayers)) {
+        log::error("Expected {} players at once, saw at most {}", options.expectPlayers, mostPlayers);
         return 3;
     }
     return 0;

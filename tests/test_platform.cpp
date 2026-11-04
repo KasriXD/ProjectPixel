@@ -6,6 +6,9 @@
 #include "px/runtime/GameLoader.hpp"
 
 #include <doctest.h>
+#include <httplib.h>
+
+#include <fstream>
 
 using namespace px;
 using namespace px::online;
@@ -248,6 +251,70 @@ TEST_CASE("Platform: HTTPS with a development certificate") {
     std::filesystem::remove_all(certDir);
 }
 #endif
+
+TEST_CASE("Platform: the browser page and player files") {
+    // Without a web player: the page says so, the player files are missing.
+    {
+        TestPlatform p;
+        auto info = p.client().info();
+        REQUIRE(info.ok());
+        CHECK_FALSE(info->webPlayer);
+        httplib::Client http(p.service->url());
+        auto page = http.Get("/play");
+        REQUIRE(page);
+        CHECK(page->status == 200);
+        CHECK(page->get_header_value("Content-Type") == "text/html; charset=utf-8");
+        CHECK(contains(page->get_header_value("Content-Security-Policy"), "script-src 'self' 'wasm-unsafe-eval'"));
+        CHECK(contains(page->get_header_value("Content-Security-Policy"), "frame-ancestors 'none'"));
+        CHECK(page->get_header_value("X-Frame-Options") == "DENY");
+        CHECK(page->get_header_value("X-Content-Type-Options") == "nosniff");
+        CHECK(contains(page->body, "<script src=\"/play/play.js\" defer>"));
+        auto script = http.Get("/play/play.js");
+        REQUIRE(script);
+        CHECK(script->status == 200);
+        CHECK(script->get_header_value("Content-Type") == "text/javascript; charset=utf-8");
+        CHECK(contains(script->body, "noUrlArguments: true"));
+        CHECK(http.Get("/play/play.css")->status == 200);
+        CHECK(http.Get("/play/other.js")->status == 404);
+        CHECK(http.Get("/play/player/px-player.js")->status == 404);
+        CHECK(http.Get("/api/v1/games")->get_header_value("X-Content-Type-Options") == "nosniff");
+    }
+    // With one: served with an ETag; only the player's own files.
+    const auto web = pxtest::tempDir("web");
+    {
+        std::ofstream(web / "px-player.js") << "console.log('player');";
+        std::ofstream(web / "px-player.wasm", std::ios::binary) << std::string("\0asm\1\0\0\0", 8);
+        std::ofstream(web / "px-player.data", std::ios::binary) << "data";
+        std::ofstream(web / "secret.txt") << "not served";
+    }
+    TestPlatform p(false, 0, [&](platform::ServiceConfig& c) { c.webPlayerDir = web; });
+    auto info = p.client().info();
+    REQUIRE(info.ok());
+    CHECK(info->webPlayer);
+    httplib::Client http(p.service->url());
+    auto js = http.Get("/play/player/px-player.js");
+    REQUIRE(js);
+    CHECK(js->status == 200);
+    CHECK(js->body == "console.log('player');");
+    CHECK(js->get_header_value("Content-Type") == "text/javascript; charset=utf-8");
+    const std::string etag = js->get_header_value("ETag");
+    CHECK_FALSE(etag.empty());
+    auto again = http.Get("/play/player/px-player.js", httplib::Headers{{"If-None-Match", etag}});
+    REQUIRE(again);
+    CHECK(again->status == 304);
+    CHECK(again->body.empty());
+    auto wasm = http.Get("/play/player/px-player.wasm");
+    REQUIRE(wasm);
+    CHECK(wasm->get_header_value("Content-Type") == "application/wasm");
+    CHECK(wasm->body.size() == 8);
+    CHECK(http.Get("/play/player/px-player.data")->body == "data");
+    CHECK(http.Get("/play/player/secret.txt")->status == 404);
+    CHECK(http.Get("/play/player/..%2Fsecret.txt")->status == 404);
+    auto home = http.Get("/");
+    REQUIRE(home);
+    CHECK(contains(home->body, "href=\"/play\""));
+    std::filesystem::remove_all(web);
+}
 
 TEST_CASE("Platform: rate limits and unknown game servers") {
     TestPlatform p(true);

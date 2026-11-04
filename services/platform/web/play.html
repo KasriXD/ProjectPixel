@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Play</title>
+<link rel="stylesheet" href="/play/play.css">
+<script src="/play/play.js" defer></script>
+</head>
+<body>
+<header>
+  <a class="brand" href="/play" id="platform-name">Project Pixel</a>
+  <span id="who" hidden><span id="who-name"></span><button id="logout" type="button" class="quiet">Log out</button></span>
+</header>
+<main>
+  <p id="message" role="alert" hidden></p>
+
+  <section id="login" hidden>
+    <h1>Play in your browser</h1>
+    <p class="lead">Log in, or make an account, to join games with players on computers and phones.</p>
+    <form id="login-form">
+      <label>Name <input id="username" autocomplete="username" required maxlength="20" spellcheck="false" autocapitalize="off"></label>
+      <label>Password <input id="password" type="password" autocomplete="current-password" required maxlength="200"></label>
+      <div class="buttons">
+        <button type="submit">Log in</button>
+        <button type="button" id="register" class="secondary">Create account</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="catalog" hidden>
+    <div class="bar">
+      <h1>Games</h1>
+      <input id="search" type="search" placeholder="Search" maxlength="100" aria-label="Search games">
+    </div>
+    <ul id="games"></ul>
+    <p id="no-games" class="lead" hidden>No games found.</p>
+  </section>
+
+  <section id="game" hidden>
+    <div class="bar">
+      <h1 id="game-title"></h1>
+      <span class="buttons">
+        <button type="button" id="fullscreen" class="secondary">Full screen</button>
+        <button type="button" id="back">Back to games</button>
+      </span>
+    </div>
+    <div id="stage"><canvas id="canvas" tabindex="0"></canvas></div>
+    <p id="game-status" role="status"></p>
+    <p class="hint">Arrows or WASD move, Space jumps, Esc opens the menu. Gamepads work too; on touch screens, use the buttons on the screen.</p>
+  </section>
+
+  <section id="unavailable" hidden>
+    <h1>No browser play here</h1>
+    <p class="lead">This platform has no browser player installed. Play its games with the Project Pixel player app.</p>
+  </section>
+</main>
+</body>
+</html>

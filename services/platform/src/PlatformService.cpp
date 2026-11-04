@@ -1,6 +1,7 @@
 #include "PlatformService.hpp"
 
 #include "Database.hpp"
+#include "WebFiles.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
 #include "px/crypto/Encoding.hpp"
@@ -944,7 +945,68 @@ struct PlatformService::Impl {
     }
 
     // --- a page for browsers -------------------------------------------------------------------
+    // --- handlers: the browser page and player (docs/platform.md#browsers) ------------------
+    [[nodiscard]] bool hasWebPlayer() const {
+        std::error_code ec;
+        return !s.m_config.webPlayerDir.empty() &&
+               std::filesystem::is_regular_file(s.m_config.webPlayerDir / "px-player.js", ec);
+    }
+
+    static void pageHeaders(httplib::Response& res) {
+        // Scripts only from here (WebAssembly needs 'wasm-unsafe-eval'); game
+        // servers are reached over ws: / wss: on their own ports.
+        res.set_header("Content-Security-Policy",
+                       "default-src 'none'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; "
+                       "connect-src 'self' ws: wss:; img-src 'self' data: blob:; base-uri 'none'; "
+                       "form-action 'self'; frame-ancestors 'none'");
+        res.set_header("X-Frame-Options", "DENY");
+        res.set_header("Referrer-Policy", "no-referrer");
+        res.set_header("Cache-Control", "no-cache");
+    }
+
+    void playPage(const httplib::Request& req, httplib::Response& res) {
+        const std::string name = req.matches.size() > 1 && req.matches[1].matched ? req.matches[1].str() : "play.html";
+        const auto file = findWebFile(name);
+        if (!file) fail(404, "not_found", "There is no such page");
+        pageHeaders(res);
+        res.set_content(std::string(file->content), file->contentType);
+    }
+
+    // px-player.js / .wasm / .data from the WebAssembly build, revalidated
+    // with an ETag so browsers keep their copy until it changes.
+    void playerFile(const httplib::Request& req, httplib::Response& res) {
+        const std::string name = req.matches[1].str();
+        if (!hasWebPlayer()) fail(404, "not_found", "This platform has no browser player");
+        const auto file = s.m_config.webPlayerDir / name;
+        std::error_code ec;
+        const auto size = std::filesystem::file_size(file, ec);
+        const auto written = ec ? std::filesystem::file_time_type{} : std::filesystem::last_write_time(file, ec);
+        if (ec) fail(404, "not_found", "There is no such file");
+        const std::string etag =
+            std::format("\"{:x}-{:x}\"", size, static_cast<std::uint64_t>(written.time_since_epoch().count()));
+        res.set_header("ETag", etag);
+        res.set_header("Cache-Control", "no-cache");
+        if (req.get_header_value("If-None-Match") == etag) {
+            res.status = 304;
+            return;
+        }
+        const std::string type = name.ends_with(".wasm") ? "application/wasm"
+                                 : name.ends_with(".js") ? "text/javascript; charset=utf-8"
+                                                         : "application/octet-stream";
+        auto stream = std::make_shared<std::ifstream>(file, std::ios::binary);
+        res.set_content_provider(static_cast<std::size_t>(size), type,
+                                 [stream](std::size_t offset, std::size_t length, httplib::DataSink& sink) {
+                                     std::vector<char> buffer(std::min<std::size_t>(length, 256 * 1024));
+                                     stream->seekg(static_cast<std::streamoff>(offset));
+                                     stream->read(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+                                     const auto n = stream->gcount();
+                                     if (n <= 0) return false;
+                                     return sink.write(buffer.data(), static_cast<std::size_t>(n));
+                                 });
+    }
+
     void home(const httplib::Request&, httplib::Response& res) {
+        const bool webPlayer = hasWebPlayer();
         std::string rows;
         {
             std::lock_guard lock(s.m_dbMutex);
@@ -954,18 +1016,21 @@ struct PlatformService::Impl {
                 kGameColumns));
             while (st.step()) {
                 const GameRow row = readGame(st);
-                rows += std::format("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td><code>px-player --platform {} "
+                const std::string browser =
+                    webPlayer ? std::format("<a href=\"/play#game={}\">Play in the browser</a> or ", row.info.id) : "";
+                rows += std::format("<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}<code>px-player --platform {} "
                                     "--play {}</code></td></tr>\n",
                                     row.info.id, htmlEscape(row.info.title), htmlEscape(row.info.ownerName),
-                                    row.info.plays, htmlEscape(s.url()), row.info.id);
+                                    row.info.plays, browser, htmlEscape(s.url()), row.info.id);
             }
         }
         const std::string page = std::format(
             "<!doctype html><html><head><meta charset=\"utf-8\"><title>{0}</title>"
             "<style>body{{font-family:sans-serif;margin:2em;max-width:60em}}td,th{{padding:.3em .8em;text-align:left}}"
-            "</style></head><body><h1>{0}</h1><p>Platform for Project Pixel {1}. Play from the player app or Studio.</p>"
+            "</style></head><body><h1>{0}</h1><p>Platform for Project Pixel {1}. Play from the player app, Studio{3}.</p>"
             "<table><tr><th>Id</th><th>Game</th><th>By</th><th>Plays</th><th>Play</th></tr>{2}</table></body></html>",
-            htmlEscape(s.m_config.name), version::string, rows);
+            htmlEscape(s.m_config.name), version::string, rows,
+            webPlayer ? " or <a href=\"/play\">your browser</a>" : "");
         res.set_content(page, "text/html; charset=utf-8");
     }
 };
@@ -1122,10 +1187,18 @@ void PlatformService::registerRoutes(httplib::Server& http) {
     const auto bind = [&i](void (Impl::*fn)(const httplib::Request&, httplib::Response&)) {
         return i.wrap([&i, fn](const httplib::Request& req, httplib::Response& res) { (i.*fn)(req, res); });
     };
+    // Every answer: no guessing of content types by browsers.
+    http.set_post_routing_handler([](const httplib::Request&, httplib::Response& res) {
+        res.set_header("X-Content-Type-Options", "nosniff");
+    });
     http.Get("/", bind(&Impl::home));
+    http.Get("/play", bind(&Impl::playPage));
+    http.Get("/play/", i.wrap([](const httplib::Request&, httplib::Response& res) { res.set_redirect("/play"); }));
+    http.Get(R"(/play/(play\.(?:js|css)))", bind(&Impl::playPage));
+    http.Get(R"(/play/player/(px-player\.(?:js|wasm|data)))", bind(&Impl::playerFile));
     http.Get("/api/v1/platform", i.wrap([this](const httplib::Request&, httplib::Response& res) {
         online::PlatformInfo info{m_config.name, std::string(version::string), online::kPlatformApiVersion,
-                                  crypto::toHex(m_key.publicKey)};
+                                  crypto::toHex(m_key.publicKey), m_impl->hasWebPlayer()};
         sendJson(res, 200, info);
     }));
     http.Post("/api/v1/accounts", bind(&Impl::registerAccount));

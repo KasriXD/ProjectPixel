@@ -7,6 +7,7 @@
 //   px-platform --data DIR --make-admin NAME
 //   px-platform --data DIR --dev-certificate HOST[,HOST...]
 //   HTTPS: --https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]
+//   Browsers: --web-player DIR (the WebAssembly player, served at /play)
 #include "Certificates.hpp"
 #include "PlatformService.hpp"
 #include "px/core/Log.hpp"
@@ -33,6 +34,7 @@ void usage() {
                  "                   [--platform-url URL] [--name NAME] [--server-ports FIRST:COUNT]\n"
                  "                   [--max-servers N] [--headless FILE] [--server FILE] [--no-rate-limits]\n"
                  "                   [--https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]]\n"
+                 "                   [--web-player DIR]   (px-player.js/.wasm/.data: play in browsers at /play)\n"
                  "       px-platform --data DIR --make-admin NAME\n"
                  "       px-platform --data DIR --dev-certificate HOST[,HOST...]   (self-signed, for testing HTTPS)\n"
                  "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n",
@@ -62,6 +64,10 @@ int main(int argc, char** argv) {
     const std::filesystem::path self = std::filesystem::absolute(argv[0]);
     config.headlessExe = findTool(self, "px-headless", PX_HEADLESS_PATH);
     config.serverExe = findTool(self, "px-server", PX_SERVER_PATH);
+    // Installed next to this program: web-player/px-player.js and friends.
+    if (std::error_code ec; std::filesystem::is_regular_file(self.parent_path() / "web-player" / "px-player.js", ec)) {
+        config.webPlayerDir = self.parent_path() / "web-player";
+    }
     for (int i = 1; i < argc; ++i) {
         const std::string arg = argv[i];
         const auto value = [&]() -> std::string {
@@ -107,6 +113,8 @@ int main(int argc, char** argv) {
                 config.tlsCert = value();
             } else if (arg == "--tls-key") {
                 config.tlsKey = value();
+            } else if (arg == "--web-player") {
+                config.webPlayerDir = value();
             } else if (arg == "--dev-certificate") {
                 devCertificate = value();
             } else {
