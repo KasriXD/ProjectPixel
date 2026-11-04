@@ -1,0 +1,94 @@
+// px-player for Android. The native code is the repository's CMake build
+// (px_player becomes libmain.so); SDL's Java side is fetched from the same
+// SDL release; the game is a package in the app's assets.
+//
+//   gradle assembleRelease -PpxGamePackage=/path/to/game.pxpkg
+// Options (-P): pxGamePackage (required), pxNdkVersion, pxCmakeVersion,
+// pxAbis (default "arm64-v8a,x86_64").
+plugins {
+    id 'com.android.application'
+}
+
+def pxRoot = rootProject.file('../..')
+def sdlJavaDir = layout.buildDirectory.dir('generated/sdl-java').get().asFile
+def gameAssetsDir = layout.buildDirectory.dir('generated/game-assets').get().asFile
+def gamePackage = project.findProperty('pxGamePackage')
+def abis = (project.findProperty('pxAbis') ?: 'arm64-v8a,x86_64').split(',')
+
+android {
+    namespace 'dev.px.player'
+    compileSdk 35
+    ndkVersion project.findProperty('pxNdkVersion') ?: '27.2.12479018'
+
+    defaultConfig {
+        applicationId 'dev.px.player'
+        minSdk 24
+        targetSdk 35
+        versionCode 700
+        versionName '0.7.0'
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_STL=c++_static',
+                          '-DPX_BUILD_STUDIO=OFF',
+                          '-DPX_BUILD_TESTS=OFF',
+                          '-DPX_ENABLE_PLATFORM=OFF'
+                targets 'px_player'
+            }
+        }
+        ndk {
+            abiFilters(*abis)
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            // Signed with the development key so CI builds install on test
+            // devices; a store release needs its own key.
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("${pxRoot}/CMakeLists.txt")
+            version project.findProperty('pxCmakeVersion') ?: '3.31.6'
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs += sdlJavaDir
+            assets.srcDirs += gameAssetsDir
+        }
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+def fetchSdlJava = tasks.register('fetchSdlJava', Exec) {
+    description = "SDL's Java sources (org.libsdl.app), from the SDL release the native build uses"
+    inputs.file("${pxRoot}/cmake/PxSdlVersion.cmake")
+    outputs.dir(sdlJavaDir)
+    commandLine 'cmake', "-DOUT=${sdlJavaDir}", '-P', file('../FetchSdlJava.cmake').absolutePath
+}
+
+def copyGamePackage = tasks.register('copyGamePackage', Copy) {
+    description = 'The game the app plays, as assets/game.pxpkg'
+    doFirst {
+        if (!gamePackage || !file(gamePackage).isFile()) {
+            throw new GradleException('Give the game: -PpxGamePackage=/path/to/game.pxpkg ' +
+                '(make one with: px-headless examples/platformer --pack game.pxpkg)')
+        }
+    }
+    from(gamePackage ?: 'missing.pxpkg') {
+        rename { 'game.pxpkg' }
+    }
+    into gameAssetsDir
+}
+
+tasks.named('preBuild') {
+    dependsOn fetchSdlJava, copyGamePackage
+}

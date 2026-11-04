@@ -41,9 +41,10 @@ if(PX_BUILD_CLIENT)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
     set(SDL_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SDL_INSTALL OFF CACHE BOOL "" FORCE)
+    include(PxSdlVersion)
     FetchContent_Declare(SDL3
-        URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.18/SDL3-3.4.18.tar.gz
-        URL_HASH SHA256=9c75cf16330322c217dedd2e0609f1124f1b54b8633e763467b4684d0f4334a3
+        URL "${PX_SDL_URL}"
+        URL_HASH SHA256=${PX_SDL_SHA256}
         DOWNLOAD_EXTRACT_TIMESTAMP TRUE
         FIND_PACKAGE_ARGS 3.4 CONFIG)
     FetchContent_MakeAvailable(SDL3)

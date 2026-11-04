@@ -26,6 +26,17 @@ SDL_AppResult toSdl(px::player::PlayerApp::Status status) {
 } // namespace
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
+#if defined(SDL_PLATFORM_ANDROID)
+    // Android has no console: the log goes where SDL's does (adb logcat).
+    px::log::setConsoleOutput(false);
+    px::log::addSink([](px::log::Level level, std::string_view message) {
+        const SDL_LogPriority priority = level == px::log::Level::Error  ? SDL_LOG_PRIORITY_ERROR
+                                         : level == px::log::Level::Warn ? SDL_LOG_PRIORITY_WARN
+                                                                         : SDL_LOG_PRIORITY_INFO;
+        SDL_LogMessage(SDL_LOG_CATEGORY_APPLICATION, priority, "%.*s", static_cast<int>(message.size()),
+                       message.data());
+    });
+#endif
     std::string error;
     auto options = px::player::parsePlayerArgs(argc, argv, error);
     if (!options) {

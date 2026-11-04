@@ -292,3 +292,116 @@ jobs:
             crossplay-*.log
             crossplay/*.png
             crossplay/*.log
+
+  android:
+    name: Android app
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.12"
+
+      - name: The game the app plays
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build
+          cmake -S . -B build/pack -G Ninja -DCMAKE_BUILD_TYPE=Release -DPX_BUILD_CLIENT=OFF \
+            -DPX_BUILD_TESTS=OFF -DPX_ENABLE_PLATFORM=OFF > pack.log 2>&1
+          cmake --build build/pack --target px_headless >> pack.log 2>&1 || { tail -40 pack.log; exit 1; }
+          build/pack/apps/headless/px-headless examples/platformer --pack "$GITHUB_WORKSPACE/game.pxpkg"
+
+      - name: Android NDK and CMake
+        shell: bash
+        run: |
+          sdkmanager="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          cmake=$("$sdkmanager" --list 2>/dev/null | grep -o 'cmake;3\.[0-9.]*' | cut -d';' -f2 | sort -uV | tail -1)
+          ndk=$(basename "$ANDROID_NDK_LATEST_HOME")
+          echo "NDK $ndk, CMake $cmake"
+          yes | "$sdkmanager" --install "cmake;$cmake" > /dev/null
+          echo "PX_NDK=$ndk" >> "$GITHUB_ENV"
+          echo "PX_CMAKE=$cmake" >> "$GITHUB_ENV"
+
+      - name: Build the APK
+        shell: bash
+        working-directory: platforms/android
+        run: |
+          gradle assembleRelease --no-daemon -PpxGamePackage="$GITHUB_WORKSPACE/game.pxpkg" \
+            -PpxNdkVersion="$PX_NDK" -PpxCmakeVersion="$PX_CMAKE" 2>&1 | tee build.log
+          apk=app/build/outputs/apk/release/app-release.apk
+          test -f "$apk" || { grep -E "error|FAILED|What went wrong" -A5 build.log | head -60; exit 1; }
+          unzip -l "$apk" | grep -E "libmain.so|game.pxpkg|classes.dex"
+          echo "::notice title=Android app::$(du -k "$apk" | cut -f1) KiB, ABIs: $(unzip -l "$apk" | grep -o 'lib/[^/]*/libmain.so' | cut -d/ -f2 | tr '\n' ' ')"
+          cp "$apk" "$GITHUB_WORKSPACE/pixel-player.apk"
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: pixel-player.apk
+
+  ios:
+    name: iOS app (simulator)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The game the app plays
+        shell: bash
+        run: |
+          cmake -S . -B build/pack -DCMAKE_BUILD_TYPE=Release -DPX_BUILD_CLIENT=OFF -DPX_BUILD_TESTS=OFF \
+            -DPX_ENABLE_PLATFORM=OFF > pack.log 2>&1
+          cmake --build build/pack --target px_headless --parallel >> pack.log 2>&1 || { tail -40 pack.log; exit 1; }
+          build/pack/apps/headless/px-headless examples/platformer --pack "$GITHUB_WORKSPACE/game.pxpkg"
+
+      - name: Build the app
+        shell: bash
+        run: |
+          cmake -S . -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 -DPX_BUILD_STUDIO=OFF -DPX_BUILD_TESTS=OFF -DPX_ENABLE_PLATFORM=OFF \
+            -DPX_GAME_PACKAGE="$GITHUB_WORKSPACE/game.pxpkg" > configure.log 2>&1 || { tail -60 configure.log; exit 1; }
+          cmake --build build/ios --config Release --target px_player -- -sdk iphonesimulator \
+            CODE_SIGNING_ALLOWED=NO -quiet > build.log 2>&1 || { grep -E "error|BUILD FAILED" build.log | head -60; exit 1; }
+          app=$(find build/ios -name "px-player.app" -type d -path "*iphonesimulator*" | head -1)
+          test -n "$app" || { echo "no px-player.app"; exit 1; }
+          ls "$app"
+          echo "PX_APP=$app" >> "$GITHUB_ENV"
+
+      - name: Run it in the simulator
+        shell: bash
+        run: |
+          set +e
+          device=$(xcrun simctl list devices available | grep -E "^ +iPhone" | head -1 | grep -oE "[0-9A-F-]{36}")
+          echo "Simulator: $(xcrun simctl list devices available | grep "$device")"
+          xcrun simctl boot "$device"
+          xcrun simctl bootstatus "$device" -b > /dev/null
+          xcrun simctl install "$device" "$PX_APP"
+          xcrun simctl launch --console-pty "$device" dev.px.player --frames 900 > simulator.log 2>&1 &
+          sleep 12
+          xcrun simctl io "$device" screenshot simulator.png
+          for _ in $(seq 1 60); do grep -q "Finished" simulator.log && break; sleep 1; done
+          cat simulator.log
+          grep -q "Finished 900 frames" simulator.log || { echo "::error title=iOS simulator::the app did not finish its run"; exit 1; }
+          echo "::notice title=iOS simulator::$(grep Finished simulator.log)"
+
+      - name: Upload the app
+        if: always()
+        shell: bash
+        run: |
+          [ -n "${PX_APP:-}" ] && ditto -c -k --keepParent "$PX_APP" pixel-player-simulator.zip || true
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-simulator-app
+          path: |
+            pixel-player-simulator.zip
+            simulator.png
+            simulator.log

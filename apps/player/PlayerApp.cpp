@@ -212,6 +212,35 @@ namespace {
 
 // Without a project argument: prefer examples/platformer next to the
 // executable (packaged builds), then the source tree's copy (dev builds).
+// Reads a game package through SDL, which also reaches files inside an
+// Android app's assets ("game.pxpkg") and the iOS app bundle.
+Result<project::Package> loadPackage(const std::string& path) {
+    std::size_t size = 0;
+    void* data = SDL_LoadFile(path.c_str(), &size);
+    if (data == nullptr) return makeError(ErrorCode::NotFound, "Could not read {}: {}", path, SDL_GetError());
+    if (size > project::kMaxPackageBytes) {
+        SDL_free(data);
+        return makeError(ErrorCode::LimitExceeded, "{} is larger than a game package may be", path);
+    }
+    auto package = project::decodePackage({static_cast<const std::uint8_t*>(data), size});
+    SDL_free(data);
+    return package;
+}
+
+// Phones and tablets: the game comes in the app as a package.
+std::string mobilePackage() {
+#if defined(PX_MOBILE_PACKAGE)
+#if defined(SDL_PLATFORM_ANDROID)
+    return PX_MOBILE_PACKAGE; // in the APK's assets
+#else
+    const char* base = SDL_GetBasePath();
+    return std::string(base != nullptr ? base : "") + PX_MOBILE_PACKAGE;
+#endif
+#else
+    return {};
+#endif
+}
+
 std::filesystem::path defaultProjectDir() {
     if (const char* base = SDL_GetBasePath()) {
         const auto packaged = std::filesystem::path(base) / "examples" / "platformer";
@@ -225,6 +254,7 @@ std::filesystem::path defaultProjectDir() {
 
 Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     if (options.verbose) log::setMinLevel(log::Level::Debug);
+    if (options.projectDir.empty() && options.packagePath.empty()) options.packagePath = mobilePackage();
     std::filesystem::path dir = options.projectDir.empty() ? defaultProjectDir() : options.projectDir;
     const bool platformGame = options.playGame != 0;
     std::unique_ptr<PlayerApp> app(new PlayerApp(std::move(options), dir));
@@ -233,9 +263,8 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
         if (auto prepared = app->preparePlatformGame(); !prepared) return prepared.error();
         source = std::format("game {} on {}", app->m_options.playGame, app->m_options.platformUrl);
     } else if (!app->m_options.packagePath.empty() || dir.extension() == ".pxpkg") {
-        const std::filesystem::path file = app->m_options.packagePath.empty() ? dir : std::filesystem::path(app->m_options.packagePath);
-        source = file.generic_string();
-        auto package = project::readPackageFile(file);
+        source = app->m_options.packagePath.empty() ? dir.generic_string() : app->m_options.packagePath;
+        auto package = loadPackage(source);
         if (!package) return package.error();
         app->m_files = package->toFileSystem();
     }
@@ -789,9 +818,15 @@ void PlayerApp::saveScreenshot(const std::filesystem::path& path) {
 
 PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
     if (m_platform->processEvent(event)) return Status::Success;
+    // A phone call, the home button, another app: pause (alone) behind the menu.
+    if (event.type == SDL_EVENT_WILL_ENTER_BACKGROUND && !m_deterministic && !m_menuOpen) {
+        m_menuOpen = true;
+        m_menuItem = 0;
+    }
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
         switch (event.key.scancode) {
             case SDL_SCANCODE_ESCAPE:
+            case SDL_SCANCODE_AC_BACK: // Android's back button
                 if (networked() && m_net->status() == net::GameClient::Status::Disconnected) return Status::Success;
                 m_menuOpen = !m_menuOpen;
                 m_menuItem = 0;
@@ -852,7 +887,11 @@ const char* touchName(TouchMode t) { return t == TouchMode::On ? "ON" : t == Tou
 
 bool PlayerApp::touchVisible() const {
     if (m_scriptPlayer) return false;
-    return m_settings.touch == TouchMode::On || (m_settings.touch == TouchMode::Auto && m_platform->touchUsed());
+    // Auto: from the first touch, or from the start on phones and tablets.
+    static const bool mobile = std::string_view(SDL_GetPlatform()) == "Android" ||
+                               std::string_view(SDL_GetPlatform()) == "iOS";
+    return m_settings.touch == TouchMode::On ||
+           (m_settings.touch == TouchMode::Auto && (mobile || m_platform->touchUsed()));
 }
 
 void PlayerApp::menuMove(int delta) { m_menuItem = (m_menuItem + delta + kMenuItems) % kMenuItems; }

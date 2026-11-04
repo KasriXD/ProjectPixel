@@ -6,8 +6,13 @@ cmake_minimum_required(VERSION 3.24)
 # ---------------------------------------------------------------------------
 set(PX_PRODUCT_NAME "Project Pixel" CACHE STRING "User-facing product name (temporary)")
 
-# Apple's libc++ only provides floating-point std::to_chars / std::format from macOS 13.3.
-set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS version")
+# Apple's libc++ only provides floating-point std::to_chars / std::format from
+# macOS 13.3 and iOS 16.3.
+if(CMAKE_SYSTEM_NAME STREQUAL "iOS")
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "16.3" CACHE STRING "Minimum iOS version")
+else()
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "13.3" CACHE STRING "Minimum macOS version")
+endif()
 
 project(px
     VERSION 0.6.0
