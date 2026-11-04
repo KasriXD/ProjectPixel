@@ -41,4 +41,23 @@ Key keyFromName(std::string_view name) noexcept {
     return Key::Unknown;
 }
 
+std::string_view padButtonName(PadButton button) noexcept {
+    switch (button) {
+        case PadButton::South: return "South (A)";
+        case PadButton::East: return "East (B)";
+        case PadButton::West: return "West (X)";
+        case PadButton::North: return "North (Y)";
+        case PadButton::Back: return "Back";
+        case PadButton::Start: return "Start";
+        case PadButton::LeftShoulder: return "Left shoulder";
+        case PadButton::RightShoulder: return "Right shoulder";
+        case PadButton::DPadUp: return "D-pad up";
+        case PadButton::DPadDown: return "D-pad down";
+        case PadButton::DPadLeft: return "D-pad left";
+        case PadButton::DPadRight: return "D-pad right";
+        case PadButton::Count: break;
+    }
+    return "?";
+}
+
 } // namespace px

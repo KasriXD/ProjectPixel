@@ -1,5 +1,6 @@
 #pragma once
 
+#include "PlayerSettings.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
 #include "px/core/Time.hpp"
@@ -12,6 +13,7 @@
 #include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
 #include "px/runtime/InputScript.hpp"
+#include "px/runtime/TouchControls.hpp"
 #include "px/scene/Scene.hpp"
 
 #include <filesystem>
@@ -43,6 +45,9 @@ struct PlayerOptions {
     std::string user;                      // --user NAME (else the login saved by Studio or the player)
     std::string password;                  // --password TEXT
     bool registerAccount = false;          // --register: create the account first
+    bool touch = false;                    // --touch: show touch controls; the mouse acts as a finger
+    std::string packagePath;               // --package FILE: play a game package (the browser page uses it)
+    std::string token;                     // --token TEXT: connect token for --connect (from a ticket)
 };
 
 // Parses command-line arguments. Returns nullopt and sets `error` on failure.
@@ -86,6 +91,13 @@ private:
     void drawNameTags(const render::Camera2D& camera);
     void drawConnectionStatus();
     void drawDebugInfo();
+    void drawTouchControls();
+    void drawMenu();
+    void handleMenuInput();
+    void menuMove(int delta);
+    void menuChange(int delta); // left/right or activate (0)
+    void applySettings();
+    [[nodiscard]] bool touchVisible() const;
     [[nodiscard]] bool networked() const { return m_net != nullptr; }
     [[nodiscard]] scene::Scene& currentScene();
     [[nodiscard]] HudState hudState() const;
@@ -120,6 +132,14 @@ private:
     bool m_showDebug = false;
     bool m_deterministic = false;
     std::string m_connectTarget; // "host:port", for the connection screen
+    PlayerSettings m_settings;
+    std::filesystem::path m_settingsFile;
+    runtime::TouchControls m_touch;
+    std::uint32_t m_touchHeld = 0; // for drawing pressed buttons
+    bool m_menuOpen = false;
+    int m_menuItem = 0;
+    bool m_quitRequested = false;
+    TouchMode m_savedTouch = TouchMode::Auto; // --touch is for this run only, unless changed in the menu
 };
 
 } // namespace px::player

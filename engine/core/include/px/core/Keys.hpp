@@ -25,6 +25,19 @@ inline constexpr std::size_t kKeyCount = static_cast<std::size_t>(Key::Count);
 // Down/up state for every key, indexed by static_cast<std::size_t>(Key).
 using KeyStates = std::array<bool, kKeyCount>;
 
+// Gamepad buttons, whatever the pad (SDL maps every known pad to this
+// layout). The left stick counts as the D-pad.
+enum class PadButton : std::uint8_t {
+    South, East, West, North, // A, B, X, Y on an Xbox layout
+    Back, Start,
+    LeftShoulder, RightShoulder,
+    DPadUp, DPadDown, DPadLeft, DPadRight,
+    Count
+};
+inline constexpr std::size_t kPadButtonCount = static_cast<std::size_t>(PadButton::Count);
+using PadStates = std::array<bool, kPadButtonCount>;
+[[nodiscard]] std::string_view padButtonName(PadButton button) noexcept; // "South (A)", "D-pad left", ...
+
 // Canonical name, e.g. "A", "Space", "Left", "F1". Unknown -> "Unknown".
 [[nodiscard]] std::string_view keyName(Key key) noexcept;
 

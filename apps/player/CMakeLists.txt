@@ -1,5 +1,5 @@
 # px-player: the desktop game client. Loads a project and plays its start scene.
-add_executable(px_player main.cpp PlayerApp.cpp)
+add_executable(px_player main.cpp PlayerApp.cpp PlayerSettings.cpp)
 set_target_properties(px_player PROPERTIES OUTPUT_NAME px-player)
 target_link_libraries(px_player PRIVATE px::runtime px::project px::net px::render px::platform_sdl)
 px_target_defaults(px_player)

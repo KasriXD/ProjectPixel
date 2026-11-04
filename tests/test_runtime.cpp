@@ -7,6 +7,7 @@
 #include "px/runtime/GameSession.hpp"
 #include "px/runtime/Input.hpp"
 #include "px/runtime/InputScript.hpp"
+#include "px/runtime/TouchControls.hpp"
 
 #include <algorithm>
 #include <stdexcept>
@@ -328,6 +329,105 @@ TEST_CASE("Input actions, key bindings and frames") {
     CHECK_FALSE(f.wasPressed(0));
     CHECK(f.wasPressed(2));
     CHECK_FALSE(f.isHeld(kInvalidAction));
+}
+
+TEST_CASE("Gamepad buttons follow the keyboard bindings") {
+    CHECK(padButtonForKey(Key::Left) == PadButton::DPadLeft);
+    CHECK(padButtonForKey(Key::D) == PadButton::DPadRight);
+    CHECK(padButtonForKey(Key::Space) == PadButton::South);
+    CHECK(padButtonForKey(Key::X) == PadButton::West);
+    CHECK(padButtonForKey(Key::E) == PadButton::East);
+    CHECK(padButtonForKey(Key::Enter) == PadButton::Start);
+    CHECK_FALSE(padButtonForKey(Key::F1).has_value());
+
+    project::ProjectManifest m = testProject();
+    m.input.actions.push_back({"dash", {Key::X, Key::LeftShift}});
+    const ActionSet actions(m.input);
+    const KeyBindings bindings(m.input, actions);
+    CHECK(bindings.actionsForPad(PadButton::DPadLeft) == (1u << 0));
+    CHECK(bindings.actionsForPad(PadButton::South) == (1u << 2));
+    CHECK(bindings.actionsForPad(PadButton::West) == (1u << 3));
+    CHECK(bindings.actionsForPad(PadButton::LeftShoulder) == (1u << 3));
+    CHECK(bindings.actionsForPad(PadButton::North) == 0u);
+    PadStates pad{};
+    pad[static_cast<std::size_t>(PadButton::DPadRight)] = true;
+    pad[static_cast<std::size_t>(PadButton::South)] = true;
+    CHECK(bindings.heldActions(pad) == ((1u << 1) | (1u << 2)));
+    CHECK(std::string(padButtonName(PadButton::Start)) == "Start");
+}
+
+TEST_CASE("Touch controls: side-view layout and hit testing") {
+    const ActionSet actions(testProject().input); // move_left, move_right, jump
+    const TouchControls touch(actions, {320, 180});
+    const auto& buttons = touch.buttons();
+    REQUIRE(buttons.size() == 3);
+    const auto centre = [](const Rect& r) { return Vec2{r.x + r.w * 0.5f, r.y + r.h * 0.5f}; };
+    const TouchButton* left = nullptr;
+    const TouchButton* jump = nullptr;
+    for (const auto& b : buttons) {
+        if (b.actions == (1u << 0)) left = &b;
+        if (b.actions == (1u << 2)) jump = &b;
+        // Everything fits on the screen.
+        CHECK(b.area.x >= 0.0f);
+        CHECK(b.area.y >= 0.0f);
+        CHECK(b.area.x + b.area.w <= 320.0f);
+        CHECK(b.area.y + b.area.h <= 180.0f);
+    }
+    REQUIRE(left != nullptr);
+    REQUIRE(jump != nullptr);
+    CHECK(left->arrow);
+    CHECK(jump->label == "JUMP");
+    CHECK(centre(left->area).x < 160.0f); // pad on the left, buttons on the right
+    CHECK(centre(jump->area).x > 160.0f);
+
+    const Vec2 onLeft = centre(left->area);
+    const Vec2 onJump = centre(jump->area);
+    CHECK(touch.heldActions(std::span(&onLeft, 1)) == (1u << 0));
+    CHECK(touch.heldActions(std::span(&onJump, 1)) == (1u << 2));
+    const Vec2 both[] = {onLeft, onJump}; // two thumbs
+    CHECK(touch.heldActions(both) == ((1u << 0) | (1u << 2)));
+    const Vec2 nowhere{160, 40};
+    CHECK(touch.heldActions(std::span(&nowhere, 1)) == 0u);
+
+    CHECK(touch.hitsPause(centre(touch.pauseButton())));
+    CHECK_FALSE(touch.hitsPause(onJump));
+    CHECK(touch.pauseButton().y < 40.0f);
+}
+
+TEST_CASE("Touch controls: four directions and several buttons") {
+    project::InputConfig input;
+    input.actions = {{"move_left", {Key::Left}}, {"move_right", {Key::Right}}, {"move_up", {Key::Up}},
+                     {"move_down", {Key::Down}}, {"attack", {Key::X}},        {"use_item", {Key::C}},
+                     {"a3", {Key::V}},           {"a4", {Key::Q}},            {"a5", {Key::I}}};
+    const ActionSet actions(input);
+    const TouchControls touch(actions, {256, 224});
+    int arrows = 0;
+    int round = 0;
+    for (const auto& b : touch.buttons()) {
+        arrows += b.arrow ? 1 : 0;
+        round += b.round ? 1 : 0;
+        if (b.actions == (1u << 5)) CHECK(b.label == "USE I"); // first five letters
+    }
+    CHECK(arrows == 4);
+    CHECK(round == 4); // at most four action buttons
+    // Between the up and right arrows, a thumb presses both (a diagonal).
+    Vec2 up{};
+    Vec2 right{};
+    for (const auto& b : touch.buttons()) {
+        if (b.actions == (1u << 2)) up = {b.area.x + b.area.w * 0.5f, b.area.y + b.area.h * 0.5f};
+        if (b.actions == (1u << 1)) right = {b.area.x + b.area.w * 0.5f, b.area.y + b.area.h * 0.5f};
+    }
+    const Vec2 diagonal{right.x, up.y};
+    CHECK(touch.heldActions(std::span(&diagonal, 1)) == ((1u << 1) | (1u << 2)));
+    // Buttons never overlap each other.
+    const auto& b = touch.buttons();
+    for (std::size_t i = 0; i < b.size(); ++i) {
+        for (std::size_t j = i + 1; j < b.size(); ++j) {
+            const bool overlap = b[i].area.x < b[j].area.x + b[j].area.w && b[j].area.x < b[i].area.x + b[i].area.w &&
+                                 b[i].area.y < b[j].area.y + b[j].area.h && b[j].area.y < b[i].area.y + b[i].area.h;
+            CHECK_MESSAGE(!overlap, b[i].label << " overlaps " << b[j].label);
+        }
+    }
 }
 
 TEST_CASE("Input scripts parse and play back with press edges") {

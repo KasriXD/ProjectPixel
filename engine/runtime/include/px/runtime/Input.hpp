@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -56,6 +57,13 @@ struct InputFrame {
 };
 
 // Default keyboard bindings from the project file, resolved to action ids.
+// Gamepads need no setup in a project: an action gets the gamepad controls
+// of its keys, so any game is playable with a pad (docs/input-devices.md).
+// What a key's gamepad equivalent is: arrows and WASD the D-pad; Space, Z
+// and J the South button; X and K West; C, E and L East; V, Q and I North;
+// Enter Start; Tab and Backspace Back; Shift and Ctrl the shoulders.
+[[nodiscard]] std::optional<PadButton> padButtonForKey(Key key) noexcept;
+
 class KeyBindings {
 public:
     KeyBindings() = default;
@@ -63,11 +71,15 @@ public:
 
     // Bitmask of actions with at least one bound key down.
     [[nodiscard]] std::uint32_t heldActions(const KeyStates& keys) const;
+    // The same for gamepad buttons.
+    [[nodiscard]] std::uint32_t heldActions(const PadStates& pad) const;
     // Actions bound to `key` (bitmask).
     [[nodiscard]] std::uint32_t actionsForKey(Key key) const;
+    [[nodiscard]] std::uint32_t actionsForPad(PadButton button) const;
 
 private:
     std::array<std::uint32_t, kKeyCount> m_keyToActions{};
+    std::array<std::uint32_t, kPadButtonCount> m_padToActions{};
 };
 
 } // namespace px::runtime

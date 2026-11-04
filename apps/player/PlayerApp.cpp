@@ -71,10 +71,14 @@ const char* playerUsage() {
            "  --screenshot FILE   with --frames: save the last frame as a PNG\n"
            "  --input-script FILE play scripted input (see docs/input-scripts.md)\n"
            "  --debug             start with the debug overlay (toggle with F1)\n"
+           "  --touch             show touch controls; the mouse acts as a finger (to try them)\n"
+           "  --package FILE      play a game package (*.pxpkg) instead of a project folder\n"
+           "  --token TEXT        with --connect: the connect token of a platform ticket\n"
            "  --scale N           initial window scale (default: from the project)\n"
            "\n"
            "  In game: arrows/WASD move, Space/Z/W jump, R restart, F5 reload scripts and\n"
-           "           scenes from disk, F1 debug overlay, F2 screenshot, Esc quit.\n";
+           "           scenes from disk, F1 debug overlay, F2 screenshot, Esc menu (settings, quit).\n"
+           "           Gamepads work at once; touch screens get on-screen controls.\n";
 }
 
 std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string& error) {
@@ -161,6 +165,15 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
             }
         } else if (arg == "--register") {
             o.registerAccount = true;
+        } else if (arg == "--touch") {
+            o.touch = true;
+        } else if (arg == "--package" || arg == "--token") {
+            const char* v = value();
+            if (v == nullptr) {
+                error = std::format("{} needs a value", arg);
+                return std::nullopt;
+            }
+            (arg == "--package" ? o.packagePath : o.token) = v;
         } else if (arg == "--help" || arg == "-h") {
             error.clear();
             return std::nullopt;
@@ -218,8 +231,10 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     if (platformGame) {
         if (auto prepared = app->preparePlatformGame(); !prepared) return prepared.error();
         source = std::format("game {} on {}", app->m_options.playGame, app->m_options.platformUrl);
-    } else if (dir.extension() == ".pxpkg") {
-        auto package = project::readPackageFile(dir);
+    } else if (!app->m_options.packagePath.empty() || dir.extension() == ".pxpkg") {
+        const std::filesystem::path file = app->m_options.packagePath.empty() ? dir : std::filesystem::path(app->m_options.packagePath);
+        source = file.generic_string();
+        auto package = project::readPackageFile(file);
         if (!package) return package.error();
         app->m_files = package->toFileSystem();
     }
@@ -248,7 +263,21 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
                                                                            : platform::Presentation::Letterbox;
     window.windowScale = app->m_options.windowScale > 0 ? app->m_options.windowScale : display.windowScale;
     app->m_deterministic = app->m_options.frames > 0;
-    window.vsync = !app->m_deterministic;
+    // Saved settings; runs with --frames (tests, screenshots) use the defaults.
+    const char* prefs = app->m_deterministic ? nullptr : SDL_GetPrefPath("ProjectPixel", "player");
+    if (prefs != nullptr) {
+        app->m_settingsFile = std::filesystem::path(prefs) / "settings.txt";
+        SDL_free(const_cast<char*>(prefs));
+        app->m_settings = PlayerSettings::load(app->m_settingsFile);
+    }
+    app->m_savedTouch = app->m_settings.touch;
+    if (app->m_options.touch) app->m_settings.touch = TouchMode::On;
+    window.vsync = !app->m_deterministic && app->m_settings.vsync;
+    window.mouseAsTouch = app->m_options.touch;
+    if (app->m_settings.scaling != Scaling::GameDefault) {
+        window.presentation = app->m_settings.scaling == Scaling::PixelPerfect ? platform::Presentation::IntegerScale
+                                                                               : platform::Presentation::Letterbox;
+    }
     auto platform = platform::SdlPlatform::create(window);
     if (!platform) return platform.error();
     app->m_platform = std::move(platform.value());
@@ -258,6 +287,8 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     app->m_clock = FixedStepClock(1.0 / app->m_game.manifest.settings.tickRate);
     app->m_showDebug = app->m_options.debugOverlay;
     app->m_actions = runtime::ActionSet(app->m_game.manifest.input);
+    app->m_touch = runtime::TouchControls(app->m_actions, {static_cast<float>(display.virtualResolution.x),
+                                                           static_cast<float>(display.virtualResolution.y)});
     if (platformGame || app->m_options.host || !app->m_options.connectAddress.empty()) {
         if (auto started = app->startNetwork(); !started) return started.error();
     } else if (auto started = app->restart(); !started) {
@@ -363,7 +394,7 @@ px::Status PlayerApp::startNetwork() {
     clientOptions.playerName = !m_platformName.empty() ? m_platformName
                                : m_options.playerName.empty() ? defaultPlayerName()
                                                               : m_options.playerName;
-    clientOptions.token = m_ticketToken;
+    clientOptions.token = !m_ticketToken.empty() ? m_ticketToken : m_options.token;
     auto client = net::GameClient::create(m_game, std::move(endpoint.value()), clientOptions);
     if (!client) return client.error();
     m_net = std::move(client.value());
@@ -437,10 +468,27 @@ void PlayerApp::reload() {
 
 runtime::InputFrame PlayerApp::nextInput() {
     if (m_scriptPlayer) return m_scriptPlayer->next();
-    // A key tapped and released between two ticks still counts as one press.
-    const std::uint32_t tapped = m_bindings.heldActions(m_platform->keysPressed());
-    const std::uint32_t held = m_bindings.heldActions(m_platform->keysDown()) | tapped;
+    if (m_menuOpen) {
+        // Nothing pressed in the menu reaches the game, not even after it closes.
+        m_platform->clearPressedKeys();
+        m_platform->clearPressedPad();
+        m_platform->clearTaps();
+        m_previousHeld = 0;
+        return {};
+    }
+    // Keyboard, gamepads and touch together. A key, button or tap released
+    // between two ticks still counts as one press.
+    const std::vector<Vec2> fingers = m_platform->touches();
+    const std::uint32_t touchHeld = touchVisible() ? m_touch.heldActions(fingers) : 0u;
+    const std::uint32_t touchTapped = touchVisible() ? m_touch.heldActions(m_platform->taps()) : 0u;
+    m_touchHeld = touchHeld;
+    const std::uint32_t tapped = m_bindings.heldActions(m_platform->keysPressed()) |
+                                 m_bindings.heldActions(m_platform->padPressed()) | touchTapped;
+    const std::uint32_t held =
+        m_bindings.heldActions(m_platform->keysDown()) | m_bindings.heldActions(m_platform->padDown()) | touchHeld | tapped;
     m_platform->clearPressedKeys();
+    m_platform->clearPressedPad();
+    m_platform->clearTaps();
     runtime::InputFrame frame{held, (held & ~m_previousHeld) | tapped};
     m_previousHeld = held;
     return frame;
@@ -477,8 +525,11 @@ PlayerApp::Status PlayerApp::iterate() {
     const double elapsed = now - m_lastTime;
     m_lastTime = now;
 
+    handleMenuInput();
+    if (m_quitRequested) return Status::Success;
     // Deterministic runs advance exactly one tick per frame regardless of speed.
-    const int steps = m_deterministic ? 1 : m_clock.advance(elapsed);
+    int steps = m_deterministic ? 1 : m_clock.advance(elapsed);
+    if (m_menuOpen && !networked()) steps = 0; // playing alone, the menu pauses the game
     if (networked()) m_net->receive(now);
     for (int i = 0; i < steps; ++i) runTick();
     if (networked()) m_net->updateView(now);
@@ -493,6 +544,14 @@ PlayerApp::Status PlayerApp::iterate() {
 
     drawFrame();
     ++m_frame;
+#if !defined(__EMSCRIPTEN__)
+    // The frame-rate limit (the browser paces frames itself).
+    if (m_settings.frameLimit > 0 && !m_deterministic) {
+        const double frame = 1.0 / m_settings.frameLimit;
+        const double spent = m_platform->secondsSinceStart() - now;
+        if (spent < frame) SDL_DelayPrecise(static_cast<Uint64>((frame - spent) * 1.0e9));
+    }
+#endif
     if (m_options.frames > 0 && m_frame >= m_options.frames) {
         if (networked()) {
             log::info("Finished {} frames: {}, score {}, {} players", m_frame, m_net->statusText(), m_net->game().score,
@@ -521,6 +580,16 @@ void PlayerApp::drawFrame() {
     drawHud();
     if (networked() && m_net->status() != net::GameClient::Status::Playing) drawConnectionStatus();
     if (m_showDebug) drawDebugInfo();
+    if (touchVisible() && !m_menuOpen) drawTouchControls();
+    if (m_settings.showFps) {
+        const std::string fps = std::format("{:.0f} FPS", m_fps);
+        const float width = static_cast<float>(m_game.manifest.settings.display.virtualResolution.x);
+        const Vec2 at{width - 6 - render::IRenderer2D::kDebugGlyphSize * static_cast<float>(fps.size()),
+                      touchVisible() ? std::round(m_touch.pauseButton().y + m_touch.pauseButton().h + 4) : 6.0f};
+        renderer.drawDebugText({at.x + 1, at.y + 1}, fps, kHudShadow);
+        renderer.drawDebugText(at, fps, colors::white);
+    }
+    if (m_menuOpen) drawMenu();
 
     const bool lastFrame = m_options.frames > 0 && m_frame + 1 >= m_options.frames;
     if (lastFrame && !m_options.screenshotPath.empty()) saveScreenshot(m_options.screenshotPath);
@@ -701,8 +770,26 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
         switch (event.key.scancode) {
             case SDL_SCANCODE_ESCAPE:
-                if (networked()) m_net->disconnect();
-                return Status::Success;
+                if (networked() && m_net->status() == net::GameClient::Status::Disconnected) return Status::Success;
+                m_menuOpen = !m_menuOpen;
+                m_menuItem = 0;
+                break;
+            case SDL_SCANCODE_UP:
+                if (m_menuOpen) menuMove(-1);
+                break;
+            case SDL_SCANCODE_DOWN:
+                if (m_menuOpen) menuMove(1);
+                break;
+            case SDL_SCANCODE_LEFT:
+                if (m_menuOpen) menuChange(-1);
+                break;
+            case SDL_SCANCODE_RIGHT:
+                if (m_menuOpen) menuChange(1);
+                break;
+            case SDL_SCANCODE_RETURN:
+            case SDL_SCANCODE_SPACE:
+                if (m_menuOpen) menuChange(0);
+                break;
             case SDL_SCANCODE_R:
                 if (networked()) break; // the server restarts the level
                 log::info("Restarting");
@@ -724,7 +811,160 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
                 break;
         }
     }
+    if (m_quitRequested) {
+        if (networked()) m_net->disconnect();
+        return Status::Success;
+    }
     return Status::Continue;
+}
+
+// --- Touch controls and the menu ----------------------------------------------------------------
+
+namespace {
+constexpr int kMenuItems = 7;
+const char* scalingName(Scaling s) {
+    return s == Scaling::PixelPerfect ? "PIXEL PERFECT" : s == Scaling::Fit ? "FIT SCREEN" : "GAME DEFAULT";
+}
+const char* touchName(TouchMode t) { return t == TouchMode::On ? "ON" : t == TouchMode::Off ? "OFF" : "AUTO"; }
+} // namespace
+
+bool PlayerApp::touchVisible() const {
+    if (m_scriptPlayer) return false;
+    return m_settings.touch == TouchMode::On || (m_settings.touch == TouchMode::Auto && m_platform->touchUsed());
+}
+
+void PlayerApp::menuMove(int delta) { m_menuItem = (m_menuItem + delta + kMenuItems) % kMenuItems; }
+
+void PlayerApp::menuChange(int delta) {
+    const int step = delta == 0 ? 1 : delta;
+    switch (m_menuItem) {
+        case 0:
+            if (delta == 0) m_menuOpen = false;
+            return;
+        case 1: m_settings.vsync = !m_settings.vsync; break;
+        case 2: {
+            const int limits[] = {0, 30, 60, 120};
+            int i = 0;
+            while (i < 4 && limits[i] != m_settings.frameLimit) ++i;
+            m_settings.frameLimit = limits[((i % 4) + step + 4) % 4];
+            break;
+        }
+        case 3: m_settings.scaling = static_cast<Scaling>((static_cast<int>(m_settings.scaling) + step + 3) % 3); break;
+        case 4: m_settings.showFps = !m_settings.showFps; break;
+        case 5:
+            m_settings.touch = static_cast<TouchMode>((static_cast<int>(m_settings.touch) + step + 3) % 3);
+            m_savedTouch = m_settings.touch;
+            break;
+        case 6:
+            if (delta == 0) m_quitRequested = true;
+            return;
+        default: return;
+    }
+    applySettings();
+}
+
+void PlayerApp::applySettings() {
+    m_platform->setVsync(m_settings.vsync && !m_deterministic);
+    const auto& display = m_game.manifest.settings.display;
+    platform::Presentation p = display.scaling == project::ScalingMode::Integer ? platform::Presentation::IntegerScale
+                                                                                : platform::Presentation::Letterbox;
+    if (m_settings.scaling == Scaling::PixelPerfect) p = platform::Presentation::IntegerScale;
+    if (m_settings.scaling == Scaling::Fit) p = platform::Presentation::Letterbox;
+    m_platform->setPresentation(p);
+    PlayerSettings saved = m_settings;
+    saved.touch = m_savedTouch;
+    if (!m_settingsFile.empty() && !saved.save(m_settingsFile)) log::warn("Could not save the settings");
+}
+
+void PlayerApp::handleMenuInput() {
+    // Gamepad: Start opens and closes the menu; the D-pad, South and East use it.
+    const PadStates& pad = m_platform->padPressed();
+    const auto pressed = [&pad](PadButton b) { return pad[static_cast<std::size_t>(b)]; };
+    bool used = false;
+    if (pressed(PadButton::Start)) {
+        m_menuOpen = !m_menuOpen;
+        m_menuItem = 0;
+        used = true;
+    } else if (m_menuOpen) {
+        if (pressed(PadButton::DPadUp)) menuMove(-1);
+        if (pressed(PadButton::DPadDown)) menuMove(1);
+        if (pressed(PadButton::DPadLeft)) menuChange(-1);
+        if (pressed(PadButton::DPadRight)) menuChange(1);
+        if (pressed(PadButton::South)) menuChange(0);
+        if (pressed(PadButton::East) || pressed(PadButton::Back)) m_menuOpen = false;
+        used = true;
+    }
+    // Touch: the pause button, and rows of the menu.
+    if (touchVisible() || m_menuOpen) {
+        for (const Vec2 t : m_platform->taps()) {
+            if (!m_menuOpen && touchVisible() && m_touch.hitsPause(t)) {
+                m_menuOpen = true;
+                m_menuItem = 0;
+                used = true;
+                break; // one tap, one action
+            }
+            if (m_menuOpen) {
+                const float height = static_cast<float>(m_game.manifest.settings.display.virtualResolution.y);
+                const float top = std::round(height * 0.5f - kMenuItems * 6.0f);
+                const int row = static_cast<int>(std::floor((t.y - top) / 12.0f));
+                if (row >= 0 && row < kMenuItems) {
+                    m_menuItem = row;
+                    menuChange(0);
+                }
+                used = true;
+                break;
+            }
+        }
+    }
+    if (used) {
+        m_platform->clearPressedPad();
+        m_platform->clearTaps();
+    }
+}
+
+void PlayerApp::drawTouchControls() {
+    auto& r = m_platform->renderer();
+    constexpr float g = render::IRenderer2D::kDebugGlyphSize;
+    for (const runtime::TouchButton& b : m_touch.buttons()) {
+        const bool down = (m_touchHeld & b.actions) != 0;
+        r.fillRect(b.area, down ? Color{255, 255, 255, 110} : Color{20, 20, 30, 90});
+        r.drawRect(b.area, Color{255, 255, 255, static_cast<std::uint8_t>(down ? 230 : 150)});
+        const Vec2 at{std::round(b.area.x + (b.area.w - g * static_cast<float>(b.label.size())) * 0.5f),
+                      std::round(b.area.y + (b.area.h - g) * 0.5f)};
+        r.drawDebugText(at, b.label, colors::white);
+    }
+    const Rect& p = m_touch.pauseButton();
+    r.fillRect(p, Color{20, 20, 30, 90});
+    r.drawRect(p, Color{255, 255, 255, 150});
+    r.drawDebugText({std::round(p.x + (p.w - g * 2) * 0.5f), std::round(p.y + (p.h - g) * 0.5f)}, "II", colors::white);
+}
+
+void PlayerApp::drawMenu() {
+    auto& r = m_platform->renderer();
+    const auto& res = m_game.manifest.settings.display.virtualResolution;
+    const float width = static_cast<float>(res.x);
+    const float height = static_cast<float>(res.y);
+    constexpr float g = render::IRenderer2D::kDebugGlyphSize;
+    r.fillRect({0, 0, width, height}, Color{10, 8, 24, 190});
+    const std::string items[kMenuItems] = {
+        networked() ? "BACK TO THE GAME" : "RESUME",
+        std::format("VSYNC: {}", m_settings.vsync ? "ON" : "OFF"),
+        m_settings.frameLimit == 0 ? std::string("FRAME LIMIT: NONE") : std::format("FRAME LIMIT: {}", m_settings.frameLimit),
+        std::format("SCALING: {}", scalingName(m_settings.scaling)),
+        std::format("SHOW FPS: {}", m_settings.showFps ? "ON" : "OFF"),
+        std::format("TOUCH CONTROLS: {}", touchName(m_settings.touch)),
+        networked() ? "LEAVE THE GAME" : "QUIT",
+    };
+    const float top = std::round(height * 0.5f - kMenuItems * 6.0f);
+    const std::string title = networked() ? "MENU (THE GAME GOES ON)" : "PAUSED";
+    r.drawDebugText({std::round((width - g * static_cast<float>(title.size())) * 0.5f), top - 16}, title, kHudText);
+    for (int i = 0; i < kMenuItems; ++i) {
+        const std::string& s = items[i];
+        const float y = top + static_cast<float>(i) * 12.0f;
+        if (i == m_menuItem) r.fillRect({width * 0.15f, y - 2, width * 0.7f, 12}, Color{255, 255, 255, 50});
+        r.drawDebugText({std::round((width - g * static_cast<float>(s.size())) * 0.5f), y}, s,
+                        i == m_menuItem ? kHudText : colors::white);
+    }
 }
 
 } // namespace px::player

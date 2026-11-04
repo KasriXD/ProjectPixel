@@ -8,6 +8,7 @@ px_add_module(runtime
         src/InputScript.cpp
         src/Movement.cpp
         src/PlayerData.cpp
+        src/TouchControls.cpp
     DEPS
         px::core
         px::scene

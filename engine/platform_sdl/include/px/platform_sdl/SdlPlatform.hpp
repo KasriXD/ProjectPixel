@@ -7,12 +7,15 @@
 
 #include <filesystem>
 #include <memory>
+#include <map>
 #include <optional>
 #include <string>
+#include <vector>
 
 union SDL_Event;
 struct SDL_Window;
 struct SDL_Renderer;
+struct SDL_Gamepad;
 
 namespace px::platform {
 
@@ -28,6 +31,7 @@ struct WindowSettings {
     int windowScale = 3;
     bool vsync = true;
     std::optional<Vec2i> position; // screen position of the window's top-left corner (default: centred)
+    bool mouseAsTouch = false;     // the mouse acts as a finger (trying touch controls on a desktop)
 };
 
 // Owns the SDL window and renderer and tracks keyboard state.
@@ -48,6 +52,23 @@ public:
     [[nodiscard]] const KeyStates& keysPressed() const { return m_pressed; }
     void clearPressedKeys() { m_pressed = {}; }
 
+    // Gamepads: every connected pad counts (one local player).
+    [[nodiscard]] const PadStates& padDown() const { return m_padDown; }
+    [[nodiscard]] const PadStates& padPressed() const { return m_padPressed; }
+    void clearPressedPad() { m_padPressed = {}; }
+    [[nodiscard]] int gamepadCount() const { return static_cast<int>(m_pads.size()); }
+
+    // Fingers on a touch screen, in virtual-resolution pixels.
+    [[nodiscard]] std::vector<Vec2> touches() const;
+    // Points touched since the last clearTaps(): quick taps between frames count.
+    [[nodiscard]] const std::vector<Vec2>& taps() const { return m_taps; }
+    void clearTaps() { m_taps.clear(); }
+    [[nodiscard]] bool touchUsed() const { return m_touchUsed; }
+
+    // Per-device settings that can change while playing.
+    void setVsync(bool on);
+    void setPresentation(Presentation presentation);
+
     [[nodiscard]] render::IRenderer2D& renderer() { return *m_renderer2d; }
 
     // Saves the current frame (call after drawing, before endFrame()) as PNG.
@@ -62,8 +83,17 @@ private:
     SDL_Window* m_window = nullptr;
     SDL_Renderer* m_renderer = nullptr;
     std::unique_ptr<SdlRenderer2D> m_renderer2d;
+    void updatePad();
+
     KeyStates m_down{};
     KeyStates m_pressed{};
+    std::vector<SDL_Gamepad*> m_pads;
+    PadStates m_padDown{};
+    PadStates m_padPressed{};
+    std::map<std::uint64_t, Vec2> m_fingers; // by SDL finger id
+    std::vector<Vec2> m_taps;
+    bool m_touchUsed = false;
+    Vec2i m_virtual{320, 180};
 };
 
 } // namespace px::platform
