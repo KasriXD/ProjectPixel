@@ -39,6 +39,7 @@ if(EMSCRIPTEN)
 else()
     option(PX_ENABLE_PLATFORM "Platform service (px-platform) and platform clients (HTTP, SQLite)" ON)
 endif()
+option(PX_ENABLE_TLS "HTTPS and secure WebSockets (Mbed TLS) for the platform and its clients" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -74,4 +75,4 @@ if(PX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} platform=${PX_ENABLE_PLATFORM} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
+message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} platform=${PX_ENABLE_PLATFORM} tls=${PX_ENABLE_TLS} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")

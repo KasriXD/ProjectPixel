@@ -38,6 +38,18 @@ if(PX_ENABLE_PLATFORM)
         target_compile_definitions(px_httplib PUBLIC _WIN32_WINNT=0x0A00 WIN32_LEAN_AND_MEAN NOMINMAX)
         target_link_libraries(px_httplib PUBLIC ws2_32)
     endif()
+    if(PX_ENABLE_TLS)
+        # HTTPS and wss:// through Mbed TLS; trusted certificates come from the
+        # system (Windows store, macOS keychain, Linux CA bundle).
+        target_compile_definitions(px_httplib PUBLIC CPPHTTPLIB_MBEDTLS_SUPPORT PX_HAVE_TLS=1)
+        target_link_libraries(px_httplib PUBLIC mbedtls mbedx509 mbedcrypto)
+        if(WIN32)
+            target_link_libraries(px_httplib PUBLIC crypt32)
+        elseif(APPLE)
+            target_compile_definitions(px_httplib PUBLIC CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
+            target_link_libraries(px_httplib PUBLIC "-framework CoreFoundation" "-framework Security")
+        endif()
+    endif()
 
     # SQLite amalgamation: the platform's database.
     add_library(px_sqlite STATIC sqlite/sqlite3.c)

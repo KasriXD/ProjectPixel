@@ -17,8 +17,12 @@ namespace px::online {
 
 class PlatformClient {
 public:
-    // `baseUrl`: "http://host:port" (plain HTTP; see docs/platform.md#security).
+    // `baseUrl`: "https://host[:port]" or "http://host:port" (docs/platform.md#https).
+    // HTTPS checks the certificate against the system's trusted ones, plus the
+    // file in PX_PLATFORM_CA if set (a self-signed development certificate).
     explicit PlatformClient(std::string baseUrl);
+    // Also trust the certificates in this PEM file (empty: only the system's).
+    void setCaFile(std::string file) { m_caFile = std::move(file); }
 
     [[nodiscard]] const std::string& baseUrl() const { return m_baseUrl; }
     // A player's session token ("Bearer"), from register or login.
@@ -89,6 +93,7 @@ private:
     std::string m_baseUrl;
     std::string m_token;
     std::string m_serverKey;
+    std::string m_caFile;
     int m_timeoutSeconds = 30;
 };
 

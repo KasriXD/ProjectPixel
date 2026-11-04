@@ -44,6 +44,12 @@ struct ServiceConfig {
     bool rateLimits = true;
     int sessionDays = 30;
     std::size_t maxGamesPerUser = 50;
+    // HTTPS (docs/platform.md#https): a second listener with the same API.
+    // Game servers keep using the plain HTTP port on this computer.
+    int httpsPort = 0;                      // 0: no HTTPS
+    std::string httpsBindAddress;           // default: bindAddress
+    std::filesystem::path tlsCert;          // PEM certificate (chain)
+    std::filesystem::path tlsKey;           // PEM private key
     std::size_t threads = 32; // joins wait for new game servers, which call back on other threads
 };
 
@@ -59,6 +65,9 @@ public:
     void stop();
     [[nodiscard]] int port() const { return m_port; }
     [[nodiscard]] std::string url() const;
+    // "https://host:port" when HTTPS is on, else empty.
+    [[nodiscard]] std::string httpsUrl() const;
+    [[nodiscard]] int httpsPort() const { return m_httpsPort; }
 
     // Makes an account an administrator or a normal user again (command line).
     [[nodiscard]] Status setRole(std::string_view username, online::Role role);
@@ -68,7 +77,7 @@ public:
 private:
     explicit PlatformService(ServiceConfig config);
     [[nodiscard]] Status initialize();
-    void registerRoutes();
+    void registerRoutes(httplib::Server& http);
     void migrate();
 
     struct Impl;
@@ -78,6 +87,9 @@ private:
     crypto::SigningKey m_key;
     std::unique_ptr<Fleet> m_fleet;
     std::unique_ptr<httplib::Server> m_http;
+    std::unique_ptr<httplib::Server> m_https; // an httplib::SSLServer
+    std::thread m_httpsListener;
+    int m_httpsPort = 0;
     RateLimiter m_limits;
     std::thread m_listener;
     std::thread m_maintenance;

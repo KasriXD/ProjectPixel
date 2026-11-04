@@ -10,6 +10,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <functional>
 #include <random>
 
 namespace pxtest {
@@ -28,7 +29,8 @@ struct TestPlatform {
     std::filesystem::path dir;
     std::unique_ptr<px::platform::PlatformService> service;
 
-    explicit TestPlatform(bool rateLimits = false, std::uint16_t firstServerPort = 0) {
+    explicit TestPlatform(bool rateLimits = false, std::uint16_t firstServerPort = 0,
+                          const std::function<void(px::platform::ServiceConfig&)>& adjust = {}) {
         dir = tempDir("platform");
         px::platform::ServiceConfig config;
         config.dataDir = dir;
@@ -41,6 +43,7 @@ struct TestPlatform {
                                                       : static_cast<std::uint16_t>(29000 + std::random_device{}() % 2000);
         config.serverPortCount = 20;
         config.threads = 16;
+        if (adjust) adjust(config);
         auto created = px::platform::PlatformService::create(config);
         REQUIRE_MESSAGE(created.ok(), (created.ok() ? "" : created.error().message));
         service = std::move(created.value());

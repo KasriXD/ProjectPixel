@@ -1116,8 +1116,7 @@ Status PlatformService::setRole(std::string_view username, Role role) {
     return {};
 }
 
-void PlatformService::registerRoutes() {
-    auto& http = *m_http;
+void PlatformService::registerRoutes(httplib::Server& http) {
     Impl& i = *m_impl;
     const auto bind = [&i](void (Impl::*fn)(const httplib::Request&, httplib::Response&)) {
         return i.wrap([&i, fn](const httplib::Request& req, httplib::Response& res) { (i.*fn)(req, res); });
@@ -1161,15 +1160,46 @@ void PlatformService::registerRoutes() {
     });
 }
 
+std::string PlatformService::httpsUrl() const {
+    if (m_httpsPort == 0) return {};
+    const std::string bind = m_config.httpsBindAddress.empty() ? m_config.bindAddress : m_config.httpsBindAddress;
+    const std::string host = bind == "0.0.0.0" ? "127.0.0.1" : bind;
+    return std::format("https://{}:{}", host, m_httpsPort);
+}
+
 Status PlatformService::start() {
-    m_http = std::make_unique<httplib::Server>();
     const std::size_t threads = m_config.threads;
-    m_http->new_task_queue = [threads] { return new httplib::ThreadPool(threads); };
-    m_http->set_payload_max_length(project::kMaxPackageBytes + (1u << 20));
-    m_http->set_read_timeout(120, 0);
-    m_http->set_write_timeout(120, 0);
-    m_http->set_keep_alive_max_count(100);
-    registerRoutes();
+    const auto configure = [this, threads](httplib::Server& server) {
+        server.new_task_queue = [threads] { return new httplib::ThreadPool(threads); };
+        server.set_payload_max_length(project::kMaxPackageBytes + (1u << 20));
+        server.set_read_timeout(120, 0);
+        server.set_write_timeout(120, 0);
+        server.set_keep_alive_max_count(100);
+        registerRoutes(server);
+    };
+    m_http = std::make_unique<httplib::Server>();
+    configure(*m_http);
+    if (m_config.httpsPort != 0) {
+#if defined(PX_HAVE_TLS)
+        const std::string cert = m_config.tlsCert.string();
+        const std::string key = m_config.tlsKey.string();
+        auto https = std::make_unique<httplib::SSLServer>(cert.c_str(), key.c_str());
+        if (!https->is_valid()) {
+            return makeError(ErrorCode::InvalidData, "Cannot use the TLS certificate {} and key {}", cert, key);
+        }
+        m_https = std::move(https);
+        configure(*m_https);
+        const std::string bind = m_config.httpsBindAddress.empty() ? m_config.bindAddress : m_config.httpsBindAddress;
+        if (m_config.httpsPort < 0) {
+            m_httpsPort = m_https->bind_to_any_port(bind);
+        } else if (m_https->bind_to_port(bind, m_config.httpsPort)) {
+            m_httpsPort = m_config.httpsPort;
+        }
+        if (m_httpsPort <= 0) return makeError(ErrorCode::IoError, "Cannot listen for HTTPS on {}:{}", bind, m_config.httpsPort);
+#else
+        return makeError(ErrorCode::Unsupported, "This build has no TLS support (PX_ENABLE_TLS)");
+#endif
+    }
     if (m_config.port == 0) {
         m_port = m_http->bind_to_any_port(m_config.bindAddress);
         if (m_port <= 0) return makeError(ErrorCode::IoError, "Cannot listen on {}", m_config.bindAddress);
@@ -1194,6 +1224,7 @@ Status PlatformService::start() {
 
     m_running = true;
     m_listener = std::thread([this] { m_http->listen_after_bind(); });
+    if (m_https) m_httpsListener = std::thread([this] { m_https->listen_after_bind(); });
     m_maintenance = std::thread([this] {
         int ticks = 0;
         while (m_running) {
@@ -1213,14 +1244,18 @@ Status PlatformService::start() {
         }
     });
     m_http->wait_until_ready();
-    log::info("{} listening on {} (data in {})", m_config.name, url(), m_config.dataDir.string());
+    if (m_https) m_https->wait_until_ready();
+    log::info("{} listening on {}{} (data in {})", m_config.name, url(),
+              m_https ? std::format(" and {}", httpsUrl()) : std::string(), m_config.dataDir.string());
     return {};
 }
 
 void PlatformService::stop() {
     if (!m_running.exchange(false)) return;
     if (m_http) m_http->stop();
+    if (m_https) m_https->stop();
     if (m_listener.joinable()) m_listener.join();
+    if (m_httpsListener.joinable()) m_httpsListener.join();
     if (m_maintenance.joinable()) m_maintenance.join();
     if (m_fleet) m_fleet->stopAll();
 }

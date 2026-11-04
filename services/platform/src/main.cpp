@@ -5,6 +5,9 @@
 //               [--platform-url URL] [--name NAME] [--server-ports FIRST:COUNT]
 //               [--max-servers N] [--headless FILE] [--server FILE] [--no-rate-limits]
 //   px-platform --data DIR --make-admin NAME
+//   px-platform --data DIR --dev-certificate HOST[,HOST...]
+//   HTTPS: --https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]
+#include "Certificates.hpp"
 #include "PlatformService.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
@@ -15,6 +18,7 @@
 #include <filesystem>
 #include <string>
 #include <thread>
+#include <vector>
 
 using namespace px;
 
@@ -28,7 +32,9 @@ void usage() {
                  "usage: px-platform [--data DIR] [--port N] [--bind ADDRESS] [--public-host HOST]\n"
                  "                   [--platform-url URL] [--name NAME] [--server-ports FIRST:COUNT]\n"
                  "                   [--max-servers N] [--headless FILE] [--server FILE] [--no-rate-limits]\n"
+                 "                   [--https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]]\n"
                  "       px-platform --data DIR --make-admin NAME\n"
+                 "       px-platform --data DIR --dev-certificate HOST[,HOST...]   (self-signed, for testing HTTPS)\n"
                  "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n",
                  version::productName, version::string);
 }
@@ -52,6 +58,7 @@ int main(int argc, char** argv) {
     platform::ServiceConfig config;
     config.dataDir = "platform-data";
     std::string makeAdmin;
+    std::string devCertificate;
     const std::filesystem::path self = std::filesystem::absolute(argv[0]);
     config.headlessExe = findTool(self, "px-headless", PX_HEADLESS_PATH);
     config.serverExe = findTool(self, "px-server", PX_SERVER_PATH);
@@ -92,6 +99,16 @@ int main(int argc, char** argv) {
                 config.rateLimits = false;
             } else if (arg == "--make-admin") {
                 makeAdmin = value();
+            } else if (arg == "--https-port") {
+                config.httpsPort = std::stoi(value());
+            } else if (arg == "--https-bind") {
+                config.httpsBindAddress = value();
+            } else if (arg == "--tls-cert") {
+                config.tlsCert = value();
+            } else if (arg == "--tls-key") {
+                config.tlsKey = value();
+            } else if (arg == "--dev-certificate") {
+                devCertificate = value();
             } else {
                 usage();
                 return 2;
@@ -102,6 +119,30 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (!devCertificate.empty()) {
+        std::vector<std::string> hosts;
+        std::size_t start = 0;
+        while (start <= devCertificate.size()) {
+            const auto comma = devCertificate.find(',', start);
+            hosts.push_back(devCertificate.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
+            if (comma == std::string::npos) break;
+            start = comma + 1;
+        }
+        const auto cert = config.dataDir / "tls" / "dev-cert.pem";
+        const auto key = config.dataDir / "tls" / "dev-key.pem";
+        if (auto made = platform::makeDevCertificate(hosts, cert, key); !made) {
+            log::error("{}", made.error().message);
+            return 1;
+        }
+        log::info("Wrote {} and {}. Start with --https-port 8731 --tls-cert {} --tls-key {}; clients trust it with "
+                  "PX_PLATFORM_CA={}",
+                  cert.string(), key.string(), cert.string(), key.string(), cert.string());
+        return 0;
+    }
+    if (config.httpsPort != 0 && (config.tlsCert.empty() || config.tlsKey.empty())) {
+        log::error("--https-port needs --tls-cert and --tls-key");
+        return 2;
+    }
     auto service = platform::PlatformService::create(config);
     if (!service) {
         log::error("{}", service.error().message);

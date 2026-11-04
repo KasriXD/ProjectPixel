@@ -208,6 +208,47 @@ TEST_CASE("Platform: reports, moderation and the audit log") {
     CHECK(bo.audit().error().code == ErrorCode::AccessDenied);
 }
 
+#if defined(PX_HAVE_TLS)
+#include "Certificates.hpp"
+
+TEST_CASE("Platform: HTTPS with a development certificate") {
+    const auto certDir = pxtest::tempDir("tls");
+    const auto cert = certDir / "cert.pem";
+    const auto key = certDir / "key.pem";
+    REQUIRE(platform::makeDevCertificate({"localhost", "127.0.0.1"}, cert, key).ok());
+    TestPlatform p(false, 0, [&](platform::ServiceConfig& c) {
+        c.httpsPort = -1; // any free port
+        c.tlsCert = cert;
+        c.tlsKey = key;
+    });
+    REQUIRE(p.service->httpsPort() > 0);
+    CHECK(p.service->httpsUrl().starts_with("https://127.0.0.1:"));
+
+    // Trusting the certificate: everything works over HTTPS.
+    PlatformClient secure(p.service->httpsUrl());
+    secure.setCaFile(cert.string());
+    auto info = secure.info();
+    REQUIRE_MESSAGE(info.ok(), (info.ok() ? "" : info.error().message));
+    auto reg = secure.registerAccount("Ada", "correct horse");
+    REQUIRE(reg.ok());
+    CHECK(secure.me().ok());
+    // The same account over plain HTTP (game servers use it on this computer).
+    CHECK(p.client().login("Ada", "correct horse").ok());
+
+    // Not trusting it: refused, with a message saying how to trust it.
+    PlatformClient untrusted(p.service->httpsUrl());
+    untrusted.setCaFile("");
+    auto refused = untrusted.info();
+    REQUIRE_FALSE(refused.ok());
+    CHECK(contains(refused.error().message, "does not trust"));
+    // A certificate for another name is refused too.
+    PlatformClient wrongName(std::format("https://localhost.localdomain:{}", p.service->httpsPort()));
+    wrongName.setCaFile(cert.string());
+    CHECK_FALSE(wrongName.info().ok());
+    std::filesystem::remove_all(certDir);
+}
+#endif
+
 TEST_CASE("Platform: rate limits and unknown game servers") {
     TestPlatform p(true);
     auto ada = p.account("Ada");

@@ -58,14 +58,25 @@ Result<T> parseAs(const std::string& body, const char* key = nullptr) {
 
 PlatformClient::PlatformClient(std::string baseUrl) : m_baseUrl(std::move(baseUrl)) {
     while (m_baseUrl.ends_with('/')) m_baseUrl.pop_back();
+    if (const char* ca = std::getenv("PX_PLATFORM_CA"); ca != nullptr && *ca != 0) m_caFile = ca;
 }
 
 Result<PlatformClient::Response> PlatformClient::request(const char* method, const std::string& path,
                                                          const std::string& body, const char* contentType, Auth auth) {
-    if (!m_baseUrl.starts_with("http://")) {
-        return makeError(ErrorCode::Unsupported, "'{}' is not an http:// address (this build has no HTTPS)", m_baseUrl);
+    const bool https = m_baseUrl.starts_with("https://");
+    if (!https && !m_baseUrl.starts_with("http://")) {
+        return makeError(ErrorCode::InvalidArgument, "'{}' is not an https:// or http:// address", m_baseUrl);
     }
+#if !defined(PX_HAVE_TLS)
+    if (https) return makeError(ErrorCode::Unsupported, "This build has no HTTPS support; use an http:// address");
+#endif
     httplib::Client client(m_baseUrl);
+#if defined(PX_HAVE_TLS)
+    if (https) {
+        client.enable_server_certificate_verification(true);
+        if (!m_caFile.empty()) client.set_ca_cert_path(m_caFile);
+    }
+#endif
     client.set_connection_timeout(5);
     client.set_read_timeout(m_timeoutSeconds);
     client.set_write_timeout(m_timeoutSeconds);
@@ -87,6 +98,12 @@ Result<PlatformClient::Response> PlatformClient::request(const char* method, con
         res = client.Delete(full, headers, body, contentType);
     }
     if (!res) {
+        if (res.error() == httplib::Error::SSLServerVerification || res.error() == httplib::Error::SSLServerHostnameVerification) {
+            return makeError(ErrorCode::AccessDenied,
+                             "The platform at {} has a certificate this computer does not trust ({}); for a development "
+                             "certificate set PX_PLATFORM_CA to its file",
+                             m_baseUrl, httplib::to_string(res.error()));
+        }
         return makeError(ErrorCode::IoError, "Cannot reach the platform at {} ({})", m_baseUrl,
                          httplib::to_string(res.error()));
     }

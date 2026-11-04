@@ -2,6 +2,7 @@
 # moderation over HTTP (docs/platform.md). The service itself is a library
 # so the tests can run it in-process.
 add_library(px_platform_service STATIC
+    src/Certificates.cpp
     src/Database.cpp
     src/Fleet.cpp
     src/PlatformService.cpp

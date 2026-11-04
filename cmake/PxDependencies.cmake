@@ -18,6 +18,21 @@ FetchContent_Declare(nlohmann_json
     FIND_PACKAGE_ARGS 3.11 CONFIG)
 FetchContent_MakeAvailable(nlohmann_json)
 
+# --- Mbed TLS (Apache-2.0) - HTTPS and secure WebSockets; platform builds only ----
+if(PX_ENABLE_PLATFORM AND PX_ENABLE_TLS)
+    set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
+    set(MBEDTLS_FATAL_WARNINGS OFF CACHE BOOL "" FORCE)
+    set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
+    set(USE_STATIC_MBEDTLS_LIBRARY ON CACHE BOOL "" FORCE)
+    set(DISABLE_PACKAGE_CONFIG_AND_INSTALL ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(mbedtls
+        URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.7/mbedtls-3.6.7.tar.bz2
+        URL_HASH SHA256=a7e8bcbec0e6f761b4af24f25677626b35f762f68eef79c08677a363212d11f6
+        DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    FetchContent_MakeAvailable(mbedtls)
+endif()
+
 # --- SDL3 (zlib) - window, input, 2D rendering backend; client only --------
 if(PX_BUILD_CLIENT)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
