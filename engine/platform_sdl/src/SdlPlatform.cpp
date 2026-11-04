@@ -16,6 +16,11 @@ Result<std::unique_ptr<SdlPlatform>> SdlPlatform::create(const WindowSettings& s
     // Android's back button reaches the game (it opens the menu) instead of
     // closing the app.
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+    // Phones and tablets: hold the screen the way the game is shaped
+    // (otherwise SDL lets a resizable window turn with the device).
+    SDL_SetHint(SDL_HINT_ORIENTATIONS, settings.virtualResolution.x >= settings.virtualResolution.y
+                                           ? "LandscapeLeft LandscapeRight"
+                                           : "Portrait PortraitUpsideDown");
     if (!SDL_InitSubSystem(SDL_INIT_VIDEO)) {
         return makeError(ErrorCode::Unsupported, "Could not initialise SDL video: {}", SDL_GetError());
     }
