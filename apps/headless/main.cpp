@@ -21,6 +21,7 @@
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
 #include "px/project/Animation.hpp"
+#include "px/project/Package.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/project/Tileset.hpp"
@@ -29,6 +30,9 @@
 #include "px/runtime/InputScript.hpp"
 #include "px/scripting/ApiReference.hpp"
 #include "px/scripting/Graph.hpp"
+#if defined(PX_HAVE_PLATFORM)
+#include "px/online/PackageCheck.hpp"
+#endif
 
 #include <charconv>
 #include <filesystem>
@@ -55,6 +59,9 @@ struct Options {
     std::string compileGraph; // print the Luau a visual script compiles to
     bool printComponentReference = false;
     bool resave = false;
+    std::string packTo;       // --pack FILE: write the project as a game package
+    std::string checkPackage; // --check-package FILE: validate an uploaded package (platform)
+    std::string checkOutput;  // --output FILE: the checked package, images re-encoded
     int traceEvery = 0; // print the player state every N ticks (0 = off)
     // Multiplayer tools (NetTools.hpp).
     std::string connectAddress;
@@ -86,6 +93,10 @@ void printUsage() {
                  "                   [--expect-joined] [--expect-level-complete] [--expect-no-script-errors]\n"
                  "                                            (server and clients in one process; client 1\n"
                  "                                             plays the input script)\n"
+                 "       px-headless <project-dir> --pack FILE.pxpkg   (write the game as a package)\n"
+                 "       px-headless --check-package FILE.pxpkg [--output FILE] [--ticks N]\n"
+                 "                                            (the platform's upload check; prints a report)\n"
+                 "       px-headless <project-dir or FILE.pxpkg> ...   (packages run like project folders)\n"
                  "       px-headless --print-api-reference\n"
                  "       px-headless --compile-graph FILE.graph.json   (print the Luau a visual script runs as)\n"
                  "       px-headless --print-component-reference\n",
@@ -165,6 +176,12 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.printComponentReference = true;
         } else if (arg == "--compile-graph") {
             o.compileGraph = needValue();
+        } else if (arg == "--pack") {
+            o.packTo = needValue();
+        } else if (arg == "--check-package") {
+            o.checkPackage = needValue();
+        } else if (arg == "--output") {
+            o.checkOutput = needValue();
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -174,10 +191,45 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             return std::nullopt;
         }
     }
-    if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty()) {
+    if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty() &&
+        o.checkPackage.empty()) {
         return std::nullopt;
     }
     return o;
+}
+
+// The platform's upload check (docs/platform.md#publishing): run in its own
+// process with resource limits. Prints a JSON report on success; the error
+// on stderr and exit code 1 if the game cannot be accepted.
+int checkPackageCommand(const Options& o) {
+#if defined(PX_HAVE_PLATFORM)
+    log::setMinLevel(log::Level::Error); // stdout is the report; keep game logs out of it
+    auto package = project::readPackageFile(o.checkPackage);
+    if (!package) {
+        std::fprintf(stderr, "%s\n", package.error().message.c_str());
+        return 1;
+    }
+    online::PackageCheckOptions check;
+    if (o.ticks) check.ticks = *o.ticks;
+    auto report = online::checkPackage(package.value(), check);
+    if (!report) {
+        std::fprintf(stderr, "%s\n", report.error().message.c_str());
+        return 1;
+    }
+    if (!o.checkOutput.empty()) {
+        if (auto written = project::writePackageFile(o.checkOutput, package.value()); !written) {
+            std::fprintf(stderr, "%s\n", written.error().message.c_str());
+            return 1;
+        }
+    }
+    const std::string json = online::reportToJson(report.value());
+    std::printf("%s\n", json.c_str());
+    return 0;
+#else
+    (void)o;
+    std::fprintf(stderr, "this build has no platform support\n");
+    return 1;
+#endif
 }
 
 const char* eventName(runtime::GameEvent::Type type) {
@@ -311,11 +363,37 @@ int main(int argc, char** argv) {
         std::fwrite(md.data(), 1, md.size(), stdout);
         return 0;
     }
+    if (!options->checkPackage.empty()) return checkPackageCommand(*options);
     if (options->verbose) log::setMinLevel(log::Level::Debug);
 
-    DirectoryFileSystem files(options->projectDir);
-    if (options->resave) return resaveProject(files);
-    auto game = runtime::loadGame(files);
+    // A project folder, or a game package (*.pxpkg) as the platform sends it.
+    std::unique_ptr<IFileSystem> files;
+    if (options->projectDir.ends_with(".pxpkg")) {
+        auto package = project::readPackageFile(options->projectDir);
+        if (!package) {
+            log::error("{}", package.error().message);
+            return 1;
+        }
+        files = package->toFileSystem();
+    } else {
+        auto dir = std::make_unique<DirectoryFileSystem>(options->projectDir);
+        if (options->resave) return resaveProject(*dir);
+        files = std::move(dir);
+    }
+    if (!options->packTo.empty()) {
+        auto package = project::collectPackage(*files);
+        if (!package) {
+            log::error("{}", package.error().message);
+            return 1;
+        }
+        if (auto written = project::writePackageFile(options->packTo, package.value()); !written) {
+            log::error("{}", written.error().message);
+            return 1;
+        }
+        log::info("Wrote {} ({} files, {} bytes)", options->packTo, package->files.size(), package->totalBytes());
+        return 0;
+    }
+    auto game = runtime::loadGame(*files);
     if (!game) {
         log::error("{}", game.error().message);
         return 1;

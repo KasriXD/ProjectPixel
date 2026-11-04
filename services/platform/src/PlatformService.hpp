@@ -1,0 +1,90 @@
+#pragma once
+
+#include "Fleet.hpp"
+#include "RateLimiter.hpp"
+#include "px/core/Result.hpp"
+#include "px/crypto/Crypto.hpp"
+#include "px/online/PlatformTypes.hpp"
+
+#include <atomic>
+#include <filesystem>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+
+namespace httplib {
+class Server;
+}
+
+// The platform service (px-platform): accounts, the game catalog,
+// publishing, joining game servers, saved player data and moderation,
+// over an HTTP API (docs/platform.md).
+namespace px::platform {
+
+class Database;
+
+struct ServiceConfig {
+    std::filesystem::path dataDir;          // database, packages, logs, the platform key
+    std::string bindAddress = "127.0.0.1";
+    int port = online::kDefaultPlatformPort; // 0: any free port (tests)
+    std::string name = "Project Pixel (local)";
+    std::string publicHost = "127.0.0.1";   // how players reach game servers
+    std::string platformUrl;                // how game servers reach the platform; default from the port
+    std::filesystem::path headlessExe;      // px-headless: checks uploaded games
+    std::filesystem::path serverExe;        // px-server: runs games
+    std::uint16_t firstServerPort = 27960;
+    std::uint16_t serverPortCount = 100;
+    std::size_t maxServers = 20;
+    std::size_t serverMemoryMiB = 1024;
+    std::size_t checkMemoryMiB = 2048;
+    double checkTimeoutSeconds = 60.0;
+    int checkTicks = 120;
+    crypto::PasswordHashing passwordHashing;
+    bool rateLimits = true;
+    int sessionDays = 30;
+    std::size_t maxGamesPerUser = 50;
+    std::size_t threads = 32; // joins wait for new game servers, which call back on other threads
+};
+
+class PlatformService {
+public:
+    [[nodiscard]] static Result<std::unique_ptr<PlatformService>> create(ServiceConfig config);
+    ~PlatformService();
+    PlatformService(const PlatformService&) = delete;
+    PlatformService& operator=(const PlatformService&) = delete;
+
+    // Starts listening (in background threads); returns once it accepts connections.
+    [[nodiscard]] Status start();
+    void stop();
+    [[nodiscard]] int port() const { return m_port; }
+    [[nodiscard]] std::string url() const;
+
+    // Makes an account an administrator or a normal user again (command line).
+    [[nodiscard]] Status setRole(std::string_view username, online::Role role);
+    [[nodiscard]] const crypto::PublicKey& publicKey() const { return m_key.publicKey; }
+    [[nodiscard]] Fleet& fleet() { return *m_fleet; }
+
+private:
+    explicit PlatformService(ServiceConfig config);
+    [[nodiscard]] Status initialize();
+    void registerRoutes();
+    void migrate();
+
+    struct Impl;
+    ServiceConfig m_config;
+    std::unique_ptr<Database> m_db;
+    std::mutex m_dbMutex;
+    crypto::SigningKey m_key;
+    std::unique_ptr<Fleet> m_fleet;
+    std::unique_ptr<httplib::Server> m_http;
+    RateLimiter m_limits;
+    std::thread m_listener;
+    std::thread m_maintenance;
+    std::atomic<bool> m_running{false};
+    int m_port = 0;
+    std::unique_ptr<Impl> m_impl;
+    friend struct Impl;
+};
+
+} // namespace px::platform

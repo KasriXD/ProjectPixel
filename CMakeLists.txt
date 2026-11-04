@@ -34,6 +34,12 @@ else()
     option(PX_ENABLE_ENET "UDP multiplayer transport (ENet)" ON)
 endif()
 
+if(EMSCRIPTEN)
+    set(PX_ENABLE_PLATFORM OFF CACHE BOOL "Platform service (px-platform) and platform clients" FORCE)
+else()
+    option(PX_ENABLE_PLATFORM "Platform service (px-platform) and platform clients (HTTP, SQLite)" ON)
+endif()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # WebAssembly (Emscripten) builds - experimental, see docs/platform-support.md#browser.
@@ -59,10 +65,13 @@ set(PX_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples")
 add_subdirectory(third_party)
 add_subdirectory(engine)
 add_subdirectory(apps)
+if(PX_ENABLE_PLATFORM)
+    add_subdirectory(services)
+endif()
 
 if(PX_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
 
-message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
+message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} platform=${PX_ENABLE_PLATFORM} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")

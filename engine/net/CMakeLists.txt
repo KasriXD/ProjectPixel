@@ -4,6 +4,7 @@
 px_add_module(net
     SOURCES
         src/Bytes.cpp
+        src/ConnectToken.cpp
         src/GameClient.cpp
         src/GameServer.cpp
         src/Loopback.cpp
@@ -12,6 +13,7 @@ px_add_module(net
         src/Udp.cpp
     DEPS
         px::core
+        px::crypto
         px::scene
         px::project
         px::runtime)

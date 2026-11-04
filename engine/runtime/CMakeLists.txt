@@ -7,6 +7,7 @@ px_add_module(runtime
         src/Input.cpp
         src/InputScript.cpp
         src/Movement.cpp
+        src/PlayerData.cpp
     DEPS
         px::core
         px::scene

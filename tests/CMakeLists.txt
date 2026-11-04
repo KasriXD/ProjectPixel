@@ -1,6 +1,7 @@
 add_executable(px_tests
     test_main.cpp
     test_core.cpp
+    test_crypto.cpp
     test_assets.cpp
     test_scene.cpp
     test_physics.cpp
@@ -15,16 +16,25 @@ add_executable(px_tests
     test_prefabs.cpp
     test_animation.cpp
     test_tilesets.cpp
-    test_graphs.cpp)
+    test_graphs.cpp
+    test_packages.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
-    px::core px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::render px::editor)
+    px::core px::crypto px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::render px::editor)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
     PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library")
 px_target_defaults(px_tests)
+if(PX_ENABLE_PLATFORM)
+    target_sources(px_tests PRIVATE test_platform.cpp)
+    target_link_libraries(px_tests PRIVATE px::online px_platform_service)
+    target_compile_definitions(px_tests PRIVATE PX_HAVE_PLATFORM=1
+        PX_HEADLESS_EXE="$<TARGET_FILE:px_headless>"
+        PX_SERVER_EXE="$<TARGET_FILE:px_server>")
+    add_dependencies(px_tests px_headless px_server)
+endif()
 if(EMSCRIPTEN)
     target_link_options(px_tests PRIVATE -sNODERAWFS=1 -sEXIT_RUNTIME=1)
 endif()

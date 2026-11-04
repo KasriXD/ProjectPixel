@@ -3,6 +3,7 @@ px_add_module(project
         src/Animation.cpp
         src/JsonUtil.cpp
         src/LibraryFormat.cpp
+        src/Package.cpp
         src/Prefab.cpp
         src/ProjectFormat.cpp
         src/SceneFormat.cpp
