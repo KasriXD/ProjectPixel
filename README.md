@@ -10,12 +10,14 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.5.0)
+## Current status (version 0.6.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
-scripting), 3 (Studio foundation), 4 (multiplayer prototype) and 5 (visual
-scripting and expanded engine: prefabs, animation clips, tilesets) are
-complete. See [ROADMAP.md](ROADMAP.md) for detail.
+scripting), 3 (Studio foundation), 4 (multiplayer prototype), 5 (visual
+scripting and expanded engine: prefabs, animation clips, tilesets) and 6
+(the platform's core loop: accounts, publishing, catalog, game servers,
+saved player data, moderation) are complete. See [ROADMAP.md](ROADMAP.md)
+for detail.
 
 | Area | Status |
 |---|---|
@@ -36,6 +38,7 @@ complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | Headless simulation (no graphics) | Implemented; used by the dedicated server and automated tests |
 | Multiplayer: dedicated server (`px-server`), joining with `px-player --connect` or hosting with `--host`, UDP transport (ENet), delta snapshots, interpolation, prediction of the own character | Prototype; server and player windows played on one Linux computer over real UDP; three-player level completed through a simulated lossy network in CI on Linux, Windows and macOS. **Not yet played across a real network** ([guide](docs/multiplayer.md)) |
 | Studio *Test Multiplayer*: a local server and 1-4 player windows | Implemented, used on Linux |
+| Platform (`px-platform`): accounts, publishing from Studio with versions and upload checks, catalog, game servers started on demand with signed join tickets, saved player data (`Data.get/set`), reports and moderation | First version; the whole loop (publish, browse, join, play, save) runs in tests with real game server processes in CI on Linux, Windows and macOS, and was used from Studio and the player on Linux. Plain HTTP, one machine: **not for the internet yet** ([guide](docs/platform.md)) |
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
 | Example games, loaded from project files | A platformer and a top-down game, both playable; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
 | Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
@@ -43,7 +46,7 @@ complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | **Experimental**: engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
-| Gamepad, touch, audio, text/fonts in games, platform services (accounts, matchmaking, secure connections, publishing) | Planned (Milestones 6-8) |
+| Gamepad, touch, audio, text/fonts in games; HTTPS and encrypted game traffic, a player launcher, profiles, friends, marketplace | Planned (Milestones 7-8 and later) |
 
 ## Building
 
@@ -168,6 +171,25 @@ starts a server and player windows for you. The
 [multiplayer guide](docs/multiplayer.md) explains how games behave online,
 the scripting API for players, and how it works inside.
 
+### Publish and play on a platform
+
+```sh
+./build/dev/services/platform/px-platform     # a platform on this computer (http://127.0.0.1:8730)
+```
+
+In Studio: *Platform > Publish, Play and Log In...*, create an account,
+publish the open project, then *Play* it from the Play tab (it runs on a
+game server the platform starts). Or from the command line:
+
+```sh
+./build/dev/apps/headless/px-headless examples/platformer --platform http://127.0.0.1:8730 \
+    --user Ada --password 'choose-one' --register --publish --title "Coin Run"
+./build/dev/apps/player/px-player --platform http://127.0.0.1:8730 --play 1 --user Ada --password 'choose-one'
+```
+
+The [platform guide](docs/platform.md) covers saved player data,
+moderation, the HTTP API and what is not secure yet.
+
 ### Try scripting
 
 The example's coins, moving platform and win condition are Luau scripts in
@@ -190,6 +212,7 @@ Guide: [docs/scripting.md](docs/scripting.md); every API function:
 ```
 engine/            engine modules (static libraries), one folder per module
   core/            logging, errors, math, ids, sandboxed file access, timing, key names
+  crypto/          secure random numbers, hashing, password hashing, signatures
   assets/          asset ids, asset registry, image decoding
   scene/           entities, components, scenes
   physics/         kinematic AABB collision, one-way platforms, slopes
@@ -199,11 +222,13 @@ engine/            engine modules (static libraries), one folder per module
   render/          renderer interface, camera, scene-to-draw-call extraction
   platform_sdl/    SDL3 window, input and renderer backend
   net/             multiplayer: transports (UDP, loopback), protocol, snapshots, game server and client
+  online/          the platform from the engine's side: package checks, HTTP client
   editor/          editor model without UI: projects, scene documents, undo, play mode
 apps/player/       px-player, the desktop client
 apps/headless/     px-headless, graphics-free runner, multiplayer bots and network tests
 apps/server/       px-server, the dedicated multiplayer server
 apps/studio/       px-studio, the desktop editor (Dear ImGui)
+services/platform/ px-platform, the platform service (accounts, publishing, game servers)
 examples/          example game projects (content only, no code): platformer, topdown
 library/           starter library behind Studio's Toolbox (generated by tools/)
 tests/             automated tests
@@ -219,6 +244,7 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [CONTRIBUTING.md](CONTRIBUTING.md): coding standards and workflow
 - [docs/studio.md](docs/studio.md): Studio guide and tutorial
 - [docs/multiplayer.md](docs/multiplayer.md): playing together, multiplayer scripting, how the networking works
+- [docs/platform.md](docs/platform.md): the platform: running it, publishing, playing, game servers, saved data, moderation, API
 - [docs/project-format.md](docs/project-format.md): `project.json` and scene files
 - [docs/library-format.md](docs/library-format.md): the starter library behind the Toolbox
 - [docs/components.md](docs/components.md): generated reference of every component and field

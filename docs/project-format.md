@@ -19,7 +19,12 @@ my-game/
   scripts/*.luau          Luau scripts (docs/scripting.md)
   graphs/*.graph.json     visual scripts (docs/visual-scripting.md)
   assets/...              textures and other assets
+  .px/publish.json        Studio: which platform game this project is published as (not part of the game)
 ```
+
+Only `project.json` and the files its assets name are part of the game:
+publishing packs exactly those into a game package
+([platform.md](platform.md#game-packages)).
 
 Every file is UTF-8 JSON. Loading is **strict**: unknown fields, wrong types
 and out-of-range values are errors that name the file and the JSON path, with

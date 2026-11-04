@@ -389,6 +389,7 @@ void StudioApp::closeProjectNow() {
     m_animationEditor->close();
     m_tilesetEditor->close();
     m_graphEditor->close();
+    m_playerData.reset(); // saved data belongs to the project being tested
     m_tilesets.reset();
     showProjectSettings = false;
     updateTitle();
@@ -490,7 +491,12 @@ void StudioApp::runAfterSaveCheck(std::string actionLabel, std::function<void()>
 void StudioApp::startPlay() {
     if (!m_project || !m_document || m_play) return;
     if (m_settings.clearConsoleOnPlay) m_log.clear();
-    auto play = editor::PlayMode::start(*m_project, m_document->scene());
+    // Saved player data (Data.get / Data.set) lasts between plays until the
+    // project is closed, so creators can test saving.
+    if (!m_playerData) m_playerData = std::make_shared<runtime::PlayerData>();
+    runtime::SessionOptions sessionOptions;
+    sessionOptions.localData = m_playerData;
+    auto play = editor::PlayMode::start(*m_project, m_document->scene(), sessionOptions);
     if (!play) {
         log::error("Cannot play: {}", play.error().message);
         notify("Cannot play: " + play.error().message, true);

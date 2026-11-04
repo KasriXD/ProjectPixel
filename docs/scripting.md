@@ -288,6 +288,24 @@ changing the API.
   tick. That is fine at the current scale; a spatial broadphase is needed
   before large worlds.
 
+## Saved player data
+
+`Data.get(player, key)`, `Data.set(player, key, value)` and
+`Data.increment(player, key, amount?)` keep numbers, booleans, text and
+vectors for each player between visits. On the platform they are stored per
+game and account and loaded before `PlayerJoined`; played locally they last
+until Studio or the player closes (Studio keeps them between plays). They
+are authority-only, like `Game`. Limits and details:
+[platform.md](platform.md#saved-player-data).
+
+```lua
+function Coin:TriggerEnter(other)
+    if other:hasComponent("Player") then
+        Data.increment(other, "coins", self.value)
+    end
+end
+```
+
 ## Visual scripting
 
 Visual scripts (`*.graph.json`) are behaviours made of nodes. They compile to

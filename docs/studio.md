@@ -262,6 +262,34 @@ or Studio) closes everything. The test plays the project's start scene as
 saved, not unsaved edits. See [multiplayer.md](multiplayer.md) for what
 changes when a game is played by several people.
 
+Saved player data (`Data.set`) lasts between plays until the project is
+closed, so you can test that your game remembers things.
+
+## Publishing
+
+*Platform > Publish, Play and Log In...* opens the **Platform** panel
+([platform.md](platform.md)):
+
+- **Log in** to a platform (a `px-platform` on this computer is
+  `http://127.0.0.1:8730`) or create an account. Studio remembers the login,
+  and so does the player.
+- **Publish**: title, description and visibility, then *Create Game and
+  Publish*. Studio saves the project, packs it and uploads it; the platform
+  checks the whole game first and says what is wrong if it refuses it.
+  Afterwards *Publish New Version* uploads the current state. The link to
+  the published game is kept in the project's `.px/publish.json`.
+- **My Games**: your games with their versions, plays and players right now;
+  *Edit* changes title, description, visibility and players per server and
+  shows a player's saved data.
+- **Play**: the published games (search, most played, playing now, recent).
+  *Play* opens the game in a player window on one of the platform's
+  servers; *Report* tells the moderators about a problem.
+- **Moderation** (administrators): reports with *Dismiss*, *Hide Game* and
+  *Ban Owner*, hiding games and banning accounts by hand, and the audit log.
+
+Requests run in the background; the panel shows what it is doing and any
+error at its top.
+
 ## Saving
 
 - **Ctrl+S** (File > Save All) saves the scene, all changed scripts and the

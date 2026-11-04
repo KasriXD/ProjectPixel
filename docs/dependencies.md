@@ -14,6 +14,10 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | Luau | 0.743 (`9d7748a4`) | MIT (`third_party/luau/LICENSE.txt`; Lua 5.1 parts: `lua_LICENSE.txt`) | Vendored subset in `third_party/luau` (Common, Ast, Bytecode, Compiler, VM), see [ADR 0009](adr/0009-luau-integration.md) | `scripting` (private) |
 | Dear ImGui | 1.92.9b, docking branch (`b48d1afb`) | MIT (`third_party/imgui/LICENSE.txt`) | Vendored in `third_party/imgui` (core, SDL3 platform backend, SDL_Renderer backend, `std::string` helpers), see [ADR 0013](adr/0013-studio-ui-dear-imgui.md) | Studio only (`apps/studio`) |
 | ENet | 1.3.18 (`2662c0de`) | MIT (`third_party/enet/LICENSE`) | Vendored unmodified in `third_party/enet` with our own CMake target; not built for WebAssembly (`PX_ENABLE_ENET`) | `net` (private): the UDP transport |
+| cpp-httplib | 0.62.0 (`74ef3c42`) | MIT (`third_party/httplib/LICENSE`) | Vendored in `third_party/httplib`, split by its own `split.py` into `httplib.h` + `httplib.cc`; plain HTTP (no OpenSSL) | `online` (client), `services/platform` (server); desktop only |
+| SQLite | 3.54.1 (`57520227`) | Public domain | Amalgamation (`sqlite3.c`/`sqlite3.h`) built from the official source tag with its own `make sqlite3.c`, vendored in `third_party/sqlite` | `services/platform` |
+| Monocypher | 4.0.3 (`ab2b16dd`) | BSD-2-Clause or CC0 (`third_party/monocypher/LICENCE.md`) | Vendored `monocypher.c`/`.h` | `crypto` (private): Argon2id, EdDSA, BLAKE2b |
+| stb_image_write | 1.16, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file, PNG to memory only | `online` (private): re-encoding uploaded images |
 | doctest | 2.5.3 | MIT | Vendored in `third_party/doctest` | tests only |
 
 ### SDL3
@@ -101,14 +105,45 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
   SDL_net (no reliability layer), raw sockets (reliability and
   fragmentation by hand). None of them work in browsers either; a browser
   client will use a WebSocket/WebTransport endpoint.
-- **Not provided:** encryption and authentication; they come with the
-  platform's connect tokens (Milestone 6, see [security.md](security.md)).
+- **Not provided:** encryption and authentication. Platform servers
+  authenticate players with connect tokens (ADR 0022); encryption is
+  planned ([security.md](security.md)).
 - **Vendoring:** the sources are copied unmodified; as for the other
   vendored libraries, the build file (`third_party/enet/CMakeLists.txt`) is
   ours: one static target, the platform checks ENet's own build performs
   (`poll`, `getaddrinfo`, ...), Winsock on Windows. Update by copying the `.c` files, `include/enet/` and
   `LICENSE` of a new tag, then run the networking tests on every platform.
 - **Build impact:** a few seconds.
+
+### cpp-httplib
+- **Why:** a small, widely used HTTP/1.1 server and client in two files,
+  enough for the platform's JSON API and package downloads, with a thread
+  pool on the server side. Works on Linux, macOS and Windows 10+ (it needs
+  `_WIN32_WINNT=0x0A00`, set by our CMake target).
+- **Alternatives:** Boost.Beast (large dependency), libcurl + a separate
+  server library (two libraries, libcurl's build), civetweb (C, server only).
+- **Not provided:** TLS. cpp-httplib supports it through OpenSSL, which the
+  clients do not ship yet; see [platform.md](platform.md#security).
+- **Update:** clone a tag, run `python3 split.py -o out`, copy `out/httplib.h`,
+  `out/httplib.cc` and `LICENSE`, run the platform tests on every OS.
+
+### SQLite
+- **Why:** an embedded, transactional database in one C file; nothing to
+  install for development, CI or a small platform. Compiled with
+  `SQLITE_THREADSAFE=2`, foreign keys on, no extension loading.
+- **Alternatives:** PostgreSQL (a server to run; the likely next step when
+  the platform outgrows one machine, see ADR 0021).
+- **Update:** clone the `version-X.Y.Z` tag of https://github.com/sqlite/sqlite,
+  run `./configure && make sqlite3.c` (needs tclsh), copy `sqlite3.c` and
+  `sqlite3.h`.
+
+### Monocypher
+- **Why:** audited, small (one C file), no dependencies, portable to every
+  target including WebAssembly; covers exactly what the platform needs:
+  Argon2id for passwords, EdDSA for connect tokens, BLAKE2b for hashes.
+  Random numbers come from the operating system (`crypto/Crypto.cpp`).
+- **Alternatives:** libsodium (larger, separate build), OpenSSL (large, hard
+  to ship on every platform).
 
 ## Evaluated, planned
 

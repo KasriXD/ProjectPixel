@@ -5,14 +5,14 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-5 are done. Milestone 5 added prefabs (with spawning from
-scripts), animation clips with an editor, tilesets with one-way platforms and
-slopes, and visual scripting (node graphs compiled to Luau, with a graph
-editor). CI builds and tests on Linux, Windows (MSVC), macOS and
-(experimentally) WebAssembly. Recommended next: creators build small games
-in Studio with the new tools and two or three people play a multiplayer test
-over a real network, before Milestone 6 (see "Recommended adjustments"
-below).
+Milestones 0-6 are done. Milestone 6 built the platform's core loop: a
+`px-platform` service with accounts, publishing from Studio (versions,
+upload checks), a catalog, game servers started on demand with signed join
+tickets, saved player data for scripts, and reports and moderation. CI builds
+and tests on Linux, Windows (MSVC), macOS and (experimentally) WebAssembly.
+Recommended next: run a platform for a few friends on a home network,
+publish and play each other's games, then decide between HTTPS and a player
+launcher first (see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -22,6 +22,7 @@ below).
 | Gamepad input not implemented | Keyboard only | Small change in `platform_sdl` + bindings; scheduled with Milestone 7, could move earlier |
 | Browser build not yet tried in a real desktop browser by a person | Input feel, audio policies, page integration unconfirmed | Founder to open the CI-built `px-player-web` artifact (serve it with any static web server) |
 | Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
+| The platform has no HTTPS and runs game servers as plain processes | Not safe on the internet (passwords and tokens in clear text) | Use it on one computer or a trusted network; HTTPS is the next platform item |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
@@ -208,7 +209,7 @@ Next for multiplayer (not part of the prototype):
 - [ ] Client-side behaviours (presentation) and client-to-server requests
       validated by server scripts (like Roblox RemoteEvents)
 - [ ] Per-player state in the API (score, inventory) and team support
-- [ ] Connect tokens from the platform, encryption, rate limits (Milestone 6)
+- [x] Connect tokens from the platform (Milestone 6); encryption and per-client rate limits still planned
 - [ ] Interest management for large worlds; lag compensation for shooting
 - [ ] A browser transport (WebSocket or WebTransport) for web clients
 
@@ -252,10 +253,47 @@ Next for these tools (not part of the milestone):
       top-down directions
 - [ ] Auto-tiling rules in tilesets
 
-## Milestone 6: Platform backend and publishing (**Planned**)
+## Milestone 6: Platform backend and publishing (**Done**: the core loop)
 
-Accounts, profiles, catalog, publishing and versioning, asset storage,
-sessions and matchmaking, persistent data, friends, moderation tools.
+Scope agreed with the founder: the core loop end to end; profiles, friends
+and fuller moderation tools later. Verified in CI on Linux (GCC, Clang,
+AddressSanitizer + UBSan, headless), Windows (MSVC) and macOS, where an
+end-to-end test publishes the examples, starts real game servers through the
+platform, plays on them over UDP and checks the saved data; used on Linux
+with px-platform, Studio's Platform panel, px-player and px-headless bots.
+
+- [x] `px-platform` ([docs/platform.md](docs/platform.md), ADR 0021): C++
+      service in this repository, HTTP/JSON API, SQLite, rate limits
+- [x] Accounts: Argon2id passwords, 30-day session tokens stored as hashes,
+      a login shared by Studio and the player
+- [x] Game packages (`*.pxpkg`) and publishing with versions: every upload
+      is checked in a separate, limited process (everything loads, images
+      re-encoded, two seconds simulated); content-addressed storage
+- [x] Catalog: public/unlisted/private games, search, popular, playing now,
+      recently updated; a web page listing the games
+- [x] Game servers on demand (ADR 0022): the platform starts px-server
+      processes, fills seats, stops empty servers; signed, single-use,
+      60-second connect tokens checked by the servers; one game at a time
+      per player
+- [x] Saved player data (ADR 0023): `Data.get/set/increment`, loaded before
+      joining, saved while playing and on leaving, limits; kept between plays
+      in Studio
+- [x] Moderation: reports, hide games (servers stop), ban accounts, audit log
+- [x] Clients: Studio's Platform panel (log in, publish, your games, play,
+      report, moderation), `px-player --platform --play`, `px-headless`
+      `--publish` / `--play` / `--pack` / `--check-package`
+
+Next for the platform (not part of the milestone):
+
+- [ ] HTTPS in the clients and encrypted game traffic (keys in the token)
+- [ ] A player launcher (log in, browse, play) without Studio; thumbnails
+- [ ] Game servers in containers on separate hosts; PostgreSQL; several
+      service instances
+- [ ] Profiles and avatars, friends and invitations, playing together on
+      purpose (parties, server choice)
+- [ ] Email verification, password reset, two-factor authentication,
+      account deletion; text filtering
+- [ ] Data shared between players (leaderboards), data of offline players
 
 ## Milestone 7: Cross-platform clients (**Planned**)
 
@@ -271,12 +309,12 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: creators and real-world multiplayer tests, then Milestone 6.**
-   Let two or three creators build a small game with prefabs, animation,
-   tilesets and visual scripts, and play a multiplayer test on two or three
-   computers over a home network and over the internet; fix what they hit
-   (likely: per-player score, client-to-server requests, the multi-entity
-   Properties panel, graph functions).
+1. **Next: a small real platform, then HTTPS or a launcher.** Run
+   px-platform on one computer of a home network (`--bind 0.0.0.0
+   --public-host <address>`), let two or three people publish and play each
+   other's games, and fix what they hit. Before anything faces the
+   internet, HTTPS in the clients and encrypted game traffic are required;
+   for people who only play, a launcher matters more than Studio's panel.
 2. **Client-side behaviours before more visual effects**: decorative motion
    (the drifting clouds) currently runs on the server and is replicated
    (about 60 bytes per snapshot for 8 clouds). Client-realm behaviours

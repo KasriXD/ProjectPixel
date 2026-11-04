@@ -22,5 +22,8 @@
 | [0018](0018-multiplayer-networking.md) | Multiplayer: authoritative server, input-only clients, delta snapshots | Accepted |
 | [0019](0019-prefabs.md) | Prefabs: copies tracked by derived ids, updated by three-way merge | Accepted |
 | [0020](0020-visual-scripting.md) | Visual scripting compiles graphs to Luau | Accepted |
+| [0021](0021-platform-service.md) | The platform is a C++ service in this repository, on HTTP and SQLite | Accepted |
+| [0022](0022-connect-tokens-and-game-sessions.md) | Signed connect tokens and platform-managed game sessions | Accepted |
+| [0023](0023-saved-player-data.md) | Saved player data is loaded before joining and accessed synchronously | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

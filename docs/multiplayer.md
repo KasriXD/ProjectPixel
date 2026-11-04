@@ -12,6 +12,11 @@ between separate processes and windows, and in CI on Linux, Windows and
 macOS (the end-to-end tests run there); not yet played across the internet
 by people. See [Limitations](#limitations).
 
+This guide covers servers you start yourself (LAN games, Studio's test).
+Published games run on servers the **platform** starts, which only admit
+players with a signed ticket and keep each player's saved data
+([platform.md](platform.md)); everything below applies to them too.
+
 ## Try it
 
 **In Studio:** open a project, then *Play > Test Multiplayer > Server + 2
@@ -202,15 +207,15 @@ and under 2 kB/s back.
 ### Protocol
 
 Messages start with a type byte; numbers are little-endian, most are
-variable-length (`net/Bytes.hpp`). Protocol version 1 (`net/Protocol.hpp`):
+variable-length (`net/Bytes.hpp`). Protocol version 2 (`net/Protocol.hpp`):
 
 | Message | Direction | Delivery | Content |
 |---|---|---|---|
-| Hello | client -> server | reliable | magic, protocol version, engine version, game hash, name |
+| Hello | client -> server | reliable | magic, protocol version, engine version, game hash, name, connect token (version 2; empty outside the platform) |
 | Input | client -> server | unreliable | newest snapshot received, newest input sequence number, up to 32 frames |
 | Goodbye | client -> server | reliable | (leaving) |
 | Welcome | server -> client | reliable | player id, tick rate, snapshot interval, server name |
-| Reject | server -> client | reliable | reason code and text, then the connection is closed |
+| Reject | server -> client | reliable | reason code and text (version 2 adds "not authorized" and "saved data unavailable"), then the connection is closed |
 | Snapshot | server -> client | unreliable | level epoch, tick, baseline tick, newest input used, world change |
 
 The game hash covers the engine and protocol versions, the replication
@@ -251,11 +256,14 @@ server's (`--udp` uses real sockets instead of the simulation).
 
 ## Limitations
 
-- **No security for connections yet:** anyone who can reach the port can
-  join, names are not verified and traffic is not encrypted. Run servers
-  only among people you trust ([security.md](security.md)).
-- Score and objective are shared; there is no per-player state in the API
-  yet (per-player score, inventory).
+- **Servers you start yourself are open:** anyone who can reach the port can
+  join and names are not verified (platform servers check signed tickets,
+  [platform.md](platform.md#joining-a-game)). Traffic is not encrypted
+  anywhere yet. Run your own servers only among people you trust
+  ([security.md](security.md)).
+- Score and objective are shared; per-player values are kept with saved
+  data (`Data.get` / `Data.set`), which only platform servers store between
+  visits.
 - No client-side scripts, no messages from client scripts to server
   scripts (like Roblox RemoteEvents) yet: clients only send input.
 - Every client receives every entity; very large levels will need interest

@@ -259,6 +259,7 @@ private:
     std::unique_ptr<TilesetEditorPanel> m_tilesetEditor;
     std::unique_ptr<GraphEditorPanel> m_graphEditor;
     std::unique_ptr<PlatformPanel> m_platformPanel;
+    std::shared_ptr<runtime::PlayerData> m_playerData; // saved data while testing, kept between plays
     std::shared_ptr<const project::TilesetLibrary> m_tilesets; // cache; reset when tilesets change
     std::unique_ptr<ProjectSettingsPanel> m_projectSettings;
     std::unique_ptr<ToolboxPanel> m_toolbox;
