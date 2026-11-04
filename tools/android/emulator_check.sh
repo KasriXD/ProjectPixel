@@ -26,14 +26,19 @@ adb logcat -d -b crash > "$out/android-crash.txt" 2> /dev/null || true
 adb logcat -d -s ActivityTaskManager:I ActivityManager:I WindowManager:W AndroidRuntime:E DEBUG:I \
   > "$out/android-system.txt" 2> /dev/null || true
 cat "$out/android-log.txt" | tail -40
+system_log() {
+  echo "== Android's activity log:"
+  grep -iE "px.player|dev\.px|config|relaunch" "$out/android-system.txt" | tail -40
+}
 if ! grep -q "Loaded project" "$out/android-log.txt"; then
   echo "FAILED: the app did not load its game"
+  system_log
   exit 1
 fi
 if [ -z "$alive" ] || ! grep -q "Menu opened" "$out/android-log.txt"; then
   echo "FAILED: the back button did not open the menu (app pid: ${alive:-none})"
   cat "$out/android-crash.txt"
-  grep -iE "px.player|dev\.px" "$out/android-system.txt" | tail -40
+  system_log
   exit 1
 fi
 echo "PASSED: the app loaded its game, the back button opened the menu, it is running (pid $alive)"
