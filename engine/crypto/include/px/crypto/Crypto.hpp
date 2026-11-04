@@ -15,7 +15,7 @@ namespace px::crypto {
 
 // --- Randomness ---------------------------------------------------------------------------
 // Fills `out` from the operating system's secure random generator
-// (getrandom, getentropy, BCryptGenRandom). Fails only if the OS does.
+// (getrandom, arc4random_buf, getentropy, BCryptGenRandom). Fails only if the OS does.
 [[nodiscard]] Status randomBytes(std::span<std::uint8_t> out);
 // A random secret of `bytes` bytes as base64url text (session tokens, server keys).
 [[nodiscard]] Result<std::string> randomToken(std::size_t bytes = 32);

@@ -12,12 +12,11 @@
 #if defined(_WIN32)
 #include <windows.h>
 #include <bcrypt.h>
+#elif defined(__APPLE__) || defined(__ANDROID__)
+#include <cstdlib> // arc4random_buf (getrandom/getentropy: not on iOS, Android API 28+ only)
 #elif defined(__linux__)
 #include <sys/random.h>
 #include <cerrno>
-#elif defined(__APPLE__)
-#include <sys/random.h> // getentropy
-#include <unistd.h>
 #else
 #include <unistd.h> // getentropy (BSDs, Emscripten)
 #endif
@@ -36,6 +35,9 @@ Status randomBytes(std::span<std::uint8_t> out) {
         }
         done += n;
     }
+#elif defined(__APPLE__) || defined(__ANDROID__)
+    // The kernel-seeded system generator; it cannot fail.
+    arc4random_buf(out.data(), out.size());
 #elif defined(__linux__)
     std::size_t done = 0;
     while (done < out.size()) {

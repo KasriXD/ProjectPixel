@@ -325,7 +325,9 @@ jobs:
           cmake=$("$sdkmanager" --list 2>/dev/null | grep -o 'cmake;3\.[0-9.]*' | cut -d';' -f2 | sort -uV | tail -1)
           ndk=$(basename "$ANDROID_NDK_LATEST_HOME")
           echo "NDK $ndk, CMake $cmake"
-          yes | "$sdkmanager" --install "cmake;$cmake" > /dev/null
+          set +o pipefail # yes stops with "broken pipe" when sdkmanager is done
+          yes 2> /dev/null | "$sdkmanager" --install "cmake;$cmake" > /dev/null
+          test -x "$ANDROID_HOME/cmake/$cmake/bin/cmake" || { echo "CMake $cmake did not install"; exit 1; }
           echo "PX_NDK=$ndk" >> "$GITHUB_ENV"
           echo "PX_CMAKE=$cmake" >> "$GITHUB_ENV"
 
