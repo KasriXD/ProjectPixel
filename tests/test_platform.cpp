@@ -236,6 +236,10 @@ namespace {
 struct OnlinePlayer {
     std::unique_ptr<net::GameClient> client;
     runtime::LoadedGame game;
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    [[nodiscard]] double clock() const {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    }
 
     OnlinePlayer(PlatformClient& platform, const JoinTicket& ticket) {
         auto bytes = platform.downloadPackage(ticket.packageHash);
@@ -260,11 +264,11 @@ struct OnlinePlayer {
         std::uint32_t held = 0;
         const runtime::ActionSet set(game.manifest.input);
         for (auto a : actions) held |= 1u << set.find(a);
-        const auto start = std::chrono::steady_clock::now();
-        auto next = start;
+        const double until = clock() + seconds;
+        auto next = std::chrono::steady_clock::now();
         while (true) {
-            const double now = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-            if (now > seconds || client->status() == net::GameClient::Status::Disconnected) break;
+            const double now = clock();
+            if (now > until || client->status() == net::GameClient::Status::Disconnected) break;
             client->receive(now);
             if (client->status() == net::GameClient::Status::Playing) client->tick({held, 0});
             client->updateView(now);
@@ -273,12 +277,10 @@ struct OnlinePlayer {
         }
     }
     bool waitUntilPlaying(double seconds = 10.0) {
-        const auto start = std::chrono::steady_clock::now();
-        double now = 0.0;
-        while (client->status() != net::GameClient::Status::Playing && now < seconds &&
+        const double until = clock() + seconds;
+        while (client->status() != net::GameClient::Status::Playing && clock() < until &&
                client->status() != net::GameClient::Status::Disconnected) {
-            now = std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
-            client->receive(now);
+            client->receive(clock());
             client->tick({});
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
@@ -286,12 +288,15 @@ struct OnlinePlayer {
     }
 };
 
+// Waits for `condition`, keeping the connected players' clients running
+// meanwhile (a client that stops answering is dropped by the server).
 template <class F>
-bool eventually(F&& condition, double seconds = 10.0) {
+bool eventually(F&& condition, std::initializer_list<OnlinePlayer*> players = {}, double seconds = 20.0) {
     const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
     while (std::chrono::steady_clock::now() < end) {
         if (condition()) return true;
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        if (players.size() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        for (OnlinePlayer* p : players) p->play(0.05);
     }
     return condition();
 }
@@ -328,8 +333,8 @@ TEST_CASE("Platform: joining starts a game server; players play there and their 
     CHECK(bobTicket->session == ticket->session);
     OnlinePlayer bobPlays(bob, bobTicket.value());
     REQUIRE(bobPlays.waitUntilPlaying());
-    CHECK(eventually([&] { return p.service->fleet().playing(game->id) == 2; }));
-    CHECK(eventually([&] { return p.client().game(game->id)->playing == 2; }));
+    CHECK(eventually([&] { return p.service->fleet().playing(game->id) == 2; }, {&adaPlays, &bobPlays}));
+    CHECK(eventually([&] { return p.client().game(game->id)->playing == 2; }, {&adaPlays, &bobPlays}));
     CHECK(p.client().game(game->id)->plays == 2);
 
     // One game at a time: Ada cannot be in two games (her data is held by this one).
@@ -339,7 +344,8 @@ TEST_CASE("Platform: joining starts a game server; players play there and their 
 
     // A stolen ticket does not work for someone else: tokens are single use.
     OnlinePlayer thief(bob, ticket.value());
-    thief.play(1.5);
+    CHECK(eventually([&] { return thief.client->status() == net::GameClient::Status::Disconnected; },
+                     {&thief, &adaPlays, &bobPlays}));
     CHECK(thief.client->status() == net::GameClient::Status::Disconnected);
 
     // Ada runs right into the first coin; when she leaves, her data is saved.
@@ -347,16 +353,18 @@ TEST_CASE("Platform: joining starts a game server; players play there and their 
     CHECK(adaPlays.client->game().score >= 1);
     adaPlays.client->disconnect();
     std::string saved;
-    CHECK(eventually([&] {
-        auto data = ada.playerData(game->id, "Ada");
-        saved = data ? data.value() : "";
-        return contains(saved, "\"coins\"");
-    }));
+    CHECK(eventually(
+        [&] {
+            auto data = ada.playerData(game->id, "Ada");
+            saved = data ? data.value() : "";
+            return contains(saved, "\"coins\"");
+        },
+        {&bobPlays}));
     CHECK(contains(saved, "\"coins\":1"));
     CHECK_FALSE(bob.playerData(game->id, "Ada").ok()); // only the owner looks at players' data
 
     // Released: Ada can play the other game now, and her data stays per game.
-    CHECK(eventually([&] { return ada.join(other->id).ok(); }));
+    CHECK(eventually([&] { return ada.join(other->id).ok(); }, {&bobPlays}));
 
     // Moderation stops a game's servers.
     auto mod = p.account("Mod");

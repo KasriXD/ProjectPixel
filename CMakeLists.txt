@@ -53,7 +53,7 @@ include(PxCompilerOptions)
 include(PxDependencies)
 
 # Studio needs the SDL client and a desktop platform.
-if(PX_BUILD_STUDIO AND PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
+if(PX_BUILD_STUDIO AND PX_BUILD_CLIENT AND PX_ENABLE_PLATFORM AND NOT EMSCRIPTEN)
     set(PX_STUDIO_ENABLED ON)
 else()
     set(PX_STUDIO_ENABLED OFF)

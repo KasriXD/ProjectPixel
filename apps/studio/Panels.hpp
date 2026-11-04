@@ -19,9 +19,14 @@
 #include <tuple>
 #include <string>
 #include <vector>
+#include <functional>
+#include <future>
+#include <optional>
 
 // Studio's panels. Each draws one window with Dear ImGui and talks to the
 // editor model through StudioApp; UI-only state lives here.
+#include "px/online/PlatformClient.hpp"
+
 namespace px::studio {
 
 class StudioApp;
@@ -291,6 +296,88 @@ private:
     bool m_recompile = true;
     bool m_showCode = false;
     bool m_editing = false; // a value field is being typed in (one undo step)
+};
+
+// Log in, publish, your games, browse and play, moderation (PlatformPanel.cpp).
+class PlatformPanel {
+public:
+    PlatformPanel();
+    ~PlatformPanel();
+    PlatformPanel(const PlatformPanel&) = delete;
+    PlatformPanel& operator=(const PlatformPanel&) = delete;
+    void draw(StudioApp& app);
+    void open() {
+        m_open = true;
+        m_focus = true;
+    }
+    [[nodiscard]] bool isOpen() const { return m_open; }
+
+private:
+    // Work runs on a worker thread and returns what to change in the panel
+    // (applied on the UI thread).
+    using Apply = std::function<void(PlatformPanel&, StudioApp&)>;
+    using Work = std::function<Apply(online::PlatformClient&)>;
+    void run(std::string what, Work work);
+    void pollJob(StudioApp& app);
+    [[nodiscard]] bool busy() const { return m_job.valid(); }
+    [[nodiscard]] online::PlatformClient client() const;
+    void loggedIn(const online::AuthResult& auth);
+    void drawLogin();
+    void drawPublish(StudioApp& app);
+    void drawMyGames(StudioApp& app);
+    void refreshMine();
+    void drawBrowse(StudioApp& app);
+    void drawModeration();
+    void drawReportPopup();
+    void drawGameRow(StudioApp& app, const online::GameInfo& game, bool mine);
+    void launchPlayer(StudioApp& app, std::int64_t gameId);
+    void loadLink(StudioApp& app);
+    void saveLink();
+
+    bool m_open = false;
+    bool m_focus = false;
+    std::string m_url = "http://127.0.0.1:8730";
+    std::string m_user;
+    std::string m_password;
+    std::string m_token;
+    bool m_checkSaved = false;
+    std::optional<online::UserInfo> m_me;
+    std::future<Apply> m_job;
+    std::string m_jobText;
+    std::string m_error;
+    std::string m_status;
+    // Publish
+    std::filesystem::path m_linkedProject;
+    std::int64_t m_linkedGame = 0; // <project>/.px/publish.json
+    std::string m_title;
+    std::string m_description;
+    std::string m_notes;
+    int m_visibility = 0;
+    // My games
+    std::vector<online::GameInfo> m_mine;
+    bool m_refreshMine = false;
+    std::int64_t m_editGame = 0;
+    std::string m_editTitle;
+    std::string m_editDescription;
+    int m_editVisibility = 0;
+    int m_editMaxPlayers = 8;
+    std::string m_dataPlayer;
+    std::string m_dataText;
+    // Browse
+    std::vector<online::GameInfo> m_browse;
+    bool m_refreshBrowse = false;
+    std::string m_search;
+    int m_sort = 0;
+    std::int64_t m_reportGame = 0;
+    std::string m_reportTitle;
+    std::string m_reportReason;
+    // Moderation
+    std::vector<online::ReportInfo> m_reports;
+    std::vector<online::AuditEntry> m_audit;
+    bool m_refreshReports = true;
+    std::string m_moderationNote;
+    std::int64_t m_moderateGame = 0;
+    std::string m_moderateUser;
 };
 
 class ProjectSettingsPanel {

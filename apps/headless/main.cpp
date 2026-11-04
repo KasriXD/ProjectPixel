@@ -32,6 +32,7 @@
 #include "px/scripting/Graph.hpp"
 #if defined(PX_HAVE_PLATFORM)
 #include "px/online/PackageCheck.hpp"
+#include "px/online/PlatformClient.hpp"
 #endif
 
 #include <charconv>
@@ -74,6 +75,16 @@ struct Options {
     bool udp = false;
     int port = 0;
     bool expectJoined = false;
+    // Platform tools (docs/platform.md#command-line-tools).
+    std::string platformUrl;
+    std::string user;
+    std::string password;
+    bool registerAccount = false;
+    bool publish = false;       // --publish: publish the project
+    long long game = 0;         // --game ID: an existing game (publish) / --play ID: the game to join
+    std::string title;
+    std::string notes;
+    bool play = false;
 };
 
 void printUsage() {
@@ -97,6 +108,12 @@ void printUsage() {
                  "       px-headless --check-package FILE.pxpkg [--output FILE] [--ticks N]\n"
                  "                                            (the platform's upload check; prints a report)\n"
                  "       px-headless <project-dir or FILE.pxpkg> ...   (packages run like project folders)\n"
+                 "       px-headless <project-dir> --platform URL --user NAME --password TEXT [--register]\n"
+                 "                   --publish [--game ID | --title TEXT] [--notes TEXT]\n"
+                 "                                            (publish the game on a platform)\n"
+                 "       px-headless --platform URL --user NAME --password TEXT [--register] --play ID\n"
+                 "                   [--input-script FILE] [--ticks N] [--expect-...]\n"
+                 "                                            (join a published game as a scripted bot)\n"
                  "       px-headless --print-api-reference\n"
                  "       px-headless --compile-graph FILE.graph.json   (print the Luau a visual script runs as)\n"
                  "       px-headless --print-component-reference\n",
@@ -176,6 +193,27 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.printComponentReference = true;
         } else if (arg == "--compile-graph") {
             o.compileGraph = needValue();
+        } else if (arg == "--platform") {
+            o.platformUrl = needValue();
+        } else if (arg == "--user") {
+            o.user = needValue();
+        } else if (arg == "--password") {
+            o.password = needValue();
+        } else if (arg == "--register") {
+            o.registerAccount = true;
+        } else if (arg == "--publish") {
+            o.publish = true;
+        } else if (arg == "--title") {
+            o.title = needValue();
+        } else if (arg == "--notes") {
+            o.notes = needValue();
+        } else if (arg == "--game" || arg == "--play") {
+            o.play = o.play || arg == "--play";
+            try {
+                o.game = std::stoll(std::string(needValue()));
+            } catch (...) {
+                return std::nullopt;
+            }
         } else if (arg == "--pack") {
             o.packTo = needValue();
         } else if (arg == "--check-package") {
@@ -192,7 +230,7 @@ std::optional<Options> parseArgs(int argc, char** argv) {
         }
     }
     if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty() &&
-        o.checkPackage.empty()) {
+        o.checkPackage.empty() && !(o.play && !o.platformUrl.empty())) {
         return std::nullopt;
     }
     return o;
@@ -231,6 +269,102 @@ int checkPackageCommand(const Options& o) {
     return 1;
 #endif
 }
+
+#if defined(PX_HAVE_PLATFORM)
+// Logs in (or creates the account) for the platform tools.
+Result<online::PlatformClient> platformLogin(const Options& o) {
+    online::PlatformClient client(o.platformUrl);
+    if (o.user.empty() || o.password.empty()) {
+        return makeError(ErrorCode::InvalidArgument, "--platform needs --user NAME --password TEXT");
+    }
+    auto auth = o.registerAccount ? client.registerAccount(o.user, o.password) : client.login(o.user, o.password);
+    if (!auth) return auth.error();
+    return client;
+}
+
+// --publish: packages the project, creates the game if needed, uploads a version.
+int publishCommand(const Options& o) {
+    auto client = platformLogin(o);
+    if (!client) {
+        log::error("{}", client.error().message);
+        return 1;
+    }
+    auto package = project::collectPackage(std::filesystem::path(o.projectDir));
+    if (!package) {
+        log::error("{}", package.error().message);
+        return 1;
+    }
+    long long gameId = o.game;
+    if (gameId == 0) {
+        auto manifest = project::loadProjectManifest(*package->toFileSystem());
+        const std::string title = o.title.empty() ? (manifest ? manifest->name : std::string("My Game")) : o.title;
+        auto game = client->createGame(title, "", online::Visibility::Public);
+        if (!game) {
+            log::error("{}", game.error().message);
+            return 1;
+        }
+        gameId = game->id;
+        log::info("Created game {} '{}'", gameId, game->title);
+    }
+    auto version = client->publish(gameId, project::encodePackage(package.value()), o.notes);
+    if (!version) {
+        log::error("{}", version.error().message);
+        return 1;
+    }
+    std::printf("published game=%lld version=%d bytes=%llu package=%s\n", gameId, version->number,
+                static_cast<unsigned long long>(version->bytes), version->packageHash.c_str());
+    return 0;
+}
+
+// --play: joins a published game through the platform as a scripted bot.
+int playCommand(const Options& o, headless::NetToolOptions net) {
+    auto client = platformLogin(o);
+    if (!client) {
+        log::error("{}", client.error().message);
+        return 1;
+    }
+    auto ticket = client->join(o.game);
+    if (!ticket) {
+        log::error("{}", ticket.error().message);
+        return 1;
+    }
+    online::PackageCache cache(online::userPlatformDir() / "packages");
+    auto bytes = cache.get(client.value(), ticket->packageHash);
+    if (!bytes) {
+        log::error("{}", bytes.error().message);
+        return 1;
+    }
+    auto package = project::decodePackage(bytes.value());
+    if (!package) {
+        log::error("{}", package.error().message);
+        return 1;
+    }
+    auto game = runtime::loadGame(*package->toFileSystem());
+    if (!game) {
+        log::error("{}", game.error().message);
+        return 1;
+    }
+    if (!o.inputScriptPath.empty()) {
+        const std::filesystem::path scriptPath(o.inputScriptPath);
+        DirectoryFileSystem scriptDir(scriptPath.parent_path().empty() ? "." : scriptPath.parent_path());
+        auto text = scriptDir.readText(scriptPath.filename().generic_string());
+        if (!text) {
+            log::error("{}", text.error().message);
+            return 1;
+        }
+        auto parsed = runtime::InputScript::parse(text.value(), runtime::ActionSet(game->manifest.input));
+        if (!parsed) {
+            log::error("{}: {}", o.inputScriptPath, parsed.error().message);
+            return 1;
+        }
+        net.script = std::move(parsed.value());
+    }
+    net.connectAddress = std::format("{}:{}", ticket->host, ticket->port);
+    net.token = ticket->token;
+    log::info("Joining game {} version {} at {}", o.game, ticket->version, net.connectAddress);
+    return headless::runBot(game.value(), net);
+}
+#endif
 
 const char* eventName(runtime::GameEvent::Type type) {
     switch (type) {
@@ -364,6 +498,24 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!options->checkPackage.empty()) return checkPackageCommand(*options);
+    if (!options->platformUrl.empty()) {
+#if defined(PX_HAVE_PLATFORM)
+        if (options->publish) return publishCommand(*options);
+        if (options->play) {
+            headless::NetToolOptions net;
+            net.ticks = options->ticks;
+            net.expectLevelComplete = options->expectLevelComplete;
+            net.expectNoScriptErrors = options->expectNoScriptErrors;
+            net.expectJoined = options->expectJoined;
+            return playCommand(*options, std::move(net));
+        }
+        log::error("--platform goes with --publish or --play ID");
+        return 2;
+#else
+        log::error("This build has no platform support");
+        return 1;
+#endif
+    }
     if (options->verbose) log::setMinLevel(log::Level::Debug);
 
     // A project folder, or a game package (*.pxpkg) as the platform sends it.

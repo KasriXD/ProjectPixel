@@ -255,6 +255,7 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     m_animationEditor = std::make_unique<AnimationEditorPanel>();
     m_tilesetEditor = std::make_unique<TilesetEditorPanel>();
     m_graphEditor = std::make_unique<GraphEditorPanel>();
+    m_platformPanel = std::make_unique<PlatformPanel>();
     m_projectSettings = std::make_unique<ProjectSettingsPanel>();
     m_toolbox = std::make_unique<ToolboxPanel>();
     if (m_options.resetLayout) m_layoutBuilt = false;
@@ -1001,6 +1002,7 @@ void StudioApp::drawUi() {
     drawMenuBar();
     if (!m_project) {
         drawWelcome();
+        m_platformPanel->draw(*this);
     } else {
         const ImGuiID dockspace = ImGui::GetID(kDockSpace);
         if (!m_layoutBuilt) {
@@ -1026,6 +1028,7 @@ void StudioApp::drawUi() {
         m_animationEditor->draw(*this);
         m_tilesetEditor->draw(*this);
         m_graphEditor->draw(*this);
+        m_platformPanel->draw(*this);
         if (showProjectSettings) m_projectSettings->draw(*this, showProjectSettings);
         if (showDemoWindow) ImGui::ShowDemoWindow(&showDemoWindow);
     }
@@ -1201,6 +1204,11 @@ void StudioApp::drawMenuBar() {
             ImGui::EndMenu();
         }
         if (m_options.verbose) ImGui::MenuItem("Dear ImGui Demo (developers)", nullptr, &showDemoWindow);
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Platform")) {
+        if (ImGui::MenuItem("Publish, Play and Log In...")) m_platformPanel->open();
+        ui::tooltip("Publish this game to a platform, play published games, manage yours (docs/platform.md)");
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {

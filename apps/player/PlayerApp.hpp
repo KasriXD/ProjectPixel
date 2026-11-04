@@ -37,6 +37,12 @@ struct PlayerOptions {
     int port = 0;                          // with --host: UDP port (0: the default)
     std::string playerName;                // shown to the other players
     std::optional<Vec2i> windowPosition;   // --window-pos X,Y (Studio tiles multiplayer test windows)
+    // The platform (docs/platform.md#playing): join a published game.
+    std::string platformUrl;               // --platform URL
+    long long playGame = 0;                // --play ID
+    std::string user;                      // --user NAME (else the login saved by Studio or the player)
+    std::string password;                  // --password TEXT
+    bool registerAccount = false;          // --register: create the account first
 };
 
 // Parses command-line arguments. Returns nullopt and sets `error` on failure.
@@ -69,6 +75,9 @@ private:
 
     [[nodiscard]] px::Status restart();
     [[nodiscard]] px::Status startNetwork();
+    // Logs in, asks the platform for a seat, downloads the game. Fills
+    // m_files and the ticket fields.
+    [[nodiscard]] px::Status preparePlatformGame();
     void reload();
     [[nodiscard]] runtime::InputFrame nextInput();
     void runTick();
@@ -84,7 +93,10 @@ private:
     void saveScreenshot(const std::filesystem::path& path);
 
     PlayerOptions m_options;
-    DirectoryFileSystem m_files;
+    std::unique_ptr<IFileSystem> m_files; // the project folder, or a downloaded package
+    std::string m_ticketToken;            // platform: connect token for the game server
+    std::string m_ticketAddress;          // platform: "host:port" of the game server
+    std::string m_platformName;           // platform: the account name
     runtime::LoadedGame m_game; // manifest, start scene and compiled scripts
     std::string m_loadError;    // shown on screen when F5 reload fails
     std::unique_ptr<runtime::GameSession> m_session; // playing alone

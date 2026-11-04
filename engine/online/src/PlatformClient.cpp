@@ -320,7 +320,8 @@ Status PlatformClient::serverEnded() {
 
 std::string playerDataToJson(const runtime::PlayerData& data) {
     json j = json::object();
-    for (const auto& [key, value] : data.values) {
+    for (const auto& entry : data.values) {
+        const std::string& key = entry.first; // (Apple Clang cannot capture structured bindings)
         std::visit(
             [&](const auto& v) {
                 using T = std::decay_t<decltype(v)>;
@@ -330,7 +331,7 @@ std::string playerDataToJson(const runtime::PlayerData& data) {
                     j[key] = v;
                 }
             },
-            value);
+            entry.second);
     }
     return j.dump();
 }

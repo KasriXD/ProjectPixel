@@ -22,3 +22,8 @@ if(WIN32)
     # Windowed application without a console in release builds.
     set_target_properties(px_player PROPERTIES WIN32_EXECUTABLE $<NOT:$<CONFIG:Debug>>)
 endif()
+
+if(PX_ENABLE_PLATFORM)
+    target_link_libraries(px_player PRIVATE px::online)
+    target_compile_definitions(px_player PRIVATE PX_HAVE_PLATFORM=1)
+endif()

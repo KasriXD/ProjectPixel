@@ -43,6 +43,7 @@ int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
     }
     net::ClientOptions clientOptions;
     clientOptions.playerName = options.playerName.empty() ? std::string("Bot") : options.playerName;
+    clientOptions.token = options.token;
     auto created = net::GameClient::create(game, std::move(endpoint.value()), clientOptions);
     if (!created) {
         log::error("{}", created.error().message);

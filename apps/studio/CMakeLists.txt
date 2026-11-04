@@ -17,9 +17,10 @@ add_executable(px_studio
     ScriptEditorPanel.cpp
     ProjectSettingsPanel.cpp
     ToolboxPanel.cpp
-    MultiplayerTest.cpp)
+    MultiplayerTest.cpp
+    PlatformPanel.cpp)
 set_target_properties(px_studio PROPERTIES OUTPUT_NAME px-studio)
-target_link_libraries(px_studio PRIVATE px::editor px::render px::platform_sdl px_imgui)
+target_link_libraries(px_studio PRIVATE px::editor px::render px::platform_sdl px::online px_imgui)
 px_target_defaults(px_studio)
 target_compile_definitions(px_studio PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"

@@ -1,5 +1,10 @@
 #include "PlayerApp.hpp"
 
+#include "px/project/Package.hpp"
+#if defined(PX_HAVE_PLATFORM)
+#include "px/online/PlatformClient.hpp"
+#endif
+
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
 #include "px/net/Udp.hpp"
@@ -11,6 +16,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <cstring>
 #include <cmath>
 #include <cstdlib>
 #include <format>
@@ -55,6 +61,9 @@ const char* playerUsage() {
            "  --host              start a server in this window and play on it; others --connect\n"
            "  --port N            with --host: the UDP port to use (default 7777)\n"
            "  --name NAME         your name in multiplayer (default: your login name)\n"
+           "  --platform URL      a platform (px-platform), with --play ID: play a published game on\n"
+           "                      one of its servers, as the account logged in from Studio or\n"
+           "                      given with --user NAME --password TEXT [--register]\n"
            "  --window-pos X,Y    place the window at this screen position\n"
            "  --frames N          run exactly N frames, one simulation tick per frame, then exit\n"
            "  --screenshot FILE   with --frames: save the last frame as a PNG\n"
@@ -135,6 +144,21 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
             o.playerName = v;
         } else if (arg == "--verbose") {
             o.verbose = true;
+        } else if (arg == "--platform" || arg == "--user" || arg == "--password") {
+            const char* v = value();
+            if (v == nullptr) {
+                error = std::format("{} needs a value", arg);
+                return std::nullopt;
+            }
+            (arg == "--platform" ? o.platformUrl : arg == "--user" ? o.user : o.password) = v;
+        } else if (arg == "--play") {
+            const char* v = value();
+            if (v == nullptr || std::from_chars(v, v + std::strlen(v), o.playGame).ec != std::errc() || o.playGame < 1) {
+                error = "--play needs a game id";
+                return std::nullopt;
+            }
+        } else if (arg == "--register") {
+            o.registerAccount = true;
         } else if (arg == "--help" || arg == "-h") {
             error.clear();
             return std::nullopt;
@@ -155,6 +179,14 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
     }
     if (o.port != 0 && !o.host) {
         error = "--port goes with --host (with --connect, write ADDRESS:PORT)";
+        return std::nullopt;
+    }
+    if ((o.playGame != 0) != !o.platformUrl.empty()) {
+        error = "--platform and --play go together";
+        return std::nullopt;
+    }
+    if (o.playGame != 0 && (o.host || !o.connectAddress.empty() || !o.projectDir.empty())) {
+        error = "--play downloads the game; do not give a project, --host or --connect";
         return std::nullopt;
     }
     return o;
@@ -178,19 +210,31 @@ std::filesystem::path defaultProjectDir() {
 Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     if (options.verbose) log::setMinLevel(log::Level::Debug);
     std::filesystem::path dir = options.projectDir.empty() ? defaultProjectDir() : options.projectDir;
+    const bool platformGame = options.playGame != 0;
     std::unique_ptr<PlayerApp> app(new PlayerApp(std::move(options), dir));
+    std::string source = dir.generic_string();
+    if (platformGame) {
+        if (auto prepared = app->preparePlatformGame(); !prepared) return prepared.error();
+        source = std::format("game {} on {}", app->m_options.playGame, app->m_options.platformUrl);
+    } else if (dir.extension() == ".pxpkg") {
+        auto package = project::readPackageFile(dir);
+        if (!package) return package.error();
+        app->m_files = package->toFileSystem();
+    }
 
-    auto game = runtime::loadGame(app->m_files);
+    auto game = runtime::loadGame(*app->m_files);
     if (!game) return game.error();
     app->m_game = std::move(game.value());
     for (const auto& w : app->m_game.warnings) log::warn("{}", w);
-    log::info("Loaded project '{}' from {} ({} scripts)", app->m_game.manifest.name, dir.generic_string(),
+    log::info("Loaded project '{}' from {} ({} scripts)", app->m_game.manifest.name, source,
               app->m_game.scripts->size());
 
     const auto& display = app->m_game.manifest.settings.display;
     platform::WindowSettings window;
     window.title = std::format("{} - {}", app->m_game.manifest.name, version::productName);
-    if (app->m_options.host || !app->m_options.connectAddress.empty()) {
+    if (platformGame) {
+        window.title = std::format("{} - {} - {}", app->m_game.manifest.name, app->m_platformName, version::productName);
+    } else if (app->m_options.host || !app->m_options.connectAddress.empty()) {
         // Online, several windows of the same game are told apart by name.
         window.title = std::format("{} - {} - {}", app->m_game.manifest.name,
                                    app->m_options.playerName.empty() ? defaultPlayerName() : app->m_options.playerName,
@@ -206,13 +250,13 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     auto platform = platform::SdlPlatform::create(window);
     if (!platform) return platform.error();
     app->m_platform = std::move(platform.value());
-    app->m_textures = std::make_unique<render::TextureCache>(app->m_platform->renderer(), app->m_files,
+    app->m_textures = std::make_unique<render::TextureCache>(app->m_platform->renderer(), *app->m_files,
                                                              app->m_game.manifest.assets);
 
     app->m_clock = FixedStepClock(1.0 / app->m_game.manifest.settings.tickRate);
     app->m_showDebug = app->m_options.debugOverlay;
     app->m_actions = runtime::ActionSet(app->m_game.manifest.input);
-    if (app->m_options.host || !app->m_options.connectAddress.empty()) {
+    if (platformGame || app->m_options.host || !app->m_options.connectAddress.empty()) {
         if (auto started = app->startNetwork(); !started) return started.error();
     } else if (auto started = app->restart(); !started) {
         return started.error();
@@ -234,7 +278,48 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
 }
 
 PlayerApp::PlayerApp(PlayerOptions options, std::filesystem::path projectDir)
-    : m_options(std::move(options)), m_files(std::move(projectDir)) {}
+    : m_options(std::move(options)), m_files(std::make_unique<DirectoryFileSystem>(std::move(projectDir))) {}
+
+px::Status PlayerApp::preparePlatformGame() {
+#if defined(PX_HAVE_PLATFORM)
+    online::PlatformClient platform(m_options.platformUrl);
+    const auto dir = online::userPlatformDir();
+    if (!m_options.user.empty()) {
+        auto auth = m_options.registerAccount ? platform.registerAccount(m_options.user, m_options.password)
+                                              : platform.login(m_options.user, m_options.password);
+        if (!auth) return auth.error();
+        m_platformName = auth->user.username;
+        if (auto saved = online::saveLogin(dir, {m_options.platformUrl, m_platformName, auth->token}); !saved) {
+            log::warn("{}", saved.error().message);
+        }
+    } else {
+        const auto saved = online::loadSavedLogin(dir);
+        if (!saved || saved->platformUrl != platform.baseUrl()) {
+            return makeError(ErrorCode::AccessDenied,
+                             "Not logged in to {}: log in from Studio (Platform panel) or add --user NAME --password TEXT",
+                             m_options.platformUrl);
+        }
+        platform.setToken(saved->token);
+        auto me = platform.me();
+        if (!me) return makeError(me.error().code, "Logging in as {}: {}", saved->username, me.error().message);
+        m_platformName = me->username;
+    }
+    log::info("Joining game {} on {} as {}", m_options.playGame, m_options.platformUrl, m_platformName);
+    auto ticket = platform.join(m_options.playGame);
+    if (!ticket) return ticket.error();
+    online::PackageCache cache(dir / "packages");
+    auto bytes = cache.get(platform, ticket->packageHash);
+    if (!bytes) return bytes.error();
+    auto package = project::decodePackage(bytes.value());
+    if (!package) return package.error();
+    m_files = package->toFileSystem();
+    m_ticketToken = ticket->token;
+    m_ticketAddress = std::format("{}:{}", ticket->host, ticket->port);
+    return {};
+#else
+    return makeError(ErrorCode::Unsupported, "This build cannot connect to a platform");
+#endif
+}
 
 px::Status PlayerApp::restart() {
     auto session = runtime::startSession(m_game);
@@ -265,7 +350,8 @@ px::Status PlayerApp::startNetwork() {
         log::info("Hosting '{}' on UDP port {}. Others join with: px-player --connect <this computer's address>:{}",
                   m_game.manifest.name, port, port);
     } else {
-        auto address = net::parseAddress(m_options.connectAddress, net::kDefaultPort);
+        auto address = net::parseAddress(m_ticketAddress.empty() ? m_options.connectAddress : m_ticketAddress,
+                                         net::kDefaultPort);
         if (!address) return address.error();
         host = address->first;
         port = address->second;
@@ -274,7 +360,10 @@ px::Status PlayerApp::startNetwork() {
     auto endpoint = net::connectUdp(host, port);
     if (!endpoint) return endpoint.error();
     net::ClientOptions clientOptions;
-    clientOptions.playerName = m_options.playerName.empty() ? defaultPlayerName() : m_options.playerName;
+    clientOptions.playerName = !m_platformName.empty() ? m_platformName
+                               : m_options.playerName.empty() ? defaultPlayerName()
+                                                              : m_options.playerName;
+    clientOptions.token = m_ticketToken;
     auto client = net::GameClient::create(m_game, std::move(endpoint.value()), clientOptions);
     if (!client) return client.error();
     m_net = std::move(client.value());
@@ -321,7 +410,7 @@ void PlayerApp::reload() {
     // Luau scripts or scene files take effect without restarting the program.
     // If anything fails to load, the current game keeps running and the
     // error is shown on screen. (Window and resolution settings are not re-applied.)
-    auto game = runtime::loadGame(m_files);
+    auto game = runtime::loadGame(*m_files);
     if (!game) {
         m_loadError = game.error().message;
         log::error("Reload failed: {}", m_loadError);
@@ -336,7 +425,7 @@ void PlayerApp::reload() {
     for (const auto& w : game->warnings) log::warn("{}", w);
     m_session.reset(); // the old session references the old game's scripts
     m_game = std::move(game.value());
-    m_textures = std::make_unique<render::TextureCache>(m_platform->renderer(), m_files, m_game.manifest.assets);
+    m_textures = std::make_unique<render::TextureCache>(m_platform->renderer(), *m_files, m_game.manifest.assets);
     m_session = std::move(session.value());
     m_bindings = runtime::KeyBindings(m_game.manifest.input, m_session->actions());
     m_previousHeld = 0;

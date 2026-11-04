@@ -15,6 +15,7 @@ struct NetToolOptions {
     // --connect: join this server as a bot.
     std::string connectAddress;
     std::string playerName;
+    std::string token; // connect token (platform game servers)
     // --net-test
     int clients = 2;
     double latencyMs = 0.0;
