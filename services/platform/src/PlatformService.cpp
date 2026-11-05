@@ -1026,7 +1026,7 @@ void PlatformService::registerRoutes(httplib::Server& http) {
     registerLeaderboardRoutes(http, i);
     http.Get("/play", bind(&Impl::playPage));
     http.Get("/play/", i.wrap([](const httplib::Request&, httplib::Response& res) { res.set_redirect("/play"); }));
-    http.Get(R"(/play/(play\.(?:js|css)))", bind(&Impl::playPage));
+    http.Get(R"(/play/(play\.(?:js|css)|avatars\.png))", bind(&Impl::playPage));
     http.Get(R"(/play/player/(px-player\.(?:js|wasm|data)))", bind(&Impl::playerFile));
     http.Get("/api/v1/platform", i.wrap([this](const httplib::Request&, httplib::Response& res) {
         online::PlatformInfo info{m_config.name, std::string(version::string), online::kPlatformApiVersion,

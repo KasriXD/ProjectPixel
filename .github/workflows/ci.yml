@@ -308,6 +308,27 @@ jobs:
           done
           exit $failed
 
+      # The page's social side with the real player: pictures, a game's page
+      # and leaderboards, friends, the profile, joining a friend and inviting
+      # one (docs/launcher.md#the-browser), on a computer and a phone screen.
+      - name: Friends and leaderboards in the browser
+        shell: bash
+        run: |
+          set +e
+          web=web-download/build/wasm/apps/player
+          picture=web-download/browser.png
+          [ -f "$picture" ] || picture=
+          failed=0
+          for screen in desktop phone; do
+            tools/browser/social_test.sh build/headless "$web" "social-$screen" "$screen" $picture > "social-$screen.log" 2>&1
+            status=$?
+            cat "social-$screen.log"
+            body=$(tail -c 6000 "social-$screen.log" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            if [ $status -ne 0 ]; then echo "::error title=Social page ($screen)::${body}"; failed=1;
+            else echo "::notice title=Social page ($screen)::${body}"; fi
+          done
+          exit $failed
+
       - name: Upload cross-play results
         if: always()
         uses: actions/upload-artifact@v4
@@ -317,6 +338,9 @@ jobs:
             crossplay-*.log
             crossplay/*.png
             crossplay/*.log
+            social-*.log
+            social-*/*.png
+            social-*/*.log
 
   android:
     name: Android app

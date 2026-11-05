@@ -12,7 +12,8 @@ struct WebFile {
     const char* contentType;
 };
 
-// "play.html", "play.js", "play.css"; nothing for other names.
+// "play.html", "play.js", "play.css", "avatars.png" (the account
+// portraits, also compiled into px-player); nothing for other names.
 [[nodiscard]] std::optional<WebFile> findWebFile(std::string_view name);
 
 } // namespace px::platform

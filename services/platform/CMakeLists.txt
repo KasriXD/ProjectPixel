@@ -7,7 +7,8 @@ px_embed_files(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/WebFiles.generated.cpp"
     NAMESPACE px::platform FUNCTION findWebFile HEADER WebFiles.hpp
     FILES "play.html=${_px_web}/play.html=text/html"
           "play.js=${_px_web}/play.js=text/javascript"
-          "play.css=${_px_web}/play.css=text/css")
+          "play.css=${_px_web}/play.css=text/css"
+          "avatars.png=${_px_web}/avatars.png=image/png")
 
 add_library(px_platform_service STATIC
     src/Certificates.cpp

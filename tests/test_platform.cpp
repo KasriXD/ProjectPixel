@@ -275,7 +275,14 @@ TEST_CASE("Platform: the browser page and player files") {
         CHECK(script->get_header_value("Content-Type") == "text/javascript; charset=utf-8");
         CHECK(contains(script->body, "noUrlArguments: true"));
         CHECK(http.Get("/play/play.css")->status == 200);
+        // The portraits (binary, no charset), the same picture px-player compiles in.
+        auto avatars = http.Get("/play/avatars.png");
+        REQUIRE(avatars);
+        CHECK(avatars->status == 200);
+        CHECK(avatars->get_header_value("Content-Type") == "image/png");
+        CHECK(avatars->body.starts_with("\x89PNG"));
         CHECK(http.Get("/play/other.js")->status == 404);
+        CHECK(http.Get("/play/other.png")->status == 404);
         CHECK(http.Get("/play/player/px-player.js")->status == 404);
         CHECK(http.Get("/api/v1/games")->get_header_value("X-Content-Type-Options") == "nosniff");
     }

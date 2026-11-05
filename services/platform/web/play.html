@@ -11,14 +11,21 @@
 <body>
 <header>
   <a class="brand" href="/play" id="platform-name">Project Pixel</a>
-  <span id="who" hidden><span id="who-name"></span><button id="logout" type="button" class="quiet">Log out</button></span>
+  <nav id="nav" hidden aria-label="Pages">
+    <a href="#games" data-page="games">Games</a>
+    <a href="#friends" data-page="friends">Friends<span id="friends-badge" class="badge" hidden></span></a>
+    <a href="#you" data-page="you">You</a>
+  </nav>
+  <span id="who" hidden><span id="who-avatar" class="avatar"></span><span id="who-name"></span><button id="logout" type="button" class="quiet">Log out</button></span>
 </header>
 <main>
   <p id="message" role="alert" hidden></p>
+  <p id="notice" role="status" hidden></p>
+  <ul id="invitations" class="invitations" hidden></ul>
 
   <section id="login" hidden>
     <h1>Play in your browser</h1>
-    <p class="lead">Log in, or make an account, to join games with players on computers and phones.</p>
+    <p class="lead">Log in, or make an account, to join games with players on computers and phones, see your friends and their best scores.</p>
     <form id="login-form">
       <label>Name <input id="username" autocomplete="username" required maxlength="20" spellcheck="false" autocapitalize="off"></label>
       <label>Password <input id="password" type="password" autocomplete="current-password" required maxlength="200"></label>
@@ -32,10 +39,41 @@
   <section id="catalog" hidden>
     <div class="bar">
       <h1>Games</h1>
-      <input id="search" type="search" placeholder="Search" maxlength="100" aria-label="Search games">
+      <span class="buttons">
+        <input id="search" type="search" placeholder="Search" maxlength="100" aria-label="Search games">
+        <select id="sort" aria-label="Order">
+          <option value="popular">Popular</option>
+          <option value="recent">New</option>
+          <option value="playing">Playing now</option>
+        </select>
+      </span>
     </div>
     <ul id="games"></ul>
     <p id="no-games" class="lead" hidden>No games found.</p>
+  </section>
+
+  <section id="details" hidden>
+    <a href="#games" class="back">&larr; Games</a>
+    <div class="details">
+      <div class="picture" id="details-picture"></div>
+      <div>
+        <h1 id="details-title"></h1>
+        <p class="meta" id="details-owner"></p>
+        <p id="details-description"></p>
+        <p class="meta" id="details-stats"></p>
+        <div class="buttons"><button type="button" id="details-play">Play</button></div>
+        <ul id="details-friends" class="people"></ul>
+      </div>
+    </div>
+    <div class="bar">
+      <h2>Leaderboards</h2>
+      <span class="toggle" role="radiogroup" aria-label="Whose scores">
+        <label><input type="radio" name="board-scope" value="top" checked> Everyone</label>
+        <label><input type="radio" name="board-scope" value="friends"> Friends</label>
+      </span>
+    </div>
+    <div id="boards" class="boards"></div>
+    <p id="no-boards" class="lead" hidden>This game has no leaderboards.</p>
   </section>
 
   <section id="game" hidden>
@@ -46,15 +84,81 @@
         <button type="button" id="back">Back to games</button>
       </span>
     </div>
-    <div id="stage"><canvas id="canvas" tabindex="0"></canvas></div>
+    <div class="playing">
+      <div id="stage"><canvas id="canvas" tabindex="0"></canvas></div>
+      <aside id="invite-panel" hidden>
+        <h2>Invite friends</h2>
+        <ul id="invite-list" class="people"></ul>
+        <p id="no-invites" class="meta" hidden>Add friends on the Friends page to invite them here.</p>
+      </aside>
+    </div>
     <p id="game-status" role="status"></p>
     <p class="hint">Arrows or WASD move, Space jumps, Esc opens the menu. Gamepads work too; on touch screens, use the buttons on the screen.</p>
+  </section>
+
+  <section id="friends" hidden>
+    <h1>Friends</h1>
+    <form id="add-friend" class="inline">
+      <label class="grow">Add a friend <input id="add-name" list="suggestions" maxlength="20" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Their name"></label>
+      <datalist id="suggestions"></datalist>
+      <button type="submit">Send a request</button>
+    </form>
+    <div id="incoming-box" hidden>
+      <h2>Want to be your friend</h2>
+      <ul id="incoming" class="people"></ul>
+    </div>
+    <h2 id="friends-heading">Friends</h2>
+    <ul id="friend-list" class="people"></ul>
+    <p id="no-friends" class="lead" hidden>Add friends by their name to see when they play and join them.</p>
+    <div id="outgoing-box" hidden>
+      <h2>Waiting for an answer</h2>
+      <ul id="outgoing" class="people"></ul>
+    </div>
+  </section>
+
+  <section id="you" hidden>
+    <div class="profile-head">
+      <span id="you-avatar" class="avatar big"></span>
+      <div>
+        <h1 id="you-name"></h1>
+        <p class="meta" id="you-meta"></p>
+      </div>
+    </div>
+    <form id="profile">
+      <fieldset>
+        <legend>Portrait</legend>
+        <div id="avatar-picker" class="avatar-picker"></div>
+      </fieldset>
+      <label>About you <textarea id="bio" maxlength="200" rows="3"></textarea></label>
+      <p class="meta" id="bio-count"></p>
+      <fieldset>
+        <legend>Who can join you in games</legend>
+        <label class="check"><input type="radio" name="join-policy" value="friends"> Friends</label>
+        <label class="check"><input type="radio" name="join-policy" value="nobody"> Only friends I invite</label>
+      </fieldset>
+      <div class="buttons"><button type="submit" id="save-profile">Save</button></div>
+    </form>
+    <h2>Blocked</h2>
+    <ul id="blocked-list" class="people"></ul>
+    <p id="no-blocked" class="meta" hidden>Nobody. Blocked players cannot add you, invite you or play in the same game as you.</p>
   </section>
 
   <section id="unavailable" hidden>
     <h1>No browser play here</h1>
     <p class="lead">This platform has no browser player installed. Play its games with the Project Pixel player app.</p>
   </section>
+
+  <dialog id="report-dialog">
+    <form method="dialog" id="report-form">
+      <h2 id="report-title">Report</h2>
+      <p class="meta">What did they do? A moderator reads every report.</p>
+      <textarea id="report-reason" maxlength="1000" rows="4" required></textarea>
+      <div class="buttons">
+        <button type="submit" value="send">Send</button>
+        <button type="button" id="report-cancel" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </dialog>
 </main>
 </body>
 </html>
