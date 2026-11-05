@@ -49,8 +49,9 @@ closes it.
 
 ## Touch screens
 
-On phones, tablets and touch laptops the player draws on-screen controls when
-the screen is first touched (setting **Touch controls: Auto**):
+On touch laptops the player draws on-screen controls when the screen is
+first touched, on phones and tablets from the start (setting **Touch
+controls: Auto**):
 
 - a direction pad, bottom left: a cross when the game has `move_up` or
   `move_down`, two arrows otherwise. A thumb between two arrows presses both
@@ -70,7 +71,8 @@ as one finger).
 
 ## Settings
 
-The menu (Esc, Start or the pause button) holds the settings. They belong to
+The menu (Esc, Start, the pause button or Android's back button) holds the
+settings. They belong to
 the device, not the game, and are saved at once, in the player's preferences
 folder (`settings.txt`, for example `%APPDATA%\ProjectPixel\player` on
 Windows and `~/.local/share/ProjectPixel/player` on Linux):

@@ -15,7 +15,7 @@ testing. This page states what is verified and what work remains.
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |
 | Windows x64 (MSVC 2022) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `windows-2022`. Not yet run interactively on real hardware |
 | macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
-| Android (arm64-v8a, x86_64) | Yes: APK from Gradle + NDK, plays a bundled game | **Not tested on a device or emulator** | GitHub Actions *Android app* ([below](#android)) |
+| Android (arm64-v8a, x86_64) | Yes: APK from Gradle + NDK, plays a bundled game | On an emulated phone (Android 14, x86_64) in CI: loads the game from the APK's assets, opens in landscape with SDL's `android` driver and `opengles2` renderer, the back button opens the menu; **not tested on a device** | GitHub Actions *Android app*, *Android app (emulator)* ([below](#android)) |
 | iOS (simulator, arm64) | Yes: app bundle from Xcode | On a simulated iPhone 16 Pro in CI: loads the bundled game from the app bundle, opens with SDL's `uikit` driver and `metal` renderer, runs 900 frames; **not tested on a device** | GitHub Actions *iOS app (simulator)* ([below](#ios)) |
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
 | Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
@@ -86,7 +86,9 @@ Needs JDK 17, Gradle 8.12 (or later), the Android SDK with an NDK (r26 or
 later, for C++20 `<format>`) and a CMake 3.24+ package. The release APK is
 signed with the development key; publishing needs your own key. The APK
 built by CI (arm64-v8a and x86_64) is attached to each run as
-`android-apk`. Logs: `adb logcat -s SDL`.
+`android-apk`; CI then starts it on an emulated phone
+(`tools/android/emulator_check.sh`, screenshots in `android-emulator-run`).
+Logs: `adb logcat -s SDL SDL/APP`.
 
 ### iOS
 

@@ -28,8 +28,13 @@ Android the app's files are inside the APK, not on a file system.
    from the start on phones; gamepads work as on desktop
    ([input-devices.md](../input-devices.md)).
 5. **CI** builds a release APK (arm64-v8a and x86_64, signed with the
-   development key) and an iOS simulator app, which it runs on a simulated
-   iPhone. Device testing, store signing and publishing are left for later.
+   development key), starts it on an emulated phone, and builds an iOS
+   simulator app, which it runs on a simulated iPhone. Device testing,
+   store signing and publishing are left for later.
+6. **Orientation**: the window is fixed and full screen on phones, so the
+   app keeps the orientation it declares (landscape); a resizable window
+   made SDL request a new orientation at run time, and Android recreated
+   the activity, which ends an SDL game.
 
 ## Consequences
 

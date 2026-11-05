@@ -50,7 +50,7 @@ settings, Android and iOS apps built in CI) are complete. See
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | Engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level and plays platform games in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
-| Android and iOS apps (px-player with a bundled game, touch controls) | Built in CI: an APK (arm64-v8a, x86_64) and an iOS app, which runs the game on a simulated iPhone (UIKit, Metal). **Not tested on phones** ([details](docs/platform-support.md#mobile)) |
+| Android and iOS apps (px-player with a bundled game, touch controls) | Built in CI: an APK (arm64-v8a, x86_64), started on an emulated Android phone, and an iOS app, run on a simulated iPhone (UIKit, Metal). **Not tested on real phones** ([details](docs/platform-support.md#mobile)) |
 | Audio, text/fonts in games; encrypted UDP game traffic, a player launcher, profiles, friends, marketplace | Planned (Milestone 8 and later) |
 
 ## Building
