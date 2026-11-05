@@ -1,6 +1,7 @@
-# Dear ImGui (MIT), docking branch: Studio's user interface. Vendored by
+# Dear ImGui (MIT), docking branch: Studio's user interface and px-player's
+# launcher (not the games: they draw with the engine's renderer). Vendored by
 # tools/update_imgui.py; version in VERSION and third_party/VERSIONS.md.
-# Built only together with Studio; px-player and px-headless never link it.
+# px-headless, px-server and the browser player never link it.
 add_library(px_imgui STATIC
     imgui.cpp
     imgui_demo.cpp

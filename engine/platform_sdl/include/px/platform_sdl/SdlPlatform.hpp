@@ -68,6 +68,17 @@ public:
     // Per-device settings that can change while playing.
     void setVsync(bool on);
     void setPresentation(Presentation presentation);
+    // The same window for another game (the launcher hands it to each game it
+    // starts): title, virtual resolution, presentation, vsync. The window keeps its size.
+    void reconfigure(const WindowSettings& settings);
+    // Drawing in window pixels, without the game's virtual resolution (the launcher's UI).
+    void useWindowPixels();
+    // Forgets keys, buttons and taps (switching between the launcher and a game).
+    void clearInput();
+
+    [[nodiscard]] SDL_Window* sdlWindow() const { return m_window; }
+    [[nodiscard]] SDL_Renderer* sdlRenderer() const { return m_renderer; }
+    [[nodiscard]] SdlRenderer2D& sdlRenderer2D() { return *m_renderer2d; }
 
     [[nodiscard]] render::IRenderer2D& renderer() { return *m_renderer2d; }
 

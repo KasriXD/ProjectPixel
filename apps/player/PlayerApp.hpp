@@ -17,9 +17,12 @@
 #include "px/scene/Scene.hpp"
 
 #include <filesystem>
+#include <functional>
+#include <future>
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 union SDL_Event;
 
@@ -48,7 +51,29 @@ struct PlayerOptions {
     bool touch = false;                    // --touch: show touch controls; the mouse acts as a finger
     std::string packagePath;               // --package FILE: play a game package (the browser page uses it)
     std::string token;                     // --token TEXT: connect token for --connect (from a ticket)
+    // Started from the launcher: leaving the game returns to it. With a
+    // platform login, the menu can invite friends (platformUrl + platformToken).
+    bool fromLauncher = false;
+    std::string platformToken;
+    std::string gameTitle;                 // as the platform lists it (window title)
+    bool launcher = false;                 // --launcher: open the launcher (also: no game given)
+    std::string open;                      // --open game:ID|friends|you: the launcher's first page (tests)
+    std::vector<std::string> invite;       // --invite NAME: invite these friends once in a platform game
 };
+
+// Whether these options start the launcher rather than a game: nothing to
+// play was given (no project, package, server, platform game or --frames).
+[[nodiscard]] bool wantsLauncher(const PlayerOptions& options);
+
+// Games that come with this player and play without a platform: the
+// bundled examples (desktop), or the game in the app (phones and tablets).
+struct DeviceGame {
+    std::string title;
+    std::string gameType;
+    std::filesystem::path projectDir; // or
+    std::string packagePath;
+};
+[[nodiscard]] std::vector<DeviceGame> gamesOnThisDevice();
 
 // Parses command-line arguments. Returns nullopt and sets `error` on failure.
 [[nodiscard]] std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string& error);
@@ -60,10 +85,16 @@ class PlayerApp {
 public:
     enum class Status { Continue, Success, Failure };
 
-    [[nodiscard]] static Result<std::unique_ptr<PlayerApp>> create(PlayerOptions options);
+    // `window`: an open window to play in (the launcher's); taken only on success.
+    [[nodiscard]] static Result<std::unique_ptr<PlayerApp>> create(
+        PlayerOptions options, std::unique_ptr<platform::SdlPlatform>* window = nullptr);
 
     [[nodiscard]] Status iterate();
     [[nodiscard]] Status handleEvent(const SDL_Event& event);
+    // Ends the game and gives the window back (to the launcher).
+    [[nodiscard]] std::unique_ptr<platform::SdlPlatform> releaseWindow();
+    // Why the game ended, for the launcher ("Disconnected: ..."), or empty.
+    [[nodiscard]] std::string endMessage() const;
 
 private:
     PlayerApp(PlayerOptions options, std::filesystem::path projectDir);
@@ -93,9 +124,19 @@ private:
     void drawDebugInfo();
     void drawTouchControls();
     void drawMenu();
+    void drawInviteMenu();
     void handleMenuInput();
     void menuMove(int delta);
     void menuChange(int delta); // left/right or activate (0)
+    enum class MenuItem { Resume, Vsync, FrameLimit, Scaling, ShowFps, Touch, Invite, Quit };
+    [[nodiscard]] std::vector<MenuItem> menuItems() const;
+    [[nodiscard]] int menuRows() const;   // rows shown now (the menu or the friends to invite)
+    [[nodiscard]] int firstInvite() const; // the first friend shown (the list scrolls)
+    // Invitations (docs/social.md#invitations): platform games with a login.
+    [[nodiscard]] bool canInvite() const;
+    void openInvites();
+    void invite(const std::string& name);
+    void updateInvites();
     void applySettings();
     [[nodiscard]] bool touchVisible() const;
     [[nodiscard]] bool networked() const { return m_net != nullptr; }
@@ -145,6 +186,16 @@ private:
     int m_menuItem = 0;
     bool m_quitRequested = false;
     TouchMode m_savedTouch = TouchMode::Auto; // --touch is for this run only, unless changed in the menu
+    bool m_inviteOpen = false; // the menu shows friends to invite
+    int m_inviteItem = 0;
+    struct InviteFriend {
+        std::string name;
+        std::string state; // "PLAYING", "ONLINE", "OFFLINE"
+    };
+    std::vector<InviteFriend> m_inviteFriends;
+    std::string m_inviteStatus;
+    std::future<std::function<void(PlayerApp&)>> m_inviteJob; // a platform request
+    std::vector<std::string> m_pendingInvites;                 // --invite, once playing
 };
 
 } // namespace px::player

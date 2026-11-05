@@ -91,6 +91,30 @@ jobs:
         shell: bash
         run: ctest --preset ${{ matrix.test }} 2>&1 | tee test.log
 
+      # The launcher against a real platform: logging in, every page, playing
+      # and joining a friend from it, inviting from a game (docs/launcher.md).
+      - name: Launcher with a platform
+        if: matrix.name == 'Linux GCC'
+        shell: bash
+        run: |
+          set +e
+          tools/launcher/launcher_check.sh build/dev launcher-run > launcher-check.log 2>&1
+          status=$?
+          cat launcher-check.log
+          body=$(tail -c 6000 launcher-check.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          if [ $status -ne 0 ]; then echo "::error title=Launcher check::${body}"; exit 1; fi
+          echo "::notice title=Launcher check::${body}"
+
+      - name: Upload launcher results
+        if: always() && matrix.name == 'Linux GCC'
+        uses: actions/upload-artifact@v4
+        with:
+          name: launcher-run
+          path: |
+            launcher-run/*.png
+            launcher-run/*.log
+          if-no-files-found: ignore
+
       # Publishes the end of the CMake/CTest logs as annotations, so failures
       # can be read through the GitHub API without downloading job logs.
       - name: Report failure details
@@ -130,6 +154,7 @@ jobs:
           name: screenshot-${{ matrix.os }}-${{ matrix.configure }}-${{ strategy.job-index }}
           path: |
             build/${{ matrix.configure }}/tests/player_smoke.png
+            build/${{ matrix.configure }}/tests/launcher_smoke.png
             build/${{ matrix.configure }}/tests/studio_smoke.png
           if-no-files-found: ignore
 
@@ -379,7 +404,7 @@ jobs:
         if: always()
         run: |
           sudo apt-get install -y --no-install-recommends python3-pil > /dev/null 2>&1
-          for shot in android-run/android-game.png android-run/android-menu.png; do
+          for shot in android-run/android-launcher.png android-run/android-game.png android-run/android-menu.png; do
             [ -f "$shot" ] && { echo "== $shot"; python3 tools/browser/ascii_screenshot.py "$shot"; }
           done
 
@@ -407,7 +432,7 @@ jobs:
         shell: bash
         run: |
           cmake -S . -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
-            -DCMAKE_OSX_ARCHITECTURES=arm64 -DPX_BUILD_STUDIO=OFF -DPX_BUILD_TESTS=OFF -DPX_ENABLE_PLATFORM=OFF \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 -DPX_BUILD_STUDIO=OFF -DPX_BUILD_TESTS=OFF \
             -DPX_GAME_PACKAGE="$GITHUB_WORKSPACE/game.pxpkg" > configure.log 2>&1 || { tail -60 configure.log; exit 1; }
           cmake --build build/ios --config Release --target px_player -- -sdk iphonesimulator \
             CODE_SIGNING_ALLOWED=NO -quiet > build.log 2>&1 || { grep -E "error|BUILD FAILED" build.log | head -60; exit 1; }
@@ -432,6 +457,19 @@ jobs:
           cat simulator.log
           grep -q "Finished 900 frames" simulator.log || { echo "::error title=iOS simulator::the app did not finish its run"; exit 1; }
           echo "::notice title=iOS simulator::$(grep Finished simulator.log)"
+          # Started without a game: the launcher.
+          xcrun simctl launch --console-pty "$device" dev.px.player > launcher.log 2>&1 &
+          sleep 12
+          xcrun simctl io "$device" screenshot simulator-launcher.png
+          xcrun simctl terminate "$device" dev.px.player
+          sleep 2
+          cat launcher.log
+          grep -q "Launcher open" launcher.log || { echo "::error title=iOS simulator::the launcher did not open"; exit 1; }
+          # Launcher -> the game on this device -> back to the launcher, in one window.
+          xcrun simctl launch --console-pty "$device" dev.px.player --launcher --open local:0 --frames 300 > roundtrip.log 2>&1 &
+          for _ in $(seq 1 90); do grep -q "Launcher finished" roundtrip.log && break; sleep 1; done
+          cat roundtrip.log
+          grep -q "Launcher finished" roundtrip.log || { echo "::error title=iOS simulator::the game did not go back to the launcher"; exit 1; }
 
       - name: Upload the app
         if: always()
@@ -446,4 +484,7 @@ jobs:
           path: |
             pixel-player-simulator.zip
             simulator.png
+            simulator-launcher.png
             simulator.log
+            launcher.log
+            roundtrip.log

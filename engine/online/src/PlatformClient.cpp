@@ -74,7 +74,14 @@ Result<PlatformClient::Response> PlatformClient::request(const char* method, con
 #if defined(PX_HAVE_TLS)
     if (https) {
         client.enable_server_certificate_verification(true);
-        if (!m_caFile.empty()) client.set_ca_cert_path(m_caFile);
+        if (!m_caFile.empty()) {
+            client.set_ca_cert_path(m_caFile);
+        } else {
+#if defined(__ANDROID__)
+            // Android keeps the trusted roots one file each.
+            client.set_ca_cert_path("", "/system/etc/security/cacerts");
+#endif
+        }
     }
 #endif
     client.set_connection_timeout(5);

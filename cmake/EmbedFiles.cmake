@@ -1,6 +1,6 @@
 # px_embed_files(OUTPUT file.cpp NAMESPACE ns FUNCTION name HEADER header.hpp
 #                FILES name=path=content-type ...)
-# Text files (UTF-8); content types without parameters. Writes a C++ source with each file's bytes and a lookup function
+# Content types without parameters (text/* get charset=utf-8). Writes a C++ source with each file's bytes and a lookup function
 # std::optional<WebFile> name(std::string_view) as declared in HEADER.
 # Runs at configure time; editing a listed file re-runs the configuration.
 function(px_embed_files)
@@ -22,7 +22,10 @@ function(px_embed_files)
         string(REPEAT "0x[0-9a-f][0-9a-f]," 20 twenty) # CMake regexes have no {n}
         string(REGEX REPLACE "(${twenty})" "\\1\n    " bytes "${bytes}")
         string(APPEND arrays "const unsigned char k${index}[] = {\n    ${bytes}\n};\n")
-        string(APPEND lookups "    if (name == \"${name}\") return WebFile{std::string_view(reinterpret_cast<const char*>(k${index}), sizeof(k${index})), \"${type}; charset=utf-8\"};\n")
+        if(type MATCHES "^text/")
+            set(type "${type}; charset=utf-8")
+        endif()
+        string(APPEND lookups "    if (name == \"${name}\") return WebFile{std::string_view(reinterpret_cast<const char*>(k${index}), sizeof(k${index})), \"${type}\"};\n")
         set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${path}")
         math(EXPR index "${index} + 1")
     endforeach()

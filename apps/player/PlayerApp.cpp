@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <cctype>
 #include <charconv>
+#include <chrono>
 #include <cstring>
 #include <cmath>
 #include <cstdlib>
@@ -56,7 +57,8 @@ const char* playerUsage() {
            "                 [--input-script FILE] [--debug] [--scale N] [--verbose]\n"
            "                 [--connect ADDRESS[:PORT] | --host [--port N]] [--name NAME]\n"
            "\n"
-           "  project-dir         folder containing project.json (default: the bundled example)\n"
+           "  project-dir         folder containing project.json; without one, the launcher opens\n"
+           "                      (with --frames, the bundled example plays)\n"
            "  --connect ADDRESS   join a multiplayer server (px-server or another player's --host),\n"
            "                      over UDP (HOST[:PORT]) or WebSockets (ws://HOST:PORT/play, wss://...);\n"
            "                      you need the same project; the port defaults to 7777\n"
@@ -73,6 +75,11 @@ const char* playerUsage() {
            "  --input-script FILE play scripted input (see docs/input-scripts.md)\n"
            "  --debug             start with the debug overlay (toggle with F1)\n"
            "  --touch             show touch controls; the mouse acts as a finger (to try them)\n"
+           "  --launcher          open the launcher (the default when no game is given): log in to a\n"
+           "                      platform (--platform URL [--user NAME --password TEXT]), browse, play\n"
+           "  --invite NAME       with --play: invite this friend once in the game (also from the menu)\n"
+           "  --open PAGE         the launcher's first page: game:ID, friends or you; play:ID, join:NAME\n"
+           "                      or local:N start a game (with --frames, the game also runs N frames)\n"
            "  --package FILE      play a game package (*.pxpkg) instead of a project folder\n"
            "  --token TEXT        with --connect: the connect token of a platform ticket\n"
            "  --scale N           initial window scale (default: from the project)\n"
@@ -166,6 +173,22 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
             }
         } else if (arg == "--register") {
             o.registerAccount = true;
+        } else if (arg == "--launcher") {
+            o.launcher = true;
+        } else if (arg == "--invite") {
+            const char* v = value();
+            if (v == nullptr) {
+                error = "--invite needs a friend's name";
+                return std::nullopt;
+            }
+            o.invite.emplace_back(v);
+        } else if (arg == "--open") {
+            const char* v = value();
+            if (v == nullptr) {
+                error = "--open needs game:ID, friends or you";
+                return std::nullopt;
+            }
+            o.open = v;
         } else if (arg == "--touch") {
             o.touch = true;
         } else if (arg == "--package" || arg == "--token") {
@@ -197,8 +220,20 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
         error = "--port goes with --host (with --connect, write ADDRESS:PORT)";
         return std::nullopt;
     }
-    if ((o.playGame != 0) != !o.platformUrl.empty()) {
-        error = "--platform and --play go together";
+    if (o.playGame != 0 && o.platformUrl.empty()) {
+        error = "--play needs --platform";
+        return std::nullopt;
+    }
+    if (!o.platformUrl.empty() && o.playGame == 0 && !wantsLauncher(o)) {
+        error = "--platform goes with --play ID or the launcher (--launcher)";
+        return std::nullopt;
+    }
+    if (!o.invite.empty() && o.playGame == 0) {
+        error = "--invite goes with --play (in the launcher, the game's menu invites)";
+        return std::nullopt;
+    }
+    if (!o.open.empty() && !wantsLauncher(o)) {
+        error = "--open is for the launcher (--launcher)";
         return std::nullopt;
     }
     if (o.playGame != 0 && (o.host || !o.connectAddress.empty() || !o.projectDir.empty())) {
@@ -252,7 +287,45 @@ std::filesystem::path defaultProjectDir() {
 
 } // namespace
 
-Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
+std::vector<DeviceGame> gamesOnThisDevice() {
+    std::vector<DeviceGame> out;
+    if (const std::string package = mobilePackage(); !package.empty()) {
+        auto loaded = loadPackage(package);
+        if (!loaded) {
+            log::warn("{}", loaded.error().message);
+            return out;
+        }
+        auto files = loaded->toFileSystem();
+        auto manifest = project::loadProjectManifest(*files);
+        if (!manifest) return out;
+        out.push_back({manifest->name, std::string(project::gameTypeName(manifest->settings.gameType)), {}, package});
+        return out;
+    }
+    // The folder of examples (each with a project.json).
+    std::error_code ec;
+    const auto examples = defaultProjectDir().parent_path();
+    for (const auto& entry : std::filesystem::directory_iterator(examples, ec)) {
+        if (!entry.is_directory(ec) || !std::filesystem::is_regular_file(entry.path() / "project.json", ec)) continue;
+        DirectoryFileSystem files(entry.path());
+        auto manifest = project::loadProjectManifest(files);
+        if (!manifest) continue;
+        out.push_back({manifest->name, std::string(project::gameTypeName(manifest->settings.gameType)), entry.path(), {}});
+    }
+    std::sort(out.begin(), out.end(), [](const DeviceGame& a, const DeviceGame& b) { return a.title < b.title; });
+    return out;
+}
+
+bool wantsLauncher(const PlayerOptions& o) {
+    if (o.launcher) return true;
+#if defined(PX_HAVE_LAUNCHER)
+    return o.projectDir.empty() && o.packagePath.empty() && o.connectAddress.empty() && !o.host && o.playGame == 0 &&
+           o.frames == 0;
+#else
+    return false;
+#endif
+}
+
+Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options, std::unique_ptr<platform::SdlPlatform>* reuse) {
     if (options.verbose) log::setMinLevel(log::Level::Debug);
     if (options.projectDir.empty() && options.packagePath.empty()) options.packagePath = mobilePackage();
     std::filesystem::path dir = options.projectDir.empty() ? defaultProjectDir() : options.projectDir;
@@ -281,6 +354,8 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
     window.title = std::format("{} - {}", app->m_game.manifest.name, version::productName);
     if (platformGame) {
         window.title = std::format("{} - {} - {}", app->m_game.manifest.name, app->m_platformName, version::productName);
+    } else if (!app->m_options.gameTitle.empty()) {
+        window.title = std::format("{} - {} - {}", app->m_options.gameTitle, app->m_options.playerName, version::productName);
     } else if (app->m_options.host || !app->m_options.connectAddress.empty()) {
         // Online, several windows of the same game are told apart by name.
         window.title = std::format("{} - {} - {}", app->m_game.manifest.name,
@@ -308,9 +383,15 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
         window.presentation = app->m_settings.scaling == Scaling::PixelPerfect ? platform::Presentation::IntegerScale
                                                                                : platform::Presentation::Letterbox;
     }
-    auto platform = platform::SdlPlatform::create(window);
-    if (!platform) return platform.error();
-    app->m_platform = std::move(platform.value());
+    if (reuse != nullptr && *reuse) {
+        // Everything that can fail is done: take the window now.
+        app->m_platform = std::move(*reuse);
+        app->m_platform->reconfigure(window);
+    } else {
+        auto platform = platform::SdlPlatform::create(window);
+        if (!platform) return platform.error();
+        app->m_platform = std::move(platform.value());
+    }
     app->m_textures = std::make_unique<render::TextureCache>(app->m_platform->renderer(), *app->m_files,
                                                              app->m_game.manifest.assets);
 
@@ -336,8 +417,25 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options) {
         app->m_scriptPlayer.emplace(*app->m_script);
         log::info("Playing input script {} ({} ticks)", path.generic_string(), app->m_script->totalTicks());
     }
+    app->m_pendingInvites = app->m_options.invite;
     app->m_lastTime = app->m_platform->secondsSinceStart();
     return app;
+}
+
+std::unique_ptr<platform::SdlPlatform> PlayerApp::releaseWindow() {
+    if (networked()) m_net->disconnect();
+    m_net.reset();
+    m_hostServer.reset();
+    m_session.reset();
+    m_textures.reset(); // frees the game's textures in the window's renderer
+    if (m_platform) m_platform->clearInput();
+    return std::move(m_platform);
+}
+
+std::string PlayerApp::endMessage() const {
+    if (m_quitRequested) return {}; // the player left
+    if (networked() && m_net->status() == net::GameClient::Status::Disconnected) return m_net->statusText();
+    return {};
 }
 
 PlayerApp::PlayerApp(PlayerOptions options, std::filesystem::path projectDir)
@@ -352,6 +450,7 @@ px::Status PlayerApp::preparePlatformGame() {
                                               : platform.login(m_options.user, m_options.password);
         if (!auth) return auth.error();
         m_platformName = auth->user.username;
+        m_options.platformToken = auth->token;
         if (auto saved = online::saveLogin(dir, {m_options.platformUrl, m_platformName, auth->token}); !saved) {
             log::warn("{}", saved.error().message);
         }
@@ -366,6 +465,7 @@ px::Status PlayerApp::preparePlatformGame() {
         auto me = platform.me();
         if (!me) return makeError(me.error().code, "Logging in as {}: {}", saved->username, me.error().message);
         m_platformName = me->username;
+        m_options.platformToken = saved->token;
     }
     log::info("Joining game {} on {} as {}", m_options.playGame, m_options.platformUrl, m_platformName);
     auto ticket = platform.join(m_options.playGame);
@@ -560,6 +660,8 @@ PlayerApp::Status PlayerApp::iterate() {
 
     handleMenuInput();
     if (m_quitRequested) return Status::Success;
+    if (!m_menuOpen) m_inviteOpen = false;
+    updateInvites();
     // Deterministic runs alone advance exactly one tick per frame regardless
     // of speed; online the server's clock rules, so ticks follow real time.
     int steps = m_deterministic && !networked() ? 1 : m_clock.advance(elapsed);
@@ -828,6 +930,10 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
             case SDL_SCANCODE_ESCAPE:
             case SDL_SCANCODE_AC_BACK: // Android's back button
                 if (networked() && m_net->status() == net::GameClient::Status::Disconnected) return Status::Success;
+                if (m_inviteOpen) {
+                    m_inviteOpen = false; // back to the menu
+                    break;
+                }
                 m_menuOpen = !m_menuOpen;
                 m_menuItem = 0;
                 log::info("Menu {}", m_menuOpen ? "opened" : "closed");
@@ -879,7 +985,7 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
 // --- Touch controls and the menu ----------------------------------------------------------------
 
 namespace {
-constexpr int kMenuItems = 7;
+constexpr int kInviteRows = 8; // friends shown at once
 const char* scalingName(Scaling s) {
     return s == Scaling::PixelPerfect ? "PIXEL PERFECT" : s == Scaling::Fit ? "FIT SCREEN" : "GAME DEFAULT";
 }
@@ -895,34 +1001,149 @@ bool PlayerApp::touchVisible() const {
            (m_settings.touch == TouchMode::Auto && (mobile || m_platform->touchUsed()));
 }
 
-void PlayerApp::menuMove(int delta) { m_menuItem = (m_menuItem + delta + kMenuItems) % kMenuItems; }
+std::vector<PlayerApp::MenuItem> PlayerApp::menuItems() const {
+    std::vector<MenuItem> items{MenuItem::Resume, MenuItem::Vsync,   MenuItem::FrameLimit,
+                                MenuItem::Scaling, MenuItem::ShowFps, MenuItem::Touch};
+    if (canInvite()) items.push_back(MenuItem::Invite);
+    items.push_back(MenuItem::Quit);
+    return items;
+}
+
+int PlayerApp::menuRows() const {
+    if (!m_inviteOpen) return static_cast<int>(menuItems().size());
+    return std::min(static_cast<int>(m_inviteFriends.size()), kInviteRows) + 1;
+}
+
+int PlayerApp::firstInvite() const {
+    const int count = static_cast<int>(m_inviteFriends.size());
+    return std::clamp(m_inviteItem - kInviteRows / 2, 0, std::max(0, count - kInviteRows));
+}
+
+void PlayerApp::menuMove(int delta) {
+    if (m_inviteOpen) {
+        const int n = static_cast<int>(m_inviteFriends.size()) + 1;
+        m_inviteItem = (m_inviteItem + delta + n) % n;
+        return;
+    }
+    const int n = static_cast<int>(menuItems().size());
+    m_menuItem = (m_menuItem + delta + n) % n;
+}
 
 void PlayerApp::menuChange(int delta) {
+    if (m_inviteOpen) {
+        if (delta != 0) return;
+        if (m_inviteItem >= static_cast<int>(m_inviteFriends.size())) {
+            m_inviteOpen = false; // BACK
+        } else {
+            invite(m_inviteFriends[static_cast<std::size_t>(m_inviteItem)].name);
+        }
+        return;
+    }
+    const auto items = menuItems();
+    if (m_menuItem < 0 || m_menuItem >= static_cast<int>(items.size())) m_menuItem = 0;
     const int step = delta == 0 ? 1 : delta;
-    switch (m_menuItem) {
-        case 0:
+    switch (items[static_cast<std::size_t>(m_menuItem)]) {
+        case MenuItem::Resume:
             if (delta == 0) m_menuOpen = false;
             return;
-        case 1: m_settings.vsync = !m_settings.vsync; break;
-        case 2: {
+        case MenuItem::Vsync: m_settings.vsync = !m_settings.vsync; break;
+        case MenuItem::FrameLimit: {
             const int limits[] = {0, 30, 60, 120};
             int i = 0;
             while (i < 4 && limits[i] != m_settings.frameLimit) ++i;
             m_settings.frameLimit = limits[((i % 4) + step + 4) % 4];
             break;
         }
-        case 3: m_settings.scaling = static_cast<Scaling>((static_cast<int>(m_settings.scaling) + step + 3) % 3); break;
-        case 4: m_settings.showFps = !m_settings.showFps; break;
-        case 5:
+        case MenuItem::Scaling:
+            m_settings.scaling = static_cast<Scaling>((static_cast<int>(m_settings.scaling) + step + 3) % 3);
+            break;
+        case MenuItem::ShowFps: m_settings.showFps = !m_settings.showFps; break;
+        case MenuItem::Touch:
             m_settings.touch = static_cast<TouchMode>((static_cast<int>(m_settings.touch) + step + 3) % 3);
             m_savedTouch = m_settings.touch;
             break;
-        case 6:
+        case MenuItem::Invite:
+            if (delta == 0) openInvites();
+            return;
+        case MenuItem::Quit:
             if (delta == 0) m_quitRequested = true;
             return;
-        default: return;
     }
     applySettings();
+}
+
+// --- Inviting friends --------------------------------------------------------------------------
+
+bool PlayerApp::canInvite() const {
+#if defined(PX_HAVE_PLATFORM)
+    return networked() && !m_options.platformUrl.empty() && !m_options.platformToken.empty();
+#else
+    return false;
+#endif
+}
+
+void PlayerApp::openInvites() {
+    m_inviteOpen = true;
+    m_inviteItem = 0;
+#if defined(PX_HAVE_PLATFORM)
+    if (m_inviteJob.valid()) return;
+    m_inviteStatus = "LOOKING FOR YOUR FRIENDS...";
+    online::PlatformClient client(m_options.platformUrl);
+    client.setToken(m_options.platformToken);
+    client.setTimeoutSeconds(10);
+    m_inviteJob = std::async(std::launch::async, [client]() mutable -> std::function<void(PlayerApp&)> {
+        auto social = client.social();
+        if (!social) return [m = social.error().message](PlayerApp& app) { app.m_inviteStatus = upper(m); };
+        std::vector<InviteFriend> list;
+        for (const char* state : {"playing", "online", "offline"}) {
+            for (const auto& f : social->friends) {
+                if (f.presence.state == state) list.push_back({f.username, upper(state)});
+            }
+        }
+        return [list](PlayerApp& app) {
+            app.m_inviteFriends = list;
+            app.m_inviteItem = 0;
+            app.m_inviteStatus = list.empty() ? "NO FRIENDS YET: ADD THEM IN THE LAUNCHER" : "";
+        };
+    });
+#endif
+}
+
+void PlayerApp::invite(const std::string& name) {
+#if defined(PX_HAVE_PLATFORM)
+    if (m_inviteJob.valid()) return; // one request at a time
+    m_inviteStatus = "INVITING " + upper(name) + "...";
+    online::PlatformClient client(m_options.platformUrl);
+    client.setToken(m_options.platformToken);
+    client.setTimeoutSeconds(10);
+    m_inviteJob = std::async(std::launch::async, [client, name]() mutable -> std::function<void(PlayerApp&)> {
+        auto sent = client.invite(name);
+        if (!sent) {
+            return [name, m = sent.error().message](PlayerApp& app) {
+                log::warn("Could not invite {}: {}", name, m);
+                app.m_inviteStatus = upper(m);
+            };
+        }
+        return [name](PlayerApp& app) {
+            log::info("Invited {} to this game", name);
+            app.m_inviteStatus = "INVITED " + upper(name);
+        };
+    });
+#else
+    (void)name;
+#endif
+}
+
+void PlayerApp::updateInvites() {
+    if (m_inviteJob.valid() && m_inviteJob.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+        if (auto apply = m_inviteJob.get()) apply(*this);
+    }
+    // --invite: once the server has let us in.
+    if (!m_pendingInvites.empty() && !m_inviteJob.valid() && canInvite() &&
+        m_net->status() == net::GameClient::Status::Playing) {
+        invite(m_pendingInvites.front());
+        m_pendingInvites.erase(m_pendingInvites.begin());
+    }
 }
 
 void PlayerApp::applySettings() {
@@ -953,7 +1174,13 @@ void PlayerApp::handleMenuInput() {
         if (pressed(PadButton::DPadLeft)) menuChange(-1);
         if (pressed(PadButton::DPadRight)) menuChange(1);
         if (pressed(PadButton::South)) menuChange(0);
-        if (pressed(PadButton::East) || pressed(PadButton::Back)) m_menuOpen = false;
+        if (pressed(PadButton::East) || pressed(PadButton::Back)) {
+            if (m_inviteOpen) {
+                m_inviteOpen = false;
+            } else {
+                m_menuOpen = false;
+            }
+        }
         used = true;
     }
     // Touch: the pause button, and rows of the menu.
@@ -967,10 +1194,16 @@ void PlayerApp::handleMenuInput() {
             }
             if (m_menuOpen) {
                 const float height = static_cast<float>(m_game.manifest.settings.display.virtualResolution.y);
-                const float top = std::round(height * 0.5f - kMenuItems * 6.0f);
+                const int rows = menuRows();
+                const float top = std::round(height * 0.5f - static_cast<float>(rows) * 6.0f);
                 const int row = static_cast<int>(std::floor((t.y - top) / 12.0f));
-                if (row >= 0 && row < kMenuItems) {
-                    m_menuItem = row;
+                if (row >= 0 && row < rows) {
+                    if (m_inviteOpen) {
+                        const int shown = rows - 1; // friends, then BACK
+                        m_inviteItem = row < shown ? firstInvite() + row : static_cast<int>(m_inviteFriends.size());
+                    } else {
+                        m_menuItem = row;
+                    }
                     menuChange(0);
                 }
                 used = true;
@@ -1008,25 +1241,70 @@ void PlayerApp::drawMenu() {
     const float height = static_cast<float>(res.y);
     constexpr float g = render::IRenderer2D::kDebugGlyphSize;
     r.fillRect({0, 0, width, height}, Color{10, 8, 24, 190});
-    const std::string items[kMenuItems] = {
-        networked() ? "BACK TO THE GAME" : "RESUME",
-        std::format("VSYNC: {}", m_settings.vsync ? "ON" : "OFF"),
-        m_settings.frameLimit == 0 ? std::string("FRAME LIMIT: NONE") : std::format("FRAME LIMIT: {}", m_settings.frameLimit),
-        std::format("SCALING: {}", scalingName(m_settings.scaling)),
-        std::format("SHOW FPS: {}", m_settings.showFps ? "ON" : "OFF"),
-        std::format("TOUCH CONTROLS: {}", touchName(m_settings.touch)),
-        networked() ? "LEAVE THE GAME" : "QUIT",
-    };
-    const float top = std::round(height * 0.5f - kMenuItems * 6.0f);
+    if (m_inviteOpen) {
+        drawInviteMenu();
+        return;
+    }
+    std::vector<std::string> items;
+    for (const MenuItem item : menuItems()) {
+        switch (item) {
+            case MenuItem::Resume: items.emplace_back(networked() ? "BACK TO THE GAME" : "RESUME"); break;
+            case MenuItem::Vsync: items.push_back(std::format("VSYNC: {}", m_settings.vsync ? "ON" : "OFF")); break;
+            case MenuItem::FrameLimit:
+                items.push_back(m_settings.frameLimit == 0 ? std::string("FRAME LIMIT: NONE")
+                                                           : std::format("FRAME LIMIT: {}", m_settings.frameLimit));
+                break;
+            case MenuItem::Scaling: items.push_back(std::format("SCALING: {}", scalingName(m_settings.scaling))); break;
+            case MenuItem::ShowFps: items.push_back(std::format("SHOW FPS: {}", m_settings.showFps ? "ON" : "OFF")); break;
+            case MenuItem::Touch: items.push_back(std::format("TOUCH CONTROLS: {}", touchName(m_settings.touch))); break;
+            case MenuItem::Invite: items.emplace_back("INVITE A FRIEND"); break;
+            case MenuItem::Quit:
+                items.emplace_back(networked() ? "LEAVE THE GAME" : m_options.fromLauncher ? "BACK TO GAMES" : "QUIT");
+                break;
+        }
+    }
+    const int count = static_cast<int>(items.size());
+    const float top = std::round(height * 0.5f - static_cast<float>(count) * 6.0f);
     const std::string title = networked() ? "MENU (THE GAME GOES ON)" : "PAUSED";
     r.drawDebugText({std::round((width - g * static_cast<float>(title.size())) * 0.5f), top - 16}, title, kHudText);
-    for (int i = 0; i < kMenuItems; ++i) {
-        const std::string& s = items[i];
+    for (int i = 0; i < count; ++i) {
+        const std::string& s = items[static_cast<std::size_t>(i)];
         const float y = top + static_cast<float>(i) * 12.0f;
         if (i == m_menuItem) r.fillRect({width * 0.15f, y - 2, width * 0.7f, 12}, Color{255, 255, 255, 50});
         r.drawDebugText({std::round((width - g * static_cast<float>(s.size())) * 0.5f), y}, s,
                         i == m_menuItem ? kHudText : colors::white);
     }
+}
+
+void PlayerApp::drawInviteMenu() {
+    auto& r = m_platform->renderer();
+    const auto& res = m_game.manifest.settings.display.virtualResolution;
+    const float width = static_cast<float>(res.x);
+    const float height = static_cast<float>(res.y);
+    constexpr float g = render::IRenderer2D::kDebugGlyphSize;
+    const std::size_t columns = static_cast<std::size_t>(std::max(8.0f, width / g - 2.0f));
+    const auto centred = [&](std::string text, float y, Color color) {
+        if (text.size() > columns) text = text.substr(0, columns - 3) + "...";
+        r.drawDebugText({std::round((width - g * static_cast<float>(text.size())) * 0.5f), y}, text, color);
+    };
+    const int rows = menuRows();
+    const float top = std::round(height * 0.5f - static_cast<float>(rows) * 6.0f);
+    centred("INVITE A FRIEND TO THIS GAME", top - 16, kHudText);
+    const int first = firstInvite();
+    const int shown = rows - 1;
+    for (int row = 0; row < rows; ++row) {
+        const bool back = row == shown;
+        const int index = back ? static_cast<int>(m_inviteFriends.size()) : first + row;
+        const float y = top + static_cast<float>(row) * 12.0f;
+        const bool selected = index == m_inviteItem;
+        if (selected) r.fillRect({width * 0.1f, y - 2, width * 0.8f, 12}, Color{255, 255, 255, 50});
+        const std::string label =
+            back ? std::string("BACK")
+                 : std::format("{}  {}", upper(m_inviteFriends[static_cast<std::size_t>(index)].name),
+                               m_inviteFriends[static_cast<std::size_t>(index)].state);
+        centred(label, y, selected ? kHudText : colors::white);
+    }
+    if (!m_inviteStatus.empty()) centred(m_inviteStatus, top + static_cast<float>(rows) * 12.0f + 6.0f, kHudText);
 }
 
 } // namespace px::player

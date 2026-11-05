@@ -65,13 +65,22 @@ else()
     set(PX_STUDIO_ENABLED OFF)
 endif()
 
+# The player's launcher (log in, browse games, friends, play) needs the
+# platform client; the browser has the platform's own page instead.
+if(PX_BUILD_CLIENT AND PX_ENABLE_PLATFORM AND NOT EMSCRIPTEN)
+    set(PX_LAUNCHER_ENABLED ON)
+else()
+    set(PX_LAUNCHER_ENABLED OFF)
+endif()
+
 # Location of the bundled example projects, used for dev defaults and tests.
 set(PX_EXAMPLES_DIR "${CMAKE_CURRENT_SOURCE_DIR}/examples")
 
 add_subdirectory(third_party)
 add_subdirectory(engine)
 add_subdirectory(apps)
-if(PX_ENABLE_PLATFORM)
+# The platform service runs on servers (phones and tablets only use it).
+if(PX_ENABLE_PLATFORM AND NOT ANDROID AND NOT IOS)
     add_subdirectory(services)
 endif()
 
@@ -80,4 +89,4 @@ if(PX_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} udp=${PX_ENABLE_ENET} platform=${PX_ENABLE_PLATFORM} tls=${PX_ENABLE_TLS} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")
+message(STATUS "${PX_PRODUCT_NAME} ${PROJECT_VERSION}: client=${PX_BUILD_CLIENT} studio=${PX_STUDIO_ENABLED} launcher=${PX_LAUNCHER_ENABLED} udp=${PX_ENABLE_ENET} platform=${PX_ENABLE_PLATFORM} tls=${PX_ENABLE_TLS} tests=${PX_BUILD_TESTS} sanitizers=${PX_ENABLE_SANITIZERS}")

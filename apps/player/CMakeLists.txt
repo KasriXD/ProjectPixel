@@ -41,7 +41,14 @@ if(IOS)
     endif()
     configure_file("${PX_GAME_PACKAGE}" "${CMAKE_CURRENT_BINARY_DIR}/game.pxpkg" COPYONLY)
     set(_px_game "${CMAKE_CURRENT_BINARY_DIR}/game.pxpkg")
-    target_sources(px_player PRIVATE "${_px_game}")
+    # HTTPS on iOS: the launcher trusts the certificates in this PEM file
+    # (iOS gives Mbed TLS no access to the system's; docs/launcher.md).
+    set(PX_CA_BUNDLE "" CACHE FILEPATH "PEM file of trusted root certificates for HTTPS platforms (iOS)")
+    if(PX_CA_BUNDLE)
+        configure_file("${PX_CA_BUNDLE}" "${CMAKE_CURRENT_BINARY_DIR}/ca-certificates.pem" COPYONLY)
+        list(APPEND _px_game "${CMAKE_CURRENT_BINARY_DIR}/ca-certificates.pem")
+    endif()
+    target_sources(px_player PRIVATE ${_px_game})
     set_target_properties(px_player PROPERTIES
         MACOSX_BUNDLE TRUE
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/ios/Info.plist.in"
@@ -63,4 +70,17 @@ endif()
 if(PX_ENABLE_PLATFORM)
     target_link_libraries(px_player PRIVATE px::online)
     target_compile_definitions(px_player PRIVATE PX_HAVE_PLATFORM=1)
+endif()
+
+# The launcher (docs/launcher.md): Dear ImGui, with the account portraits
+# compiled in (the same picture the platform's web page uses).
+if(PX_LAUNCHER_ENABLED)
+    include("${PROJECT_SOURCE_DIR}/cmake/EmbedFiles.cmake")
+    px_embed_files(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/LauncherFiles.generated.cpp"
+        NAMESPACE px::player FUNCTION findLauncherFile HEADER LauncherFiles.hpp
+        FILES "avatars.png=${PROJECT_SOURCE_DIR}/services/platform/web/avatars.png=image/png")
+    target_sources(px_player PRIVATE Launcher.cpp "${CMAKE_CURRENT_BINARY_DIR}/LauncherFiles.generated.cpp")
+    target_include_directories(px_player PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
+    target_link_libraries(px_player PRIVATE px_imgui)
+    target_compile_definitions(px_player PRIVATE PX_HAVE_LAUNCHER=1)
 endif()

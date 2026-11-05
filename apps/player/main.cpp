@@ -7,21 +7,66 @@
 #include <SDL3/SDL_main.h>
 
 #include "PlayerApp.hpp"
+#if defined(PX_HAVE_LAUNCHER)
+#include "Launcher.hpp"
+#endif
 
 #include "px/core/Log.hpp"
 
 #include <cstdio>
+#include <memory>
 
 namespace {
 
-SDL_AppResult toSdl(px::player::PlayerApp::Status status) {
+using px::player::PlayerApp;
+
+SDL_AppResult toSdl(PlayerApp::Status status) {
     switch (status) {
-        case px::player::PlayerApp::Status::Continue: return SDL_APP_CONTINUE;
-        case px::player::PlayerApp::Status::Success: return SDL_APP_SUCCESS;
-        case px::player::PlayerApp::Status::Failure: return SDL_APP_FAILURE;
+        case PlayerApp::Status::Continue: return SDL_APP_CONTINUE;
+        case PlayerApp::Status::Success: return SDL_APP_SUCCESS;
+        case PlayerApp::Status::Failure: return SDL_APP_FAILURE;
     }
     return SDL_APP_FAILURE;
 }
+
+// What runs: a game, or the launcher and the game it started (one window,
+// passed between them).
+struct Shell {
+    std::unique_ptr<PlayerApp> game;
+#if defined(PX_HAVE_LAUNCHER)
+    std::unique_ptr<px::player::Launcher> launcher;
+
+    // The game ended: back to the launcher, with the window.
+    void backToLauncher(PlayerApp::Status status) {
+        const std::string message = game->endMessage();
+        launcher->resume(game->releaseWindow(), message, status == PlayerApp::Status::Failure);
+        game.reset();
+    }
+
+    SDL_AppResult iterateLauncher() {
+        switch (launcher->iterate()) {
+            case px::player::Launcher::Status::Continue: return SDL_APP_CONTINUE;
+            case px::player::Launcher::Status::Quit: return SDL_APP_SUCCESS;
+            case px::player::Launcher::Status::Failed: return SDL_APP_FAILURE;
+            case px::player::Launcher::Status::Play: break;
+        }
+        auto window = launcher->takeWindow();
+        auto app = PlayerApp::create(launcher->takeGame(), &window);
+        if (!app) {
+            px::log::warn("{}", app.error().message);
+            launcher->resume(std::move(window), app.error().message, true);
+            return SDL_APP_CONTINUE;
+        }
+        game = std::move(app.value());
+        return SDL_APP_CONTINUE;
+    }
+
+    ~Shell() {
+        // The launcher's user interface closes in its window.
+        if (game && launcher) launcher->resume(game->releaseWindow(), {}, false);
+    }
+#endif
+};
 
 } // namespace
 
@@ -44,23 +89,60 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char* argv[]) {
         std::fputs(px::player::playerUsage(), stderr);
         return error.empty() ? SDL_APP_SUCCESS : SDL_APP_FAILURE;
     }
-    auto app = px::player::PlayerApp::create(std::move(*options));
+    auto shell = std::make_unique<Shell>();
+#if defined(PX_HAVE_LAUNCHER)
+    if (px::player::wantsLauncher(*options)) {
+        auto launcher = px::player::Launcher::create(*options);
+        if (!launcher) {
+            px::log::error("{}", launcher.error().message);
+            return SDL_APP_FAILURE;
+        }
+        shell->launcher = std::move(launcher.value());
+        *appstate = shell.release();
+        return SDL_APP_CONTINUE;
+    }
+#endif
+    auto app = PlayerApp::create(std::move(*options));
     if (!app) {
         px::log::error("{}", app.error().message);
         return SDL_APP_FAILURE;
     }
-    *appstate = app.value().release();
+    shell->game = std::move(app.value());
+    *appstate = shell.release();
     return SDL_APP_CONTINUE;
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    return toSdl(static_cast<px::player::PlayerApp*>(appstate)->iterate());
+    auto& shell = *static_cast<Shell*>(appstate);
+#if defined(PX_HAVE_LAUNCHER)
+    if (shell.launcher) {
+        if (!shell.game) return shell.iterateLauncher();
+        const PlayerApp::Status status = shell.game->iterate();
+        if (status != PlayerApp::Status::Continue) shell.backToLauncher(status);
+        return SDL_APP_CONTINUE;
+    }
+#endif
+    return toSdl(shell.game->iterate());
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    return toSdl(static_cast<px::player::PlayerApp*>(appstate)->handleEvent(*event));
+    auto& shell = *static_cast<Shell*>(appstate);
+#if defined(PX_HAVE_LAUNCHER)
+    if (shell.launcher) {
+        // Closing the window leaves the app, also from a game.
+        if (event->type == SDL_EVENT_QUIT) return SDL_APP_SUCCESS;
+        if (!shell.game) {
+            return shell.launcher->handleEvent(*event) == px::player::Launcher::Status::Quit ? SDL_APP_SUCCESS
+                                                                                             : SDL_APP_CONTINUE;
+        }
+        const PlayerApp::Status status = shell.game->handleEvent(*event);
+        if (status != PlayerApp::Status::Continue) shell.backToLauncher(status);
+        return SDL_APP_CONTINUE;
+    }
+#endif
+    return toSdl(shell.game->handleEvent(*event));
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult) {
-    delete static_cast<px::player::PlayerApp*>(appstate);
+    delete static_cast<Shell*>(appstate);
 }

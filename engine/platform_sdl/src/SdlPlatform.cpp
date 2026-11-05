@@ -193,6 +193,30 @@ void SdlPlatform::setPresentation(Presentation presentation) {
     SDL_SetRenderLogicalPresentation(m_renderer, m_virtual.x, m_virtual.y, mode);
 }
 
+void SdlPlatform::reconfigure(const WindowSettings& settings) {
+    SDL_SetWindowTitle(m_window, settings.title.c_str());
+    SDL_SetRenderTarget(m_renderer, nullptr);
+    SDL_SetRenderScale(m_renderer, 1.0f, 1.0f); // the launcher scales for high-density screens
+    m_virtual = settings.virtualResolution;
+    setPresentation(settings.presentation);
+    setVsync(settings.vsync);
+    SDL_SetHint(SDL_HINT_MOUSE_TOUCH_EVENTS, settings.mouseAsTouch ? "1" : "0");
+    clearInput();
+}
+
+void SdlPlatform::useWindowPixels() {
+    SDL_SetRenderLogicalPresentation(m_renderer, 0, 0, SDL_LOGICAL_PRESENTATION_DISABLED);
+    SDL_SetRenderTarget(m_renderer, nullptr);
+}
+
+void SdlPlatform::clearInput() {
+    m_down = {};
+    m_pressed = {};
+    m_padPressed = {};
+    m_fingers.clear();
+    m_taps.clear();
+}
+
 Status SdlPlatform::saveScreenshot(const std::filesystem::path& path) {
     SDL_Surface* surface = SDL_RenderReadPixels(m_renderer, nullptr);
     if (surface == nullptr) {

@@ -24,14 +24,13 @@ android {
         applicationId 'dev.px.player'
         minSdk 24
         targetSdk 35
-        versionCode 700
-        versionName '0.7.0'
+        versionCode 800
+        versionName '0.8.0'
         externalNativeBuild {
             cmake {
                 arguments '-DANDROID_STL=c++_static',
                           '-DPX_BUILD_STUDIO=OFF',
-                          '-DPX_BUILD_TESTS=OFF',
-                          '-DPX_ENABLE_PLATFORM=OFF'
+                          '-DPX_BUILD_TESTS=OFF'
                 targets 'px_player'
             }
         }

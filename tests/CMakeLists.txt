@@ -91,6 +91,18 @@ if(PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0")
 endif()
 
+# The launcher (docs/launcher.md), without a platform: it opens, starts the
+# first game on this device (60 frames), gets the window back and draws 60
+# frames of its own. tools/launcher/launcher_check.sh tests it with a platform.
+if(PX_LAUNCHER_ENABLED)
+    add_test(NAME launcher_smoke_headless_display
+        COMMAND px_player --launcher --open local:0 --frames 60
+                --screenshot "${CMAKE_CURRENT_BINARY_DIR}/launcher_smoke.png")
+    set_tests_properties(launcher_smoke_headless_display PROPERTIES
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0;PX_PLATFORM_DIR=${CMAKE_CURRENT_BINARY_DIR}/launcher_smoke_data"
+        PASS_REGULAR_EXPRESSION "Launcher finished 60 frames")
+endif()
+
 # Studio smoke test: the real editor UI with SDL's "dummy" video driver. It
 # opens the example project, selects and creates entities, opens the script
 # editor and project settings, undoes everything, plays for two seconds and

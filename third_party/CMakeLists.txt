@@ -47,7 +47,9 @@ if(PX_ENABLE_PLATFORM)
         target_link_libraries(px_httplib PUBLIC mbedtls mbedx509 mbedcrypto)
         if(WIN32)
             target_link_libraries(px_httplib PUBLIC crypt32)
-        elseif(APPLE)
+        elseif(APPLE AND NOT IOS)
+            # (iOS has no keychain API for the trusted roots: PlatformClient
+            # uses a certificate file there, docs/launcher.md#phones-and-tablets.)
             target_compile_definitions(px_httplib PUBLIC CPPHTTPLIB_USE_CERTS_FROM_MACOSX_KEYCHAIN)
             target_link_libraries(px_httplib PUBLIC "-framework CoreFoundation" "-framework Security")
         endif()
@@ -74,7 +76,7 @@ endif()
 add_library(px_doctest INTERFACE)
 target_include_directories(px_doctest SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/doctest")
 
-# Dear ImGui: Studio's user interface (desktop only).
-if(PX_STUDIO_ENABLED)
+# Dear ImGui: Studio's user interface and the player's launcher.
+if(PX_STUDIO_ENABLED OR PX_LAUNCHER_ENABLED)
     add_subdirectory(imgui)
 endif()
