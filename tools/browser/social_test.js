@@ -103,6 +103,17 @@ async function main() {
     await fits('catalog');
     await shot('catalog.png');
 
+    // A link to play= or join= opens the game's page or the friends page:
+    // only a click on the page starts the player.
+    await page.goto(`${o.url}/play#join=${o.friend}`);
+    await page.waitForSelector('#friends:not([hidden])', { timeout: 20000 });
+    await page.goto(`${o.url}/play#play=${o.game}`);
+    await page.waitForSelector('#details:not([hidden])', { timeout: 20000 });
+    if (lines.some((l) => /Joining|stub:|Connecting/.test(l))) throw new Error('a link started the player');
+    log('Links to play= and join= opened pages without starting the player');
+    await page.click('#nav a[data-page=games]');
+    await page.waitForSelector('#catalog:not([hidden])');
+
     // The game's page: the friend's score, for everyone and among friends.
     await page.click(`#games a.open[href="#game=${o.game}"]`);
     await page.waitForSelector('#details:not([hidden])');

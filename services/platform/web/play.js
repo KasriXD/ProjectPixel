@@ -5,7 +5,8 @@
 // textContent.
 //
 // Pages (the address's #): games, game=ID (a game's page), play=ID,
-// join=NAME (a friend's game), friends, you.
+// join=NAME (a friend's game), friends, you. play= and join= start the
+// player only after a click on this page (see route()).
 'use strict';
 
 (() => {
@@ -197,20 +198,32 @@
       return;
     }
     const hash = decodeURIComponent(location.hash.slice(1));
+    // Playing and joining start only from a click on this page: a link from
+    // elsewhere opens the game's page or the friends page instead.
+    const asked = store.get('px.intent') === location.hash;
+    store.del('px.intent');
     let m;
-    if ((m = /^play=(\d{1,18})$/.exec(hash))) play(m[1]);
-    else if ((m = /^join=([A-Za-z0-9_]{1,32})$/.exec(hash))) joinFriend(m[1]);
-    else if ((m = /^game=(\d{1,18})$/.exec(hash))) details(m[1]);
+    if ((m = /^play=(\d{1,18})$/.exec(hash))) {
+      if (asked) play(m[1]);
+      else details(m[1]);
+    } else if ((m = /^join=([A-Za-z0-9_]{1,32})$/.exec(hash))) {
+      if (asked) joinFriend(m[1]);
+      else friendsPage();
+    } else if ((m = /^game=(\d{1,18})$/.exec(hash))) details(m[1]);
     else if (hash === 'friends') friendsPage();
     else if (hash === 'you') youPage();
     else catalog();
   }
 
-  // While the player runs, other pages need a fresh page (the player cannot be unloaded).
+  // Goes to a page from a click on this page. While the player runs, other
+  // pages need a fresh page (the player cannot be unloaded).
   function go(hash) {
+    store.set('px.intent', hash);
     if (started) {
       history.replaceState(null, '', location.pathname + location.search + hash);
       location.reload();
+    } else if (location.hash === hash) {
+      route();
     } else {
       location.hash = hash;
     }

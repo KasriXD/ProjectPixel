@@ -21,7 +21,8 @@ public class PlayerActivity extends SDLActivity {
      * Test runs pass a few player options as an extra:
      * {@code adb shell am start -n dev.px.player/.PlayerActivity --es args "--open local:0"}.
      * Other apps can start this activity too, so only options that read or
-     * write nothing outside the app are taken.
+     * write nothing outside the app are taken, and --open only opens a page or
+     * a game on this device (never joins an online game or a person).
      */
     @Override
     protected String[] getArguments() {
@@ -35,8 +36,11 @@ public class PlayerActivity extends SDLActivity {
             String w = words[i];
             if (w.equals("--verbose") || w.equals("--touch") || w.equals("--launcher")) {
                 args.add(w);
-            } else if ((w.equals("--open") || w.equals("--frames")) && i + 1 < words.length
-                       && words[i + 1].matches("[A-Za-z0-9:_]{1,40}")) {
+            } else if (w.equals("--open") && i + 1 < words.length
+                       && words[i + 1].matches("local:[0-9]{1,2}|game:[0-9]{1,18}|friends|you")) {
+                args.add(w);
+                args.add(words[++i]);
+            } else if (w.equals("--frames") && i + 1 < words.length && words[i + 1].matches("[0-9]{1,7}")) {
                 args.add(w);
                 args.add(words[++i]);
             }
