@@ -22,6 +22,11 @@
         android:enableOnBackInvokedCallback="false"
         android:hardwareAccelerated="true">
 
+        <!-- Android may create the activity again while it starts (for
+             example when the screen turns to landscape before the first
+             frame). Without this, SDL ends the app when that happens. -->
+        <meta-data android:name="SDL_ENV.SDL_ANDROID_ALLOW_RECREATE_ACTIVITY" android:value="1" />
+
         <activity
             android:name="dev.px.player.PlayerActivity"
             android:label="@string/app_name"

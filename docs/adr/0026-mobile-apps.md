@@ -34,7 +34,10 @@ Android the app's files are inside the APK, not on a file system.
 6. **Orientation**: the window is fixed and full screen on phones, so the
    app keeps the orientation it declares (landscape); a resizable window
    made SDL request a new orientation at run time, and Android recreated
-   the activity, which ends an SDL game.
+   the activity, which ends an SDL game. Android can still recreate the
+   activity while it starts (the screen turning to landscape before the
+   first frame, seen on the emulator), so the app allows SDL to carry on in
+   the new activity (`SDL_ANDROID_ALLOW_RECREATE_ACTIVITY`).
 
 ## Consequences
 
