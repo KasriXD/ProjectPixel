@@ -16,6 +16,13 @@
 
 namespace px::scripting {
 
+// One line of a leaderboard (Leaderboard.top, Leaderboard.best).
+struct LeaderboardRow {
+    int rank = 0; // 1 = best; equal scores share a rank
+    std::string name;
+    double score = 0.0;
+};
+
 // Services the game runtime provides to scripts. The scripting module has
 // no dependency on the runtime; GameSession implements this interface.
 // Every script API call that touches game state goes through here, which is
@@ -91,6 +98,22 @@ public:
     [[nodiscard]] virtual Status playerDataSet(scene::Entity /*player*/, std::string_view /*key*/,
                                                std::optional<scene::ScriptValue> /*value*/) {
         return makeError(ErrorCode::Unsupported, "saved data is not available here");
+    }
+
+    // --- Leaderboards (authority realm only, docs/leaderboards.md) -------------------------
+    // `board` is a leaderboard id from project.json. Errors are shown to the script author.
+    // Submit returns true when the score is the player's best so far.
+    [[nodiscard]] virtual Result<bool> leaderboardSubmit(scene::Entity /*player*/, std::string_view /*board*/,
+                                                         double /*score*/) {
+        return makeError(ErrorCode::Unsupported, "leaderboards are not available here");
+    }
+    [[nodiscard]] virtual Result<std::optional<LeaderboardRow>> leaderboardEntry(scene::Entity /*player*/,
+                                                                                std::string_view /*board*/) const {
+        return makeError(ErrorCode::Unsupported, "leaderboards are not available here");
+    }
+    [[nodiscard]] virtual Result<std::vector<LeaderboardRow>> leaderboardTop(std::string_view /*board*/,
+                                                                            std::size_t /*count*/) const {
+        return makeError(ErrorCode::Unsupported, "leaderboards are not available here");
     }
 
     // --- Reporting --------------------------------------------------------------

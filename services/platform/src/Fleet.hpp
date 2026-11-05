@@ -46,6 +46,15 @@ struct Seat {
     std::string webSocket;    // ws:// or wss:// URL of the same server
 };
 
+// Where a player is: the session holding them, while they play there or
+// have a seat waiting.
+struct PlayerLocation {
+    std::string session;
+    std::int64_t gameId = 0;
+    int version = 0;
+    bool playing = false; // in the server's last heartbeat (not only a seat)
+};
+
 struct SessionInfo {
     std::string id;
     std::int64_t gameId = 0;
@@ -72,9 +81,13 @@ public:
         std::string title;
     };
     // A seat for `userId` on a server running the game version: an existing
-    // one with room, or a new one (waits until it is ready). Errors are for
-    // the player.
-    [[nodiscard]] Result<Seat> reserve(const GameRef& game, const std::string& userId);
+    // one with room and none of the `avoid` players (blocked either way), or
+    // a new one (waits until it is ready). Errors are for the player.
+    [[nodiscard]] Result<Seat> reserve(const GameRef& game, const std::string& userId,
+                                       const std::set<std::string>& avoid = {});
+    // A seat in one running session (joining a friend there). Errors are for the player.
+    [[nodiscard]] Result<Seat> reserveIn(const std::string& session, const std::string& userId);
+    [[nodiscard]] std::optional<PlayerLocation> whereIs(const std::string& userId) const;
 
     // --- Calls from game servers -----------------------------------------------------------
     [[nodiscard]] std::optional<std::string> sessionForKey(std::string_view serverKey) const;
@@ -86,6 +99,8 @@ public:
     [[nodiscard]] bool holdsPlayer(const std::string& session, const std::string& userId) const;
     void release(const std::string& session, const std::string& userId);
     [[nodiscard]] std::optional<std::int64_t> gameOf(const std::string& session) const;
+    // The game version a session runs (0: unknown session).
+    [[nodiscard]] int versionOf(const std::string& session) const;
 
     // --- Platform side ----------------------------------------------------------------------
     [[nodiscard]] int playing(std::int64_t gameId) const;
@@ -115,6 +130,12 @@ private:
     };
 
     [[nodiscard]] Result<Session*> startSession(const GameRef& game);
+    // After a seat is reserved: waits for the server to be ready.
+    [[nodiscard]] Result<Seat> seatWhenReady(std::unique_lock<std::mutex>& lock, const std::string& session,
+                                             const std::string& userId);
+    // Checks the player's lock: nullptr (free), their current session (a
+    // reconnect to `wanted`), or an error.
+    [[nodiscard]] Result<Session*> currentSessionFor(const std::string& userId, std::int64_t gameId, int version);
     [[nodiscard]] bool alive(const Session& s) const { return s.state != Session::State::Ended; }
     void endSession(Session& s, const char* why);
     [[nodiscard]] std::size_t occupancy(const Session& s) const;

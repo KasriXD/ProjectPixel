@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,43 @@ public:
     // A player's saved data in one of your games (owners and admins), as JSON.
     [[nodiscard]] Result<std::string> playerData(std::int64_t gameId, const std::string& username);
 
+    // --- People (docs/social.md) -----------------------------------------------------------
+    [[nodiscard]] Result<Profile> profile(const std::string& username);
+    [[nodiscard]] Result<Profile> updateProfile(const ProfileUpdate& update);
+    // Accounts whose names start with `prefix` (two letters or more).
+    [[nodiscard]] Result<std::vector<PersonInfo>> searchUsers(const std::string& prefix);
+    // Friends with presence, friend requests both ways, invitations to you.
+    [[nodiscard]] Result<SocialSummary> social();
+    // Sends a friend request, or accepts theirs if they asked first.
+    // Returns "requested" or "friends".
+    [[nodiscard]] Result<std::string> requestFriend(const std::string& username);
+    [[nodiscard]] Status acceptFriend(const std::string& username);
+    // Declines their request or takes back yours.
+    [[nodiscard]] Status removeFriendRequest(const std::string& username);
+    [[nodiscard]] Status removeFriend(const std::string& username);
+    // A ticket to the game server a friend is playing on.
+    [[nodiscard]] Result<JoinTicket> joinFriend(const std::string& username);
+    // Invites a friend to the game server you are playing on.
+    [[nodiscard]] Status invite(const std::string& username);
+    [[nodiscard]] Status dismissInvitation(std::int64_t id);
+    [[nodiscard]] Result<std::vector<PersonInfo>> blocked();
+    [[nodiscard]] Status block(const std::string& username);
+    [[nodiscard]] Status unblock(const std::string& username);
+    [[nodiscard]] Status reportUser(const std::string& username, const std::string& reason);
+
+    // --- Leaderboards (docs/leaderboards.md) ----------------------------------------------
+    // The game's leaderboards: the top `limit` of each, and you and your friends with a login.
+    [[nodiscard]] Result<std::vector<LeaderboardView>> leaderboards(std::int64_t gameId, int limit = 10);
+    // Owners: remove one player's score, or every score (username empty).
+    [[nodiscard]] Status clearLeaderboard(std::int64_t gameId, const std::string& board, const std::string& username = {});
+
+    // --- Thumbnails -------------------------------------------------------------------------
+    // Owners: a PNG or JPEG picture of the game; the platform checks it and
+    // stores it as a 320x180 PNG.
+    [[nodiscard]] Status uploadThumbnail(std::int64_t gameId, const std::vector<std::uint8_t>& image);
+    // The PNG (empty when the game has none).
+    [[nodiscard]] Result<std::vector<std::uint8_t>> thumbnail(std::int64_t gameId);
+
     // --- Moderation (admins) ----------------------------------------------------------------
     [[nodiscard]] Result<std::vector<ReportInfo>> reports(bool openOnly = true);
     // action: "dismiss", "hide_game" or "ban_owner".
@@ -67,6 +105,9 @@ public:
     [[nodiscard]] Status setGameHidden(std::int64_t gameId, bool hidden, const std::string& note);
     [[nodiscard]] Status setUserBanned(const std::string& username, bool banned, const std::string& note);
     [[nodiscard]] Result<std::vector<AuditEntry>> audit(int limit = 100);
+    [[nodiscard]] Result<std::vector<UserReportInfo>> userReports(bool openOnly = true);
+    // action: "dismiss", "clear_profile" or "ban".
+    [[nodiscard]] Status resolveUserReport(std::int64_t reportId, const std::string& action, const std::string& note);
 
     // --- Game servers (server key) ---------------------------------------------------------
     [[nodiscard]] Status serverReady(std::uint16_t port);
@@ -78,6 +119,20 @@ public:
     // The player left before their data was loaded.
     [[nodiscard]] Status serverRelease(const std::string& userId);
     [[nodiscard]] Status serverEnded();
+    struct ScoreSubmission {
+        std::string userId;
+        std::string board;
+        double value = 0.0;
+    };
+    // Players' scores; the platform keeps each player's best.
+    [[nodiscard]] Status serverSubmitScores(const std::vector<ScoreSubmission>& scores);
+    struct ServerLeaderboards {
+        std::vector<LeaderboardView> boards; // top entries carry their account ids
+        // account id -> board id -> that player's best and rank
+        std::map<std::string, std::map<std::string, LeaderboardEntry>> players;
+    };
+    // The game's leaderboards (top `limit` each) and the bests of these players.
+    [[nodiscard]] Result<ServerLeaderboards> serverLeaderboards(int limit, const std::vector<std::string>& userIds);
 
 private:
     struct Response {

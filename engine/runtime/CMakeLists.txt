@@ -5,6 +5,7 @@ px_add_module(runtime
         src/GameLoader.cpp
         src/GameSession.cpp
         src/Input.cpp
+        src/Leaderboards.cpp
         src/InputScript.cpp
         src/Movement.cpp
         src/PlayerData.cpp

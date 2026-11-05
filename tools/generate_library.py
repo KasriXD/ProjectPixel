@@ -60,6 +60,7 @@ SHARED_SCRIPTS = {
     "coin": ("coin.luau", "Coin", "Collect a coin: adds points, then disappears"),
     "level_rules": ("level_rules.luau", "Level Rules", "Counts collected coins and can end the level"),
     "moving_platform": ("moving_platform.luau", "Moving Platform", "Glides back and forth, carrying riders"),
+    "best_time": ("best_time.luau", "Best Time", "Puts each player's time on a leaderboard when the level is complete"),
 }
 LIBRARY_TEXTURES = {
     "topdown_tiles": ("topdown_tiles.png", "Top-down Tiles", "Tiles", [T],

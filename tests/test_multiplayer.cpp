@@ -402,6 +402,67 @@ TEST_CASE("Saved data: playing alone, sessions can share it (Studio keeps it bet
     CHECK(play(nullptr) == "PLAYS 1");
 }
 
+TEST_CASE("Leaderboards: scripts submit and read scores, alone and with players") {
+    auto library = std::make_shared<scripting::ScriptLibrary>();
+    const assets::AssetId id{Guid(7, 9)};
+    REQUIRE(library->add(id, "scripts/board.luau", R"lua(
+        local Board = {}
+        function Board:PlayerJoined(player)
+            local first = Leaderboard.submit(player, "best", 10 + player.playerId)
+            local again = Leaderboard.submit(player, "best", 1)
+            local top = Leaderboard.top("best", 5)
+            Game.setObjective(string.format("%s %s %d %s %d %s", tostring(first), tostring(again), #top, top[1].name,
+                top[1].score, tostring(Leaderboard.rank(player, "best"))))
+            assert(Leaderboard.best(player, "best") == 10 + player.playerId)
+            local ok, err = pcall(Leaderboard.submit, player, "missing", 1)
+            assert(not ok and string.find(tostring(err), "no leaderboard 'missing'"))
+            ok, err = pcall(Leaderboard.top, "best", 500)
+            assert(not ok)
+        end
+        return Board
+    )lua"));
+    project::ProjectManifest project = mpProject();
+    project.leaderboards = {{"best", "Best", project::LeaderboardOrder::Highest, project::ScoreFormat::Number}};
+    const auto withScript = [&] {
+        Scene scene = mpScene();
+        Scripts scripts;
+        scripts.items.push_back({id, {}});
+        scene.set(scene.createEntity("Board"), scripts);
+        return scene;
+    };
+
+    // Alone: the scores are the local player's.
+    {
+        auto store = std::make_shared<MemoryLeaderboardStore>();
+        SessionOptions options;
+        options.leaderboards = store;
+        options.localPlayerName = "Ada";
+        auto session = GameSession::create(project, withScript(), library, options);
+        REQUIRE(session.ok());
+        (*session)->tick();
+        CHECK((*session)->state().objective == "true false 1 Ada 10 1");
+        CHECK((*session)->state().scriptErrors == 0);
+        CHECK(store->entry(project.leaderboards[0], "local")->name == "Ada");
+    }
+    // Multiplayer: each player under their account.
+    {
+        auto store = std::make_shared<MemoryLeaderboardStore>();
+        SessionOptions options;
+        options.multiplayer = true;
+        options.leaderboards = store;
+        auto session = GameSession::create(project, withScript(), library, options);
+        REQUIRE(session.ok());
+        REQUIRE((*session)->addPlayer(1, "Ada", {}, "101").ok());
+        REQUIRE((*session)->addPlayer(2, "Bob", {}, "102").ok());
+        (*session)->tick();
+        // Bob joined second with 12: first place, with Ada (11) second.
+        CHECK((*session)->state().objective == "true false 2 Bob 12 1");
+        CHECK((*session)->state().scriptErrors == 0);
+        CHECK(store->entry(project.leaderboards[0], "101")->rank == 2);
+        CHECK(store->entry(project.leaderboards[0], "102")->name == "Bob");
+    }
+}
+
 TEST_CASE("Saved data: values, keys and limits") {
     PlayerData d;
     CHECK(d.set("a.b-c_1", 1.0).ok());

@@ -302,6 +302,18 @@
       "description": "Glides back and forth, carrying riders"
     },
     {
+      "id": "994b6127-fefc-5ca1-803b-82ad6230ab9e",
+      "type": "script",
+      "name": "Best Time",
+      "path": "scripts/best_time.luau",
+      "category": "Behaviours",
+      "gameTypes": [
+        "platformer",
+        "topdown"
+      ],
+      "description": "Puts each player's time on a leaderboard when the level is complete"
+    },
+    {
       "id": "2ae5af57-b8e8-5c4a-828d-27d1f2bc3cb7",
       "type": "animation",
       "name": "Platformer Hero Idle",

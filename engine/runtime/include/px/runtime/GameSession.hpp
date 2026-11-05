@@ -7,6 +7,7 @@
 #include "px/project/Prefab.hpp"
 #include "px/project/Project.hpp"
 #include "px/runtime/Input.hpp"
+#include "px/runtime/Leaderboards.hpp"
 #include "px/runtime/PlayerData.hpp"
 #include "px/runtime/Movement.hpp"
 #include "px/scene/Scene.hpp"
@@ -62,6 +63,10 @@ struct SessionOptions {
     // Playing alone: the saved data every character shares (Studio keeps one
     // between plays). nullptr: a fresh, empty one.
     std::shared_ptr<PlayerData> localData;
+    // Leaderboard scores (Leaderboard.submit). nullptr: a fresh store in memory.
+    std::shared_ptr<ILeaderboardStore> leaderboards;
+    // Playing alone: whose scores they are.
+    std::string localPlayerName = "You";
 };
 
 // Entities scripts may create in one tick (World.spawn; a prefab's
@@ -82,6 +87,7 @@ struct PlayerSlot {
     scene::Entity character;        // their copy of a Player template (null if the scene has none)
     PlayerData data;                // saved data (Data.get / Data.set)
     bool dataChanged = false;       // since takeChangedPlayerData
+    std::string account;            // leaderboard identity: the platform account, else the name
 };
 
 // The scene's Player entities, removed from it to be copied for each player.
@@ -133,7 +139,9 @@ public:
     // turns over the templates) to its spawn point. Their character's scripts
     // start, and PlayerJoined is delivered, in the next tick.
     // `data` is the player's saved data (loaded from the platform).
-    [[nodiscard]] Result<scene::Entity> addPlayer(PlayerId id, std::string name, PlayerData data = {});
+    // `account`: their platform account id (leaderboards); empty: the name.
+    [[nodiscard]] Result<scene::Entity> addPlayer(PlayerId id, std::string name, PlayerData data = {},
+                                                  std::string account = {});
     // Removes a player: PlayerLeft is delivered and their character is
     // destroyed at the start of the next tick. Unknown ids are ignored.
     void removePlayer(PlayerId id);
@@ -144,6 +152,7 @@ public:
     [[nodiscard]] std::vector<PlayerId> takeChangedPlayerData();
     // Playing alone: the shared saved data.
     [[nodiscard]] const std::shared_ptr<PlayerData>& localData() const { return m_localData; }
+    [[nodiscard]] const std::shared_ptr<ILeaderboardStore>& leaderboards() const { return m_leaderboards; }
 
     [[nodiscard]] scene::Scene& scene() { return m_scene; }
     [[nodiscard]] const scene::Scene& scene() const { return m_scene; }
@@ -214,6 +223,19 @@ private:
     Result<std::optional<scene::ScriptValue>> playerDataGet(scene::Entity player, std::string_view key) const override;
     Status playerDataSet(scene::Entity player, std::string_view key, std::optional<scene::ScriptValue> value) override;
     [[nodiscard]] const PlayerData* dataOf(scene::Entity player) const;
+    Result<bool> leaderboardSubmit(scene::Entity player, std::string_view board, double score) override;
+    Result<std::optional<scripting::LeaderboardRow>> leaderboardEntry(scene::Entity player,
+                                                                      std::string_view board) const override;
+    Result<std::vector<scripting::LeaderboardRow>> leaderboardTop(std::string_view board,
+                                                                  std::size_t count) const override;
+    // The board and who `player` is on it, or an error for the script author.
+    struct Scorer {
+        const project::LeaderboardDef* board = nullptr;
+        std::string account;
+        std::string name;
+    };
+    [[nodiscard]] Result<Scorer> scorer(scene::Entity player, std::string_view board) const;
+    [[nodiscard]] Result<const project::LeaderboardDef*> findBoard(std::string_view board) const;
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -239,6 +261,11 @@ private:
     PlayerTemplates m_templates;
     std::vector<PlayerSlot> m_players;          // in join order
     std::shared_ptr<PlayerData> m_localData;    // playing alone
+    std::vector<project::LeaderboardDef> m_boards;
+    std::shared_ptr<ILeaderboardStore> m_leaderboards;
+    std::string m_localPlayerName;
+    std::uint64_t m_submitTick = 0;
+    int m_submitsThisTick = 0;
     std::vector<scene::Entity> m_pendingJoins;  // characters whose PlayerJoined is due
     std::vector<scene::Entity> m_pendingLeaves; // characters whose PlayerLeft is due
     physics::CollisionWorld m_collision;

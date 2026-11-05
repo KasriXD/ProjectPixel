@@ -53,6 +53,9 @@ Status GameServer::startSession() {
     options.prefabs = m_game.prefabs;
     options.animations = m_game.animations;
     options.tilesets = m_game.tilesets;
+    // One store for every round, so scores survive level restarts.
+    if (!m_options.leaderboards) m_options.leaderboards = std::make_shared<runtime::MemoryLeaderboardStore>();
+    options.leaderboards = m_options.leaderboards;
     auto session = runtime::GameSession::create(m_game.manifest, m_game.startScene, m_game.scripts, options);
     if (!session) return session.error();
     m_session = std::move(session.value());
@@ -302,7 +305,7 @@ void GameServer::completeJoin(Client& client, runtime::PlayerData data) {
     std::string name = client.name;
     if (name.empty()) name = std::format("Player {}", id);
     name = uniqueName(std::move(name));
-    auto character = m_session->addPlayer(id, name, std::move(data));
+    auto character = m_session->addPlayer(id, name, std::move(data), client.userId);
     if (!character) {
         if (m_options.playerStore && !client.userId.empty()) m_options.playerStore->release(client.userId);
         reject(client, DisconnectReason::ServerFull, character.error().message);
@@ -394,17 +397,20 @@ void GameServer::restartLevel() {
         runtime::PlayerId id;
         std::string name;
         runtime::PlayerData data; // saved data carries over to the new round
+        std::string account;
     };
     saveChangedData(true);
     std::vector<Joined> players;
-    for (const auto& p : m_session->players()) players.push_back({p.id, p.name, p.data});
+    for (const auto& p : m_session->players()) players.push_back({p.id, p.name, p.data, p.account});
     if (auto started = startSession(); !started) {
         log::error("Could not restart the level: {}", started.error().message);
         return;
     }
     ++m_epoch;
     for (const Joined& p : players) {
-        if (auto added = m_session->addPlayer(p.id, p.name, p.data); !added) log::error("{}", added.error().message);
+        if (auto added = m_session->addPlayer(p.id, p.name, p.data, p.account); !added) {
+            log::error("{}", added.error().message);
+        }
     }
     log::info("Level restarted ({} playing)", players.size());
 }

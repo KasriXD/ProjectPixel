@@ -75,6 +75,29 @@ struct InputConfig {
     }
 };
 
+// Leaderboards the game's scripts submit scores to (Leaderboard.submit);
+// the platform keeps each player's best (docs/leaderboards.md).
+inline constexpr std::size_t kMaxLeaderboards = 8;
+inline constexpr std::size_t kMaxLeaderboardTitle = 40;
+enum class LeaderboardOrder { Highest, Lowest }; // which score is best
+enum class ScoreFormat { Number, Time };        // Time: seconds, shown as m:ss.cc
+[[nodiscard]] std::string_view leaderboardOrderName(LeaderboardOrder order) noexcept; // "highest", "lowest"
+[[nodiscard]] std::string_view scoreFormatName(ScoreFormat format) noexcept;          // "number", "time"
+[[nodiscard]] std::optional<LeaderboardOrder> parseLeaderboardOrder(std::string_view name) noexcept;
+[[nodiscard]] std::optional<ScoreFormat> parseScoreFormat(std::string_view name) noexcept;
+// [a-z0-9_], 1-32 characters.
+[[nodiscard]] bool isValidLeaderboardId(std::string_view id) noexcept;
+// "1234", "12.5", or "1:02.34" for times.
+[[nodiscard]] std::string formatScore(double value, ScoreFormat format);
+
+struct LeaderboardDef {
+    std::string id;    // used by scripts
+    std::string title; // shown to players
+    LeaderboardOrder order = LeaderboardOrder::Highest;
+    ScoreFormat format = ScoreFormat::Number;
+    [[nodiscard]] bool better(double a, double b) const { return order == LeaderboardOrder::Highest ? a > b : a < b; }
+};
+
 struct ProjectManifest {
     int formatVersion = kProjectFormatVersion;
     Guid id;
@@ -84,6 +107,14 @@ struct ProjectManifest {
     ProjectSettings settings;
     InputConfig input;
     assets::AssetRegistry assets;
+    std::vector<LeaderboardDef> leaderboards;
+
+    [[nodiscard]] const LeaderboardDef* findLeaderboard(std::string_view boardId) const {
+        for (const auto& b : leaderboards) {
+            if (b.id == boardId) return &b;
+        }
+        return nullptr;
+    }
 };
 
 [[nodiscard]] Result<ProjectManifest> parseProjectManifest(std::string_view json, std::string_view sourceName);

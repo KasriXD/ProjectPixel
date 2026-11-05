@@ -43,6 +43,14 @@
       ]
     }
   },
+  "leaderboards": [
+    {
+      "id": "fastest",
+      "title": "Fastest coin run",
+      "order": "lowest",
+      "format": "time"
+    }
+  ],
   "assets": [
     {
       "id": "782c3432-d57a-558a-a29f-2eb189772494",
@@ -139,6 +147,12 @@
       "type": "script",
       "name": "Sparkle",
       "path": "scripts/sparkle.luau"
+    },
+    {
+      "id": "994b6127-fefc-5ca1-803b-82ad6230ab9e",
+      "type": "script",
+      "name": "Best Time",
+      "path": "scripts/best_time.luau"
     },
     {
       "id": "83b8999f-374a-543e-a1ac-897ab87c299d",

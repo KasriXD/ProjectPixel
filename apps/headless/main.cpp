@@ -32,6 +32,7 @@
 #include "px/scripting/Graph.hpp"
 #if defined(PX_HAVE_PLATFORM)
 #include "px/online/PackageCheck.hpp"
+#include "px/online/Thumbnail.hpp"
 #include "px/online/PlatformClient.hpp"
 #endif
 
@@ -63,6 +64,8 @@ struct Options {
     std::string packTo;       // --pack FILE: write the project as a game package
     std::string checkPackage; // --check-package FILE: validate an uploaded package (platform)
     std::string checkOutput;  // --output FILE: the checked package, images re-encoded
+    std::string checkThumbnail; // --check-thumbnail FILE: make a 320x180 PNG of a picture (platform)
+    std::string thumbnail;      // --thumbnail FILE: with --publish, the game's picture
     int traceEvery = 0; // print the player state every N ticks (0 = off)
     // Multiplayer tools (NetTools.hpp).
     std::string connectAddress;
@@ -107,10 +110,11 @@ void printUsage() {
                  "                                             plays the input script)\n"
                  "       px-headless <project-dir> --pack FILE.pxpkg   (write the game as a package)\n"
                  "       px-headless --check-package FILE.pxpkg [--output FILE] [--ticks N]\n"
+                 "       px-headless --check-thumbnail PICTURE --output FILE.png   (the platform's thumbnail check)\n"
                  "                                            (the platform's upload check; prints a report)\n"
                  "       px-headless <project-dir or FILE.pxpkg> ...   (packages run like project folders)\n"
                  "       px-headless <project-dir> --platform URL --user NAME --password TEXT [--register]\n"
-                 "                   --publish [--game ID | --title TEXT] [--notes TEXT]\n"
+                 "                   --publish [--game ID | --title TEXT] [--notes TEXT] [--thumbnail PICTURE]\n"
                  "                                            (publish the game on a platform)\n"
                  "       px-headless --platform URL --user NAME --password TEXT [--register] --play ID\n"
                  "                   [--input-script FILE] [--ticks N] [--expect-...]\n"
@@ -223,6 +227,10 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.checkPackage = needValue();
         } else if (arg == "--output") {
             o.checkOutput = needValue();
+        } else if (arg == "--check-thumbnail") {
+            o.checkThumbnail = needValue();
+        } else if (arg == "--thumbnail") {
+            o.thumbnail = needValue();
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -233,10 +241,42 @@ std::optional<Options> parseArgs(int argc, char** argv) {
         }
     }
     if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty() &&
-        o.checkPackage.empty() && !(o.play && !o.platformUrl.empty())) {
+        o.checkPackage.empty() && o.checkThumbnail.empty() && !(o.play && !o.platformUrl.empty())) {
         return std::nullopt;
     }
     return o;
+}
+
+// The platform's thumbnail check: the picture becomes a 320x180 PNG in --output.
+int checkThumbnailCommand(const Options& o) {
+#if defined(PX_HAVE_PLATFORM)
+    auto bytes = readLocalFile(o.checkThumbnail);
+    if (!bytes) {
+        std::fprintf(stderr, "%s\n", bytes.error().message.c_str());
+        return 1;
+    }
+    auto png = online::makeThumbnail(bytes.value());
+    if (!png) {
+        std::fprintf(stderr, "%s\n", png.error().message.c_str());
+        return 1;
+    }
+    if (o.checkOutput.empty()) {
+        std::fprintf(stderr, "--check-thumbnail needs --output FILE\n");
+        return 2;
+    }
+    std::FILE* out = std::fopen(o.checkOutput.c_str(), "wb");
+    if (out == nullptr || std::fwrite(png->data(), 1, png->size(), out) != png->size()) {
+        if (out != nullptr) std::fclose(out);
+        std::fprintf(stderr, "cannot write %s\n", o.checkOutput.c_str());
+        return 1;
+    }
+    std::fclose(out);
+    return 0;
+#else
+    (void)o;
+    std::fprintf(stderr, "this build has no platform support\n");
+    return 1;
+#endif
 }
 
 // The platform's upload check (docs/platform.md#publishing): run in its own
@@ -316,6 +356,18 @@ int publishCommand(const Options& o) {
     }
     std::printf("published game=%lld version=%d bytes=%llu package=%s\n", gameId, version->number,
                 static_cast<unsigned long long>(version->bytes), version->packageHash.c_str());
+    if (!o.thumbnail.empty()) {
+        auto picture = readLocalFile(o.thumbnail);
+        if (!picture) {
+            log::error("{}", picture.error().message);
+            return 1;
+        }
+        if (auto sent = client->uploadThumbnail(gameId, picture.value()); !sent) {
+            log::error("The thumbnail was not accepted: {}", sent.error().message);
+            return 1;
+        }
+        std::printf("thumbnail uploaded\n");
+    }
     return 0;
 }
 
@@ -501,6 +553,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (!options->checkPackage.empty()) return checkPackageCommand(*options);
+    if (!options->checkThumbnail.empty()) return checkThumbnailCommand(*options);
     if (!options->platformUrl.empty()) {
 #if defined(PX_HAVE_PLATFORM)
         if (options->publish) return publishCommand(*options);

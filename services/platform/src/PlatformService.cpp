@@ -1,4 +1,7 @@
 #include "PlatformService.hpp"
+#include "ServiceContext.hpp"
+#include "Leaderboards.hpp"
+#include "Social.hpp"
 
 #include "Database.hpp"
 #include "WebFiles.hpp"
@@ -7,6 +10,7 @@
 #include "px/crypto/Encoding.hpp"
 #include "px/net/ConnectToken.hpp"
 #include "px/online/PackageCheck.hpp"
+#include "px/online/Thumbnail.hpp"
 #include "px/online/PlatformClient.hpp"
 #include "px/online/WireJson.hpp"
 #include "px/project/Package.hpp"
@@ -21,296 +25,12 @@
 
 namespace px::platform {
 
-using nlohmann::json;
-using online::GameInfo;
-using online::Role;
-using online::UserInfo;
-using online::Visibility;
-
-namespace {
-
-// An answer other than success: thrown by handlers, turned into
-// {"error": {"code": ..., "message": ...}} with the HTTP status.
-struct HttpError {
-    int status;
-    std::string code;
-    std::string message;
-};
-
-[[noreturn]] void fail(int status, std::string code, std::string message) {
-    throw HttpError{status, std::move(code), std::move(message)};
-}
-
-std::int64_t now() { return net::unixTimeNow(); }
-
-constexpr std::size_t kMaxJsonBody = 64 * 1024;
-
-json parseBody(const httplib::Request& req, std::size_t limit = kMaxJsonBody) {
-    if (req.body.size() > limit) fail(413, "too_large", "The request is too large");
-    try {
-        json j = req.body.empty() ? json::object() : json::parse(req.body);
-        if (!j.is_object()) fail(400, "bad_request", "Expected a JSON object");
-        return j;
-    } catch (const json::exception&) {
-        fail(400, "bad_request", "The request is not valid JSON");
-    }
-}
-
-std::string stringField(const json& j, const char* name, std::size_t maxLength, bool required, const char* label) {
-    const auto it = j.find(name);
-    if (it == j.end() || it->is_null()) {
-        if (required) fail(400, "bad_request", std::format("{} is required", label));
-        return {};
-    }
-    if (!it->is_string()) fail(400, "bad_request", std::format("{} must be text", label));
-    std::string value = it->get<std::string>();
-    if (value.size() > maxLength) fail(400, "bad_request", std::format("{} is longer than {} characters", label, maxLength));
-    return value;
-}
-
-// Titles and similar single-line text: trimmed, no control characters.
-std::string cleanLine(std::string text, const char* label) {
-    for (const char c : text) {
-        if (static_cast<unsigned char>(c) < 0x20 || c == 0x7F) {
-            fail(400, "bad_request", std::format("{} cannot contain line breaks or control characters", label));
-        }
-    }
-    const auto first = text.find_first_not_of(' ');
-    if (first == std::string::npos) return {};
-    const auto last = text.find_last_not_of(' ');
-    return text.substr(first, last - first + 1);
-}
-
-std::string cleanText(std::string text, const char* label) {
-    for (const char c : text) {
-        if ((static_cast<unsigned char>(c) < 0x20 && c != '\n') || c == 0x7F) {
-            fail(400, "bad_request", std::format("{} cannot contain control characters", label));
-        }
-    }
-    return text;
-}
-
-std::string likePattern(const std::string& words) {
-    std::string out = "%";
-    for (const char c : words) {
-        if (c == '%' || c == '_' || c == '\\') out += '\\';
-        out += c;
-    }
-    return out + "%";
-}
-
-std::string htmlEscape(std::string_view s) {
-    std::string out;
-    for (const char c : s) {
-        switch (c) {
-            case '<': out += "&lt;"; break;
-            case '>': out += "&gt;"; break;
-            case '&': out += "&amp;"; break;
-            case '"': out += "&quot;"; break;
-            case '\'': out += "&#39;"; break;
-            default: out += c;
-        }
-    }
-    return out;
-}
-
-std::int64_t pathId(const httplib::Request& req, std::size_t index = 1) {
-    try {
-        return std::stoll(req.matches[static_cast<int>(index)].str());
-    } catch (const std::exception&) {
-        fail(404, "not_found", "Not found");
-    }
-}
-
-constexpr const char* kGameColumns = R"(g.id, g.title, g.description, g.owner_id, u.username, g.visibility,
-    g.game_type, g.max_players, g.latest_version,
-    COALESCE((SELECT package_hash FROM versions v WHERE v.game_id = g.id AND v.number = g.latest_version), ''),
-    g.plays, g.created, g.updated, g.hidden, g.hidden_note, u.banned)";
-
-struct GameRow {
-    GameInfo info;
-    bool ownerBanned = false;
-};
-
-GameRow readGame(const Statement& s) {
-    GameRow row;
-    GameInfo& g = row.info;
-    g.id = s.integer(0);
-    g.title = s.text(1);
-    g.description = s.text(2);
-    g.ownerId = s.integer(3);
-    g.ownerName = s.text(4);
-    g.visibility = online::parseVisibility(s.text(5)).value_or(Visibility::Private);
-    g.gameType = s.text(6);
-    g.maxPlayers = static_cast<int>(s.integer(7));
-    g.latestVersion = static_cast<int>(s.integer(8));
-    g.packageHash = s.text(9);
-    g.plays = s.integer(10);
-    g.created = s.integer(11);
-    g.updated = s.integer(12);
-    g.hidden = s.integer(13) != 0;
-    g.moderationNote = s.text(14);
-    row.ownerBanned = s.integer(15) != 0;
-    return row;
-}
-
-struct User {
-    std::int64_t id = 0;
-    std::string username;
-    Role role = Role::User;
-    bool banned = false;
-    std::int64_t created = 0;
-
-    [[nodiscard]] bool admin() const { return role == Role::Admin; }
-    [[nodiscard]] UserInfo info(bool withBan = false) const {
-        UserInfo u{id, username, role, created, withBan && banned};
-        return u;
-    }
-};
-
-void sendJson(httplib::Response& res, int status, const json& body) {
-    res.status = status;
-    res.set_content(body.dump(), "application/json");
-}
-
-} // namespace
+using namespace service;
 
 // =============================================================================================
 
-struct PlatformService::Impl {
-    PlatformService& s;
-    std::string dummyHash; // verified against for unknown names, so timing does not reveal accounts
-
-    explicit Impl(PlatformService& service) : s(service) {}
-
-    Database& db() { return *s.m_db; }
-
-    // --- request plumbing ------------------------------------------------------------------
-    using Handler = std::function<void(const httplib::Request&, httplib::Response&)>;
-
-    httplib::Server::Handler wrap(Handler handler) {
-        return [this, handler](const httplib::Request& req, httplib::Response& res) {
-            try {
-                if (!s.m_limits.allow("ip:" + req.remote_addr, 600, 60)) {
-                    fail(429, "rate_limited", "Too many requests; slow down");
-                }
-                handler(req, res);
-            } catch (const HttpError& e) {
-                sendJson(res, e.status, {{"error", {{"code", e.code}, {"message", e.message}}}});
-            } catch (const std::exception& e) {
-                log::error("{} {}: {}", req.method, req.path, e.what());
-                sendJson(res, 500, {{"error", {{"code", "internal"}, {"message", "The platform had an internal error"}}}});
-            }
-        };
-    }
-
-    void limit(const std::string& key, double perWindow, double windowSeconds) {
-        if (!s.m_limits.allow(key, perWindow, windowSeconds)) {
-            fail(429, "rate_limited", "Too many attempts; please wait a little and try again");
-        }
-    }
-
-    std::optional<User> userById(std::int64_t id) {
-        auto st = db().prepare("SELECT id, username, role, banned, created FROM users WHERE id = ?1");
-        st.bind(1, id);
-        if (!st.step()) return std::nullopt;
-        return User{st.integer(0), st.text(1), st.text(2) == "admin" ? Role::Admin : Role::User, st.integer(3) != 0,
-                    st.integer(4)};
-    }
-
-    std::optional<User> userByName(std::string_view name) {
-        auto st = db().prepare("SELECT id, username, role, banned, created FROM users WHERE username = ?1 COLLATE NOCASE");
-        st.bind(1, name);
-        if (!st.step()) return std::nullopt;
-        return User{st.integer(0), st.text(1), st.text(2) == "admin" ? Role::Admin : Role::User, st.integer(3) != 0,
-                    st.integer(4)};
-    }
-
-    static std::string bearer(const httplib::Request& req, std::string_view scheme) {
-        const std::string header = req.get_header_value("Authorization");
-        const std::string prefix = std::string(scheme) + " ";
-        return header.starts_with(prefix) ? header.substr(prefix.size()) : std::string();
-    }
-
-    std::optional<User> currentUser(const httplib::Request& req) {
-        const std::string token = bearer(req, "Bearer");
-        if (token.empty() || token.size() > 100) return std::nullopt;
-        const std::string hash = crypto::toHex(crypto::hash256(token));
-        std::lock_guard lock(s.m_dbMutex);
-        auto st = db().prepare("SELECT user_id, expires FROM sessions WHERE token_hash = ?1");
-        st.bind(1, hash);
-        if (!st.step()) return std::nullopt;
-        if (st.integer(1) < now()) return std::nullopt;
-        auto user = userById(st.integer(0));
-        if (user && user->banned) fail(403, "banned", "This account is banned");
-        return user;
-    }
-
-    User requireUser(const httplib::Request& req) {
-        auto user = currentUser(req);
-        if (!user) fail(401, "not_logged_in", "Log in first");
-        return *user;
-    }
-
-    User requireAdmin(const httplib::Request& req) {
-        User user = requireUser(req);
-        if (!user.admin()) fail(403, "forbidden", "Only administrators can do this");
-        return user;
-    }
-
-    std::string createSession(std::int64_t userId) {
-        auto token = crypto::randomToken(32);
-        if (!token) throw std::runtime_error(token.error().message);
-        auto st = db().prepare("INSERT INTO sessions (token_hash, user_id, created, expires) VALUES (?1, ?2, ?3, ?4)");
-        st.bind(1, crypto::toHex(crypto::hash256(token.value())))
-            .bind(2, userId)
-            .bind(3, now())
-            .bind(4, now() + std::int64_t{s.m_config.sessionDays} * 86400);
-        st.run();
-        return token.value();
-    }
-
-    void audit(const User& actor, std::string_view action, std::string_view target, std::string_view detail) {
-        auto st = db().prepare("INSERT INTO audit (at, actor_id, action, target, detail) VALUES (?1, ?2, ?3, ?4, ?5)");
-        st.bind(1, now()).bind(2, actor.id).bind(3, action).bind(4, target).bind(5, detail);
-        st.run();
-        log::info("audit: {} {} {} {}", actor.username, action, target, detail);
-    }
-
-    // --- games ---------------------------------------------------------------------------
-    std::optional<GameRow> gameById(std::int64_t id) {
-        auto st = db().prepare(std::format("SELECT {} FROM games g JOIN users u ON u.id = g.owner_id WHERE g.id = ?1",
-                                           kGameColumns));
-        st.bind(1, id);
-        if (!st.step()) return std::nullopt;
-        return readGame(st);
-    }
-
-    static bool owns(const std::optional<User>& user, const GameInfo& g) { return user && user->id == g.ownerId; }
-
-    // Whether `user` may see (and play) the game.
-    static bool mayView(const std::optional<User>& user, const GameRow& row) {
-        if (user && (user->admin() || user->id == row.info.ownerId)) return true;
-        if (row.info.hidden || row.ownerBanned) return false;
-        return row.info.visibility != Visibility::Private;
-    }
-
-    GameRow viewableGame(std::int64_t id, const std::optional<User>& user) {
-        std::lock_guard lock(s.m_dbMutex);
-        auto row = gameById(id);
-        if (!row || !mayView(user, *row)) fail(404, "not_found", "There is no such game");
-        return *row;
-    }
-
-    json gameJson(GameRow row, const std::optional<User>& viewer) {
-        row.info.playing = s.m_fleet->playing(row.info.id);
-        const bool privileged = viewer && (viewer->admin() || viewer->id == row.info.ownerId);
-        if (!privileged) {
-            row.info.hidden = false;
-            row.info.moderationNote.clear();
-        }
-        return row.info;
-    }
+struct PlatformService::Impl : PlatformService::Context {
+    explicit Impl(PlatformService& service) : Context(service) {}
 
     // --- handlers: accounts -------------------------------------------------------------
     void registerAccount(const httplib::Request& req, httplib::Response& res) {
@@ -596,7 +316,7 @@ struct PlatformService::Impl {
         const int number = static_cast<int>(next.integer(0));
         auto st = db().prepare(
             "INSERT INTO versions (game_id, number, package_hash, bytes, notes, engine_version, script_errors, report, "
-            "created) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)");
+            "created, leaderboards) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)");
         st.bind(1, id)
             .bind(2, number)
             .bind(3, hash)
@@ -605,7 +325,8 @@ struct PlatformService::Impl {
             .bind(6, std::string(version::string))
             .bind(7, report->scriptErrors)
             .bind(8, run->output)
-            .bind(9, now());
+            .bind(9, now())
+            .bind(10, online::leaderboardsToJson(report->leaderboards));
         st.run();
         auto upd = db().prepare("UPDATE games SET latest_version = ?1, game_type = ?2, updated = ?3 WHERE id = ?4");
         upd.bind(1, number).bind(2, report->gameType).bind(3, now()).bind(4, id);
@@ -615,6 +336,97 @@ struct PlatformService::Impl {
         online::VersionInfo v{number, hash, bytes.size(), notes, std::string(version::string), report->scriptErrors, now()};
         json out = {{"version", v}, {"report", json::parse(run->output)}};
         sendJson(res, 201, out);
+    }
+
+    // --- thumbnails -------------------------------------------------------------------------
+    std::filesystem::path thumbnailPath(const std::string& hash) const {
+        return s.m_config.dataDir / "thumbnails" / (hash + ".png");
+    }
+
+    void uploadThumbnail(const httplib::Request& req, httplib::Response& res) {
+        const User user = requireUser(req);
+        const std::int64_t id = pathId(req);
+        {
+            std::lock_guard lock(s.m_dbMutex);
+            auto row = gameById(id);
+            if (!row || !(row->info.ownerId == user.id || user.admin())) fail(404, "not_found", "There is no such game of yours");
+        }
+        limit("thumbnail:" + std::to_string(user.id), 30, 3600);
+        if (req.body.size() > online::kMaxThumbnailUploadBytes) fail(413, "too_large", "The picture is larger than 4 MiB");
+        if (req.body.size() < 8) fail(400, "bad_request", "Send a PNG or JPEG picture as the request body");
+        // Decoded in its own limited process, like uploaded games; only its PNG is kept.
+        const auto tmpDir = s.m_config.dataDir / "tmp";
+        std::error_code ec;
+        std::filesystem::create_directories(tmpDir, ec);
+        auto name = crypto::randomToken(12);
+        if (!name) throw std::runtime_error(name.error().message);
+        const auto upload = tmpDir / (name.value() + ".picture");
+        const auto made = tmpDir / (name.value() + ".thumb.png");
+        struct Cleanup {
+            std::filesystem::path a, b;
+            ~Cleanup() {
+                std::error_code e;
+                std::filesystem::remove(a, e);
+                std::filesystem::remove(b, e);
+            }
+        } cleanup{upload, made};
+        {
+            std::ofstream out(upload, std::ios::binary | std::ios::trunc);
+            out.write(req.body.data(), static_cast<std::streamsize>(req.body.size()));
+            if (!out) throw std::runtime_error("cannot write the upload");
+        }
+        ProcessOptions options;
+        options.args = {"--check-thumbnail", upload.string(), "--output", made.string()};
+        options.memoryLimitMiB = 512;
+        options.cpuLimitSeconds = 25;
+        auto run = runProcess(s.m_config.headlessExe, options, 20.0);
+        if (!run) throw std::runtime_error(run.error().message);
+        if (run->timedOut || run->exitCode != 0) {
+            std::string why = run->errors;
+            while (!why.empty() && (why.back() == '\n' || why.back() == '\r')) why.pop_back();
+            if (why.empty() || why.size() > 300) why = "it could not be read";
+            fail(422, "check_failed", "The picture was not accepted: " + why);
+        }
+        auto png = readLocalFile(made);
+        if (!png || png->empty()) throw std::runtime_error("the checker wrote no thumbnail");
+        const std::string hash = crypto::toHex(crypto::hash256(png.value())).substr(0, 32);
+        const auto stored = thumbnailPath(hash);
+        std::filesystem::create_directories(stored.parent_path(), ec);
+        std::filesystem::rename(made, stored, ec);
+        if (ec) {
+            std::filesystem::copy_file(made, stored, std::filesystem::copy_options::overwrite_existing, ec);
+            if (ec) throw std::runtime_error("cannot store the thumbnail: " + ec.message());
+        }
+        std::lock_guard lock(s.m_dbMutex);
+        auto old = db().prepare("SELECT thumbnail FROM games WHERE id = ?1");
+        old.bind(1, id);
+        const std::string previous = old.step() ? old.text(0) : std::string();
+        auto st = db().prepare("UPDATE games SET thumbnail = ?1 WHERE id = ?2");
+        st.bind(1, hash).bind(2, id);
+        st.run();
+        if (!previous.empty() && previous != hash) {
+            auto used = db().prepare("SELECT COUNT(*) FROM games WHERE thumbnail = ?1");
+            used.bind(1, previous);
+            if (used.step() && used.integer(0) == 0) std::filesystem::remove(thumbnailPath(previous), ec);
+        }
+        sendJson(res, 200, {{"thumbnail", hash}});
+    }
+
+    void getThumbnail(const httplib::Request& req, httplib::Response& res) {
+        const auto viewer = currentUser(req);
+        const GameRow row = viewableGame(pathId(req), viewer);
+        if (row.info.thumbnail.empty()) fail(404, "not_found", "This game has no picture");
+        const auto file = thumbnailPath(row.info.thumbnail);
+        auto png = readLocalFile(file);
+        if (!png) fail(404, "not_found", "This game has no picture");
+        const std::string etag = "\"" + row.info.thumbnail + "\"";
+        res.set_header("ETag", etag);
+        res.set_header("Cache-Control", "no-cache");
+        if (req.get_header_value("If-None-Match") == etag) {
+            res.status = 304;
+            return;
+        }
+        res.set_content(std::string(png->begin(), png->end()), "image/png");
     }
 
     void listVersions(const httplib::Request& req, httplib::Response& res) {
@@ -676,37 +488,14 @@ struct PlatformService::Impl {
         if (row.info.latestVersion == 0) fail(409, "not_published", "This game has not been published yet");
         Fleet::GameRef ref{id, row.info.latestVersion, packagePath(row.info.packageHash), row.info.maxPlayers,
                            row.info.title};
-        auto seat = s.m_fleet->reserve(ref, std::to_string(user.id));
-        if (!seat) {
-            const int status = seat.error().code == ErrorCode::LimitExceeded ? 503
-                               : seat.error().code == ErrorCode::InvalidArgument ? 409
-                                                                                 : 502;
-            fail(status, "no_server", seat.error().message);
-        }
-        net::ConnectToken token;
-        token.session = seat->session;
-        token.userId = std::to_string(user.id);
-        token.username = user.username;
-        token.expires = now() + net::kConnectTokenLifetimeSeconds;
-        auto nonce = crypto::randomToken(16);
-        if (!nonce) throw std::runtime_error(nonce.error().message);
-        token.nonce = nonce.value();
-        online::JoinTicket ticket;
-        ticket.token = net::signConnectToken(token, s.m_key);
-        ticket.host = seat->host;
-        ticket.port = seat->port;
-        ticket.session = seat->session;
-        ticket.expires = token.expires;
-        ticket.version = row.info.latestVersion;
-        ticket.packageHash = row.info.packageHash;
-        ticket.webSocket = seat->webSocket;
+        std::set<std::string> avoid;
         {
             std::lock_guard lock(s.m_dbMutex);
-            auto st = db().prepare("UPDATE games SET plays = plays + 1 WHERE id = ?1");
-            st.bind(1, id);
-            st.run();
+            avoid = blockedWith(user.id); // never in one server with someone blocked either way
         }
-        sendJson(res, 200, {{"ticket", ticket}});
+        auto seat = s.m_fleet->reserve(ref, std::to_string(user.id), avoid);
+        if (!seat) failSeat(seat.error());
+        sendJson(res, 200, {{"ticket", issueTicket(user, row.info.id, row.info.latestVersion, row.info.packageHash, *seat)}});
     }
 
     void reportGame(const httplib::Request& req, httplib::Response& res) {
@@ -767,22 +556,6 @@ struct PlatformService::Impl {
         st.run();
         audit(admin, hidden ? "hide_game" : "unhide_game", std::format("game {} '{}'", id, row->info.title), note);
         if (hidden) s.m_fleet->stopGame(id);
-    }
-
-    void banUser(const User& admin, const User& target, bool banned, const std::string& note) {
-        if (target.admin() && banned) fail(400, "bad_request", "Administrators cannot be banned; remove their role first");
-        auto st = db().prepare("UPDATE users SET banned = ?1, ban_note = ?2 WHERE id = ?3");
-        st.bind(1, banned ? 1 : 0).bind(2, note).bind(3, target.id);
-        st.run();
-        if (banned) {
-            auto del = db().prepare("DELETE FROM sessions WHERE user_id = ?1");
-            del.bind(1, target.id);
-            del.run();
-            auto games = db().prepare("SELECT id FROM games WHERE owner_id = ?1");
-            games.bind(1, target.id);
-            while (games.step()) s.m_fleet->stopGame(games.integer(0));
-        }
-        audit(admin, banned ? "ban_user" : "unban_user", "user " + target.username, note);
     }
 
     void resolveReport(const httplib::Request& req, httplib::Response& res) {
@@ -859,13 +632,6 @@ struct PlatformService::Impl {
     }
 
     // --- handlers: game servers ------------------------------------------------------------
-    std::string requireServer(const httplib::Request& req) {
-        const std::string key = bearer(req, "Server");
-        auto session = key.empty() || key.size() > 100 ? std::nullopt : s.m_fleet->sessionForKey(key);
-        if (!session) fail(401, "not_a_server", "Unknown game server");
-        return *session;
-    }
-
     void serverReady(const httplib::Request& req, httplib::Response& res) {
         const std::string session = requireServer(req);
         const json body = parseBody(req);
@@ -1096,7 +862,11 @@ void PlatformService::migrate() {
     auto st = m_db->prepare("PRAGMA user_version");
     st.step();
     const auto version = st.integer(0);
-    if (version >= 1) return;
+    if (version < 1) migrateTo1();
+    if (version < 2) migrateTo2();
+}
+
+void PlatformService::migrateTo1() {
     m_db->exec(R"SQL(
 BEGIN;
 CREATE TABLE users (
@@ -1168,6 +938,66 @@ COMMIT;
 )SQL");
 }
 
+// Version 2 (0.8.0): profiles, friends, blocks, invitations, reports about
+// accounts, leaderboards, thumbnails.
+void PlatformService::migrateTo2() {
+    m_db->exec(R"SQL(
+BEGIN;
+ALTER TABLE users ADD COLUMN bio TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN avatar INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN join_policy TEXT NOT NULL DEFAULT 'friends';
+ALTER TABLE users ADD COLUMN last_seen INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE friends (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    friend_id INTEGER NOT NULL REFERENCES users(id),
+    created INTEGER NOT NULL,
+    PRIMARY KEY (user_id, friend_id));
+CREATE TABLE friend_requests (
+    from_id INTEGER NOT NULL REFERENCES users(id),
+    to_id INTEGER NOT NULL REFERENCES users(id),
+    created INTEGER NOT NULL,
+    PRIMARY KEY (from_id, to_id));
+CREATE INDEX friend_requests_to ON friend_requests(to_id);
+CREATE TABLE blocks (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    blocked_id INTEGER NOT NULL REFERENCES users(id),
+    created INTEGER NOT NULL,
+    PRIMARY KEY (user_id, blocked_id));
+CREATE INDEX blocks_blocked ON blocks(blocked_id);
+CREATE TABLE invitations (
+    id INTEGER PRIMARY KEY,
+    from_id INTEGER NOT NULL REFERENCES users(id),
+    to_id INTEGER NOT NULL REFERENCES users(id),
+    game_id INTEGER NOT NULL REFERENCES games(id),
+    session TEXT NOT NULL,
+    created INTEGER NOT NULL,
+    expires INTEGER NOT NULL);
+CREATE INDEX invitations_to ON invitations(to_id);
+CREATE TABLE user_reports (
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    reporter_id INTEGER NOT NULL REFERENCES users(id),
+    reason TEXT NOT NULL,
+    state TEXT NOT NULL DEFAULT 'open',
+    resolution TEXT NOT NULL DEFAULT '',
+    resolved_by INTEGER,
+    resolved_at INTEGER,
+    created INTEGER NOT NULL);
+CREATE TABLE leaderboard_scores (
+    game_id INTEGER NOT NULL REFERENCES games(id),
+    board TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    value REAL NOT NULL,
+    updated INTEGER NOT NULL,
+    PRIMARY KEY (game_id, board, user_id));
+CREATE INDEX leaderboard_values ON leaderboard_scores(game_id, board, value);
+ALTER TABLE versions ADD COLUMN leaderboards TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE games ADD COLUMN thumbnail TEXT NOT NULL DEFAULT '';
+PRAGMA user_version = 2;
+COMMIT;
+)SQL");
+}
+
 std::string PlatformService::url() const {
     const std::string host = m_config.bindAddress == "0.0.0.0" ? "127.0.0.1" : m_config.bindAddress;
     return std::format("http://{}:{}", host, m_port);
@@ -1192,6 +1022,8 @@ void PlatformService::registerRoutes(httplib::Server& http) {
         res.set_header("X-Content-Type-Options", "nosniff");
     });
     http.Get("/", bind(&Impl::home));
+    registerSocialRoutes(http, i);
+    registerLeaderboardRoutes(http, i);
     http.Get("/play", bind(&Impl::playPage));
     http.Get("/play/", i.wrap([](const httplib::Request&, httplib::Response& res) { res.set_redirect("/play"); }));
     http.Get(R"(/play/(play\.(?:js|css)))", bind(&Impl::playPage));
@@ -1212,6 +1044,8 @@ void PlatformService::registerRoutes(httplib::Server& http) {
     http.Patch(R"(/api/v1/games/(\d+))", bind(&Impl::updateGame));
     http.Post(R"(/api/v1/games/(\d+)/versions)", bind(&Impl::publish));
     http.Get(R"(/api/v1/games/(\d+)/versions)", bind(&Impl::listVersions));
+    http.Put(R"(/api/v1/games/(\d+)/thumbnail)", bind(&Impl::uploadThumbnail));
+    http.Get(R"(/api/v1/games/(\d+)/thumbnail)", bind(&Impl::getThumbnail));
     http.Post(R"(/api/v1/games/(\d+)/join)", bind(&Impl::join));
     http.Post(R"(/api/v1/games/(\d+)/reports)", bind(&Impl::reportGame));
     http.Get(R"(/api/v1/games/(\d+)/data/([A-Za-z0-9_]{1,32}))", bind(&Impl::ownerPlayerData));

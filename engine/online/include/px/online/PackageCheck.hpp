@@ -2,6 +2,7 @@
 
 #include "px/core/Result.hpp"
 #include "px/project/Package.hpp"
+#include "px/project/Project.hpp"
 
 #include <string>
 #include <vector>
@@ -30,6 +31,7 @@ struct PackageReport {
     int scriptErrors = 0;     // runtime errors while simulating (reported, not fatal)
     std::string firstScriptError;
     std::vector<std::string> warnings;
+    std::vector<project::LeaderboardDef> leaderboards; // declared in project.json
 };
 
 // Validates `package` completely (manifest, every scene, prefab, animation,
@@ -38,6 +40,9 @@ struct PackageReport {
 [[nodiscard]] Result<PackageReport> checkPackage(project::Package& package, const PackageCheckOptions& options = {});
 
 [[nodiscard]] std::string reportToJson(const PackageReport& report);
+// Leaderboard declarations as the platform stores them per version.
+[[nodiscard]] std::string leaderboardsToJson(const std::vector<project::LeaderboardDef>& boards);
+[[nodiscard]] Result<std::vector<project::LeaderboardDef>> leaderboardsFromJson(std::string_view json);
 [[nodiscard]] Result<PackageReport> reportFromJson(std::string_view json);
 
 } // namespace px::online

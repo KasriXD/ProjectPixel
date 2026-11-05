@@ -80,7 +80,7 @@ def main():
 
     textures = ["topdown_tiles", "hero", "hero_sheet", "gem", "key", "lock_block", "spike_trap", "beetle", "stairs", "tree",
                 "rock", "shrub", "scenery"]
-    scripts = ["coin", "level_rules", "key", "lock_block", "hazard", "patrol", "goal", "sign"]
+    scripts = ["coin", "level_rules", "key", "lock_block", "hazard", "patrol", "goal", "sign", "best_time"]
     assets = []
     for key in textures:
         file, name, *_ = lib.SHARED_TEXTURES.get(key) or lib.LIBRARY_TEXTURES[key]
@@ -142,7 +142,8 @@ def main():
                              "Tilemap": {"tileset": T["topdown_tiles"], "tileSize": [16, 16], "tilesetColumns": 8,
                                          "solid": True, "layer": 0, "rows": lib.tile_rows(wall_rows())}}),
         e("rules", "Level Rules", {"Scripts": [{"script": S["level_rules"], "properties": {
-            "tag": "coin", "label": "GEMS", "message": "ALL GEMS FOUND!", "complete": False}}]}),
+            "tag": "coin", "label": "GEMS", "message": "ALL GEMS FOUND!", "complete": False}},
+            {"script": S["best_time"], "properties": {"board": "fastest"}}]}),
         e("sign", "Sign", {"Transform": {"position": centre(4, 12)},
                            "Sprite": sprite("scenery", [16, 16], [16, 16, 16, 16], -1),
                            "BoxCollider": trigger((16, 16)),
@@ -227,6 +228,7 @@ def main():
                      "scripting": {"apiVersion": 1}},
         "input": {"actions": {"move_left": ["Left", "A"], "move_right": ["Right", "D"],
                               "move_up": ["Up", "W"], "move_down": ["Down", "S"]}},
+        "leaderboards": [{"id": "fastest", "title": "Fastest gem hunt", "order": "lowest", "format": "time"}],
         "assets": assets,
     }
     (OUT / "project.json").write_text(example.dump_pretty(project) + "\n")

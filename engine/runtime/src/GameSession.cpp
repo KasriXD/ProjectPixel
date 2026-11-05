@@ -144,6 +144,9 @@ Result<std::unique_ptr<GameSession>> GameSession::create(const project::ProjectM
 
     session->m_prefabs = options.prefabs;
     session->m_localData = options.localData ? options.localData : std::make_shared<PlayerData>();
+    session->m_boards = project.leaderboards;
+    session->m_leaderboards = options.leaderboards ? options.leaderboards : std::make_shared<MemoryLeaderboardStore>();
+    session->m_localPlayerName = options.localPlayerName;
     session->m_animations = options.animations;
     session->m_tilesets = options.tilesets;
     session->m_spawnCount = options.seed;
@@ -189,7 +192,7 @@ Entity GameSession::characterOf(PlayerId id) const {
     return slot != nullptr && m_scene.isAlive(slot->character) ? slot->character : kNullEntity;
 }
 
-Result<Entity> GameSession::addPlayer(PlayerId id, std::string name, PlayerData data) {
+Result<Entity> GameSession::addPlayer(PlayerId id, std::string name, PlayerData data, std::string account) {
     if (!m_multiplayer) return makeError(ErrorCode::InvalidArgument, "Players can only be added in multiplayer");
     if (id == kNoPlayer || findPlayer(id) != nullptr) {
         return makeError(ErrorCode::InvalidArgument, "Player id {} is not free", id);
@@ -199,6 +202,8 @@ Result<Entity> GameSession::addPlayer(PlayerId id, std::string name, PlayerData 
     slot.id = id;
     slot.name = std::move(name);
     slot.data = std::move(data);
+    slot.account = account.empty() ? slot.name : std::move(account);
+    m_leaderboards->playerJoined(slot.account);
     if (!m_templates.entries.empty()) {
         // Players take turns over the templates, so several Player entities
         // in a scene are several spawn points.
@@ -253,6 +258,7 @@ void GameSession::removePlayer(PlayerId id) {
     const auto it = std::find_if(m_players.begin(), m_players.end(), [id](const PlayerSlot& p) { return p.id == id; });
     if (it == m_players.end()) return;
     if (m_scene.isAlive(it->character)) m_pendingLeaves.push_back(it->character);
+    m_leaderboards->playerLeft(it->account);
     m_players.erase(it);
 }
 
@@ -654,6 +660,56 @@ Status GameSession::playerDataSet(Entity player, std::string_view key, std::opti
         return {};
     }
     return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+}
+
+Result<const project::LeaderboardDef*> GameSession::findBoard(std::string_view board) const {
+    for (const auto& b : m_boards) {
+        if (b.id == board) return &b;
+    }
+    return makeError(ErrorCode::InvalidArgument,
+                     "there is no leaderboard '{}'; declare it in project.json under \"leaderboards\"", board);
+}
+
+Result<GameSession::Scorer> GameSession::scorer(Entity player, std::string_view board) const {
+    auto def = findBoard(board);
+    if (!def) return def.error();
+    if (!m_scene.isAlive(player) || m_scene.tryGet<Player>(player) == nullptr) {
+        return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+    }
+    if (!m_multiplayer) return Scorer{def.value(), "local", m_localPlayerName};
+    for (const PlayerSlot& p : m_players) {
+        if (p.character == player) return Scorer{def.value(), p.account, p.name};
+    }
+    return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+}
+
+Result<bool> GameSession::leaderboardSubmit(Entity player, std::string_view board, double score) {
+    auto who = scorer(player, board);
+    if (!who) return who.error();
+    if (!std::isfinite(score) || std::abs(score) > 1e15) {
+        return makeError(ErrorCode::InvalidArgument, "scores must be finite numbers up to 1e15");
+    }
+    // A script submitting in a loop must not flood the platform.
+    if (m_submitTick != m_tick) {
+        m_submitTick = m_tick;
+        m_submitsThisTick = 0;
+    }
+    if (++m_submitsThisTick > 100) return makeError(ErrorCode::LimitExceeded, "at most 100 scores per tick");
+    return m_leaderboards->submit(*who->board, who->account, who->name, score);
+}
+
+Result<std::optional<scripting::LeaderboardRow>> GameSession::leaderboardEntry(Entity player,
+                                                                               std::string_view board) const {
+    auto who = scorer(player, board);
+    if (!who) return who.error();
+    return m_leaderboards->entry(*who->board, who->account);
+}
+
+Result<std::vector<scripting::LeaderboardRow>> GameSession::leaderboardTop(std::string_view board,
+                                                                           std::size_t count) const {
+    auto def = findBoard(board);
+    if (!def) return def.error();
+    return m_leaderboards->top(*def.value(), count);
 }
 
 const std::vector<std::string>* GameSession::tileTags(assets::AssetId tileset, Vec2 tileSize, int tile) const {

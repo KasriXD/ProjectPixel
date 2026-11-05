@@ -7,6 +7,7 @@
 #include "px/runtime/GameSession.hpp"
 #include "px/runtime/Input.hpp"
 #include "px/runtime/InputScript.hpp"
+#include "px/runtime/Leaderboards.hpp"
 #include "px/runtime/TouchControls.hpp"
 
 #include <algorithm>
@@ -428,6 +429,37 @@ TEST_CASE("Touch controls: four directions and several buttons") {
             CHECK_MESSAGE(!overlap, b[i].label << " overlaps " << b[j].label);
         }
     }
+}
+
+TEST_CASE("Leaderboards in memory keep each player's best and rank ties") {
+    project::LeaderboardDef most{"coins", "Coins", project::LeaderboardOrder::Highest, project::ScoreFormat::Number};
+    project::LeaderboardDef fastest{"time", "Time", project::LeaderboardOrder::Lowest, project::ScoreFormat::Time};
+    MemoryLeaderboardStore store;
+    CHECK(store.submit(most, "1", "Ada", 5));
+    CHECK_FALSE(store.submit(most, "1", "Ada", 3)); // not better
+    CHECK(store.submit(most, "1", "Ada", 9));
+    CHECK(store.submit(most, "2", "Bob", 7));
+    CHECK(store.submit(most, "3", "Cy", 7));
+    const auto top = store.top(most, 10);
+    REQUIRE(top.size() == 3);
+    CHECK(top[0].name == "Ada");
+    CHECK(top[0].rank == 1);
+    CHECK(top[1].name == "Bob"); // reached 7 first
+    CHECK(top[1].rank == 2);
+    CHECK(top[2].rank == 2);     // a tie shares the place
+    CHECK(store.top(most, 1).size() == 1);
+    CHECK(store.entry(most, "3")->rank == 2);
+    CHECK_FALSE(store.entry(most, "4").has_value());
+
+    CHECK(store.submit(fastest, "1", "Ada", 20.5));
+    CHECK(store.submit(fastest, "1", "Ada", 18.0)); // lower is better
+    CHECK_FALSE(store.submit(fastest, "1", "Ada", 19.0));
+    CHECK(store.entry(fastest, "1")->score == doctest::Approx(18.0));
+    // A copy refreshed from the platform: the platform's rank counts outside the copy's scores.
+    store.set(fastest, "9", "Zed", 99.0, 250);
+    CHECK(store.entry(fastest, "9")->rank == 250);
+    store.set(fastest, "1", "Ada", 25.0); // older than the local best: kept
+    CHECK(store.entry(fastest, "1")->score == doctest::Approx(18.0));
 }
 
 TEST_CASE("Input scripts parse and play back with press edges") {

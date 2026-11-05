@@ -109,6 +109,12 @@
               "message": "ALL GEMS FOUND!",
               "complete": false
             }
+          },
+          {
+            "script": "994b6127-fefc-5ca1-803b-82ad6230ab9e",
+            "properties": {
+              "board": "fastest"
+            }
           }
         ]
       }

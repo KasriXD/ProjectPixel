@@ -29,7 +29,7 @@ target_compile_definitions(px_tests PRIVATE
     PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library")
 px_target_defaults(px_tests)
 if(PX_ENABLE_PLATFORM)
-    target_sources(px_tests PRIVATE test_platform.cpp)
+    target_sources(px_tests PRIVATE test_platform.cpp test_social.cpp)
     target_link_libraries(px_tests PRIVATE px::online px_platform_service px_httplib)
     target_compile_definitions(px_tests PRIVATE PX_HAVE_PLATFORM=1
         PX_HEADLESS_EXE="$<TARGET_FILE:px_headless>"

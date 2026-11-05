@@ -469,6 +469,74 @@ struct Bindings {
         return 1;
     }
 
+    // --- Leaderboards ---------------------------------------------------------------
+
+    static std::string checkBoard(lua_State* L, int idx) {
+        size_t len = 0;
+        const char* board = luaL_checklstring(L, idx, &len);
+        return std::string(board, len);
+    }
+
+    static void pushRow(lua_State* L, const LeaderboardRow& row) {
+        lua_createtable(L, 0, 3);
+        lua_pushinteger(L, row.rank);
+        lua_setfield(L, -2, "rank");
+        lua_pushlstring(L, row.name.data(), row.name.size());
+        lua_setfield(L, -2, "name");
+        lua_pushnumber(L, row.score);
+        lua_setfield(L, -2, "score");
+    }
+
+    static int leaderboardSubmit(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string board = checkBoard(L, 2);
+        const double score = checkFinite(L, 3);
+        auto best = system(L).m_host.leaderboardSubmit(player, board, score);
+        if (!best) luaL_errorL(L, "Leaderboard.submit: %s", best.error().message.c_str());
+        lua_pushboolean(L, best.value() ? 1 : 0);
+        return 1;
+    }
+
+    static int leaderboardBest(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string board = checkBoard(L, 2);
+        auto entry = system(L).m_host.leaderboardEntry(player, board);
+        if (!entry) luaL_errorL(L, "Leaderboard.best: %s", entry.error().message.c_str());
+        if (entry.value()) {
+            lua_pushnumber(L, entry.value()->score);
+        } else {
+            lua_pushnil(L);
+        }
+        return 1;
+    }
+
+    static int leaderboardRank(lua_State* L) {
+        const scene::Entity player = checkEntity(L, 1);
+        const std::string board = checkBoard(L, 2);
+        auto entry = system(L).m_host.leaderboardEntry(player, board);
+        if (!entry) luaL_errorL(L, "Leaderboard.rank: %s", entry.error().message.c_str());
+        if (entry.value()) {
+            lua_pushinteger(L, entry.value()->rank);
+        } else {
+            lua_pushnil(L);
+        }
+        return 1;
+    }
+
+    static int leaderboardTop(lua_State* L) {
+        const std::string board = checkBoard(L, 1);
+        const double count = lua_isnoneornil(L, 2) ? 10.0 : checkFinite(L, 2);
+        if (count < 1 || count > 100) luaL_argerrorL(L, 2, "count must be 1 to 100");
+        auto rows = system(L).m_host.leaderboardTop(board, static_cast<std::size_t>(count));
+        if (!rows) luaL_errorL(L, "Leaderboard.top: %s", rows.error().message.c_str());
+        lua_createtable(L, static_cast<int>(rows.value().size()), 0);
+        for (std::size_t i = 0; i < rows.value().size(); ++i) {
+            pushRow(L, rows.value()[i]);
+            lua_rawseti(L, -2, static_cast<int>(i + 1));
+        }
+        return 1;
+    }
+
     // --- Events ---------------------------------------------------------------------
 
     static ScriptSystem::EventValue checkEventValue(lua_State* L, int idx) {
@@ -913,6 +981,25 @@ const Binding kBindings[] = {
       "Adds `amount` (default 1) to a saved number (missing counts as 0) and returns the new value."},
      &Bindings::dataIncrement},
 
+    // Leaderboard: best scores shared between players.
+    {{"Leaderboard", "submit", K::Function, A::AuthorityOnly,
+      "Leaderboard.submit(player: Entity, board: string, score: number): boolean",
+      "Records a score for `player` (a character) on a leaderboard declared in project.json; each player keeps "
+      "their best. Returns true when the score is their new best. On the platform the scores of every player "
+      "of the game are kept; played locally they last until the program closes."},
+     &Bindings::leaderboardSubmit},
+    {{"Leaderboard", "best", K::Function, A::AuthorityOnly, "Leaderboard.best(player: Entity, board: string): number?",
+      "The player's best score on the board, or nil.", false, true},
+     &Bindings::leaderboardBest},
+    {{"Leaderboard", "rank", K::Function, A::AuthorityOnly, "Leaderboard.rank(player: Entity, board: string): number?",
+      "The player's place on the board (1 is best; equal scores share a place), or nil without a score.", false, true},
+     &Bindings::leaderboardRank},
+    {{"Leaderboard", "top", K::Function, A::AuthorityOnly,
+      "Leaderboard.top(board: string, count: number?): { {rank: number, name: string, score: number} }",
+      "The best `count` (default 10, at most 100) scores, best first, as tables with rank, name and score. "
+      "On the platform the list is refreshed from it every few seconds.", false, true},
+     &Bindings::leaderboardTop},
+
     // Events: messages between scripts.
     {{"Events", "emit", K::Function, A::Everywhere, "Events.emit(name: string, value: any?)",
       "Queues an event. Listeners run after the current phase, in registration order. value must be nil, "
@@ -1035,7 +1122,7 @@ void Bindings::registerApi(lua_State* L, ScriptSystem& s) {
     };
 
     // Globals and library tables.
-    for (const char* group : {"Game", "World", "Input", "Players", "Data", "Events"}) {
+    for (const char* group : {"Game", "World", "Input", "Players", "Data", "Leaderboard", "Events"}) {
         lua_createtable(L, 0, 8);
         for (const Binding& b : kBindings) {
             if (b.info.group != group || b.function == nullptr || !available(b)) continue;
@@ -1237,7 +1324,8 @@ std::string generateApiReferenceMarkdown() {
     md += "Guide and examples: [scripting.md](scripting.md). *Available in*: **all** means authority and "
           "client scripts; **authority** means only where game state is decided (single-player session, "
           "server). *Pure* members have no side effects (data nodes in visual scripting).\n";
-    const char* groups[] = {"Lifecycle", "Globals", "Game", "World", "Input", "Players", "Data", "Events", "Entity"};
+    const char* groups[] = {"Lifecycle", "Globals", "Game",        "World",  "Input",
+                            "Players",   "Data",    "Leaderboard", "Events", "Entity"};
     const char* intro[] = {
         "Functions a behaviour table may define. The engine calls them; see the lifecycle rules in scripting.md.",
         "Global functions.",
@@ -1248,6 +1336,8 @@ std::string generateApiReferenceMarkdown() {
         "scene's Player entity when playing alone.",
         "Saved player data: values kept for each player between visits (docs/platform.md#saved-player-data). "
         "Loaded before PlayerJoined, saved while they play and when they leave.",
+        "Leaderboards declared in project.json (`leaderboards`): each player's best score, shared between "
+        "everyone who plays the game on the platform (docs/leaderboards.md).",
         "Custom events between scripts. Values must be serializable.",
         "An `Entity` is a handle to a scene entity. Properties need the named component; accessing a "
         "destroyed entity is an error except `isValid()`. Writable properties can only be assigned by "

@@ -10,6 +10,7 @@ local Goal = {
 
 function Goal:TriggerEnter(other)
     if other:hasComponent("Player") then
+        Events.emit("level_complete", self.message) -- for Best Time and other listeners
         Game.completeLevel(self.message)
     end
 end

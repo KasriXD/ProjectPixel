@@ -38,6 +38,7 @@ Result<PackageReport> checkPackage(project::Package& package, const PackageCheck
     if (!manifest) return manifest.error();
     report.name = manifest->name;
     report.gameType = std::string(project::gameTypeName(manifest->settings.gameType));
+    report.leaderboards = manifest->leaderboards;
 
     // Images: decoded with the engine's limits and written again as PNG, so
     // players only ever decode files the platform produced.
@@ -88,6 +89,38 @@ Result<PackageReport> checkPackage(project::Package& package, const PackageCheck
     return report;
 }
 
+std::string leaderboardsToJson(const std::vector<project::LeaderboardDef>& boards) {
+    nlohmann::json list = nlohmann::json::array();
+    for (const auto& b : boards) {
+        list.push_back({{"id", b.id},
+                        {"title", b.title},
+                        {"order", std::string(project::leaderboardOrderName(b.order))},
+                        {"format", std::string(project::scoreFormatName(b.format))}});
+    }
+    return list.dump();
+}
+
+Result<std::vector<project::LeaderboardDef>> leaderboardsFromJson(std::string_view json) {
+    try {
+        const auto list = nlohmann::json::parse(json);
+        std::vector<project::LeaderboardDef> out;
+        for (const auto& item : list) {
+            project::LeaderboardDef b;
+            b.id = item.at("id").get<std::string>();
+            b.title = item.value("title", b.id);
+            b.order = project::parseLeaderboardOrder(item.value("order", std::string("highest")))
+                          .value_or(project::LeaderboardOrder::Highest);
+            b.format = project::parseScoreFormat(item.value("format", std::string("number")))
+                           .value_or(project::ScoreFormat::Number);
+            if (!project::isValidLeaderboardId(b.id)) return makeError(ErrorCode::InvalidData, "bad leaderboard id");
+            out.push_back(std::move(b));
+        }
+        return out;
+    } catch (const std::exception& e) {
+        return makeError(ErrorCode::InvalidData, "Invalid leaderboards: {}", e.what());
+    }
+}
+
 std::string reportToJson(const PackageReport& r) {
     nlohmann::json j;
     j["name"] = r.name;
@@ -102,6 +135,7 @@ std::string reportToJson(const PackageReport& r) {
     j["scriptErrors"] = r.scriptErrors;
     j["firstScriptError"] = r.firstScriptError;
     j["warnings"] = r.warnings;
+    j["leaderboards"] = nlohmann::json::parse(leaderboardsToJson(r.leaderboards));
     return j.dump();
 }
 
@@ -121,6 +155,11 @@ Result<PackageReport> reportFromJson(std::string_view json) {
         r.scriptErrors = j.at("scriptErrors").get<int>();
         r.firstScriptError = j.at("firstScriptError").get<std::string>();
         r.warnings = j.at("warnings").get<std::vector<std::string>>();
+        if (j.contains("leaderboards")) {
+            auto boards = leaderboardsFromJson(j["leaderboards"].dump());
+            if (!boards) return boards.error();
+            r.leaderboards = std::move(boards.value());
+        }
         return r;
     } catch (const std::exception& e) {
         return makeError(ErrorCode::InvalidData, "Invalid package report: {}", e.what());

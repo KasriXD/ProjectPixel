@@ -333,84 +333,8 @@ TEST_CASE("Platform: rate limits and unknown game servers") {
 
 // --- Joining games: real game servers (px-server processes) ----------------------------------
 
-#include "px/net/GameClient.hpp"
-#include "px/net/Udp.hpp"
-#include "px/net/WebSocket.hpp"
-
-#include <thread>
-
-namespace {
-
-// A player connected to a platform game server over UDP, in real time.
-struct OnlinePlayer {
-    std::unique_ptr<net::GameClient> client;
-    runtime::LoadedGame game;
-    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
-    [[nodiscard]] double clock() const {
-        return std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-    }
-
-    OnlinePlayer(PlatformClient& platform, const JoinTicket& ticket, bool webSocket = false) {
-        auto bytes = platform.downloadPackage(ticket.packageHash);
-        REQUIRE(bytes.ok());
-        auto package = project::decodePackage(bytes.value());
-        REQUIRE(package.ok());
-        auto fs = package->toFileSystem();
-        auto loaded = runtime::loadGame(*fs);
-        REQUIRE(loaded.ok());
-        game = std::move(loaded.value());
-        auto endpoint = webSocket ? net::connectWebSocket(ticket.webSocket) : net::connectUdp(ticket.host, ticket.port);
-        REQUIRE(endpoint.ok());
-        net::ClientOptions options;
-        options.token = ticket.token;
-        auto created = net::GameClient::create(game, std::move(endpoint.value()), options);
-        REQUIRE(created.ok());
-        client = std::move(created.value());
-    }
-
-    // Runs in real time for `seconds` (or until disconnected), holding `actions`.
-    void play(double seconds, std::initializer_list<std::string_view> actions = {}) {
-        std::uint32_t held = 0;
-        const runtime::ActionSet set(game.manifest.input);
-        for (auto a : actions) held |= 1u << set.find(a);
-        const double until = clock() + seconds;
-        auto next = std::chrono::steady_clock::now();
-        while (true) {
-            const double now = clock();
-            if (now > until || client->status() == net::GameClient::Status::Disconnected) break;
-            client->receive(now);
-            if (client->status() == net::GameClient::Status::Playing) client->tick({held, 0});
-            client->updateView(now);
-            next += std::chrono::milliseconds(16);
-            std::this_thread::sleep_until(next);
-        }
-    }
-    bool waitUntilPlaying(double seconds = 10.0) {
-        const double until = clock() + seconds;
-        while (client->status() != net::GameClient::Status::Playing && clock() < until &&
-               client->status() != net::GameClient::Status::Disconnected) {
-            client->receive(clock());
-            client->tick({});
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }
-        return client->status() == net::GameClient::Status::Playing;
-    }
-};
-
-// Waits for `condition`, keeping the connected players' clients running
-// meanwhile (a client that stops answering is dropped by the server).
-template <class F>
-bool eventually(F&& condition, std::initializer_list<OnlinePlayer*> players = {}, double seconds = 20.0) {
-    const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
-    while (std::chrono::steady_clock::now() < end) {
-        if (condition()) return true;
-        if (players.size() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        for (OnlinePlayer* p : players) p->play(0.05);
-    }
-    return condition();
-}
-
-} // namespace
+using pxtest::eventually;
+using pxtest::OnlinePlayer;
 
 TEST_CASE("Platform: joining starts a game server; players play there and their data is saved") {
     TestPlatform p;

@@ -65,8 +65,51 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 19); // 6 images, 4 scripts, 1 graph, 2 prefabs, 4 animations, 1 tileset, 1 scene
+    CHECK(manifest->assets.size() == 20); // 6 images, 5 scripts, 1 graph, 2 prefabs, 4 animations, 1 tileset, 1 scene
     CHECK(manifest->settings.scripting.apiVersion == 1);
+    REQUIRE(manifest->leaderboards.size() == 1);
+    CHECK(manifest->leaderboards[0].id == "fastest");
+    CHECK(manifest->leaderboards[0].order == LeaderboardOrder::Lowest);
+    CHECK(manifest->leaderboards[0].format == ScoreFormat::Time);
+}
+
+TEST_CASE("Leaderboards in project.json: parsed, checked, written back") {
+    const auto withBoards = [](const std::string& boards) {
+        return std::string(R"({"format": "px.project", "formatVersion": 2, "id": "aaaaaaaa-0000-4000-8000-000000000001",
+            "name": "T", "startScene": "aaaaaaaa-0000-4000-8000-000000000002",
+            "assets": [{"id": "aaaaaaaa-0000-4000-8000-000000000002", "type": "scene", "path": "s.scene.json"}],
+            "leaderboards": )") + boards + "}";
+    };
+    auto ok = parseProjectManifest(withBoards(R"([{"id": "coins", "title": "Most coins"},
+        {"id": "run_time", "order": "lowest", "format": "time"}])"), "test");
+    REQUIRE_MESSAGE(ok.ok(), (ok.ok() ? "" : ok.error().message));
+    REQUIRE(ok->leaderboards.size() == 2);
+    CHECK(ok->leaderboards[0].order == LeaderboardOrder::Highest);
+    CHECK(ok->leaderboards[0].better(5, 3));
+    CHECK(ok->leaderboards[1].title == "run_time");
+    CHECK(ok->leaderboards[1].better(3, 5));
+    CHECK(ok->findLeaderboard("coins") != nullptr);
+    CHECK(ok->findLeaderboard("nope") == nullptr);
+    auto again = parseProjectManifest(serializeProjectManifest(*ok), "again");
+    REQUIRE(again.ok());
+    CHECK(again->leaderboards.size() == 2);
+    CHECK(again->leaderboards[1].format == ScoreFormat::Time);
+
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "Coins"}])"), "t").ok());
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "a"}, {"id": "a"}])"), "t").ok());
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "a", "order": "up"}])"), "t").ok());
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "a", "format": "money"}])"), "t").ok());
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "a", "title": ""}])"), "t").ok());
+    CHECK_FALSE(parseProjectManifest(withBoards(R"([{"id": "a", "colour": "red"}])"), "t").ok());
+    std::string many = "[";
+    for (int i = 0; i < 9; ++i) many += std::format("{}{{\"id\": \"b{}\"}}", i ? "," : "", i);
+    CHECK_FALSE(parseProjectManifest(withBoards(many + "]"), "t").ok());
+
+    CHECK(formatScore(14, ScoreFormat::Number) == "14");
+    CHECK(formatScore(2.5, ScoreFormat::Number) == "2.50");
+    CHECK(formatScore(62.25, ScoreFormat::Time) == "1:02.25");
+    CHECK(formatScore(59.999, ScoreFormat::Time) == "1:00.00");
+    CHECK(formatScore(9.5, ScoreFormat::Time) == "0:09.50");
 }
 
 TEST_CASE("Example scene loads with all expected content") {

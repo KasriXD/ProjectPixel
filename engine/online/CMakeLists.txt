@@ -6,7 +6,9 @@ px_add_module(online
     SOURCES
         src/PackageCheck.cpp
         src/PlatformClient.cpp
+        src/PlatformLeaderboardStore.cpp
         src/PlatformPlayerStore.cpp
+        src/Thumbnail.cpp
         src/WireJson.cpp
     DEPS
         px::core

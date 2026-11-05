@@ -99,33 +99,44 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
     return raw;
 }
 
-Result<Seat> Fleet::reserve(const GameRef& game, const std::string& userId) {
-    std::unique_lock lock(m_mutex);
-    Session* chosen = nullptr;
-    if (const auto it = m_userSession.find(userId); it != m_userSession.end()) {
-        Session* current = find(it->second);
-        if (current != nullptr && alive(*current) && !current->stopRequested) {
-            if (current->game.gameId == game.gameId && current->game.version == game.version) {
-                chosen = current; // back to the same server (a reconnect)
-            } else {
-                return makeError(ErrorCode::InvalidArgument,
-                                 "You are still in another game ('{}'). Leave it first, or wait a minute.",
-                                 current->game.title);
-            }
-        } else if (current != nullptr && alive(*current)) {
-            return makeError(ErrorCode::InvalidArgument,
-                             "Your last game is still saving your progress; try again in a moment");
-        } else {
-            m_userSession.erase(it);
-        }
+Result<Fleet::Session*> Fleet::currentSessionFor(const std::string& userId, std::int64_t gameId, int version) {
+    const auto it = m_userSession.find(userId);
+    if (it == m_userSession.end()) return static_cast<Session*>(nullptr);
+    Session* current = find(it->second);
+    if (current != nullptr && alive(*current) && !current->stopRequested) {
+        if (current->game.gameId == gameId && current->game.version == version) return current; // a reconnect
+        return makeError(ErrorCode::InvalidArgument,
+                         "You are still in another game ('{}'). Leave it first, or wait a minute.", current->game.title);
     }
+    if (current != nullptr && alive(*current)) {
+        return makeError(ErrorCode::InvalidArgument, "Your last game is still saving your progress; try again in a moment");
+    }
+    m_userSession.erase(it);
+    return static_cast<Session*>(nullptr);
+}
+
+Result<Seat> Fleet::reserve(const GameRef& game, const std::string& userId, const std::set<std::string>& avoid) {
+    std::unique_lock lock(m_mutex);
+    auto current = currentSessionFor(userId, game.gameId, game.version);
+    if (!current) return current.error();
+    Session* chosen = current.value();
     if (chosen == nullptr) {
         for (auto& [id, s] : m_sessions) {
-            if (alive(*s) && !s->stopRequested && s->game.gameId == game.gameId && s->game.version == game.version &&
-                occupancy(*s) < static_cast<std::size_t>(game.maxPlayers)) {
-                chosen = s.get();
-                break;
+            if (!alive(*s) || s->stopRequested || s->game.gameId != game.gameId || s->game.version != game.version ||
+                occupancy(*s) >= static_cast<std::size_t>(game.maxPlayers)) {
+                continue;
             }
+            const auto unwanted = [&avoid](const auto& who) {
+                for (const auto& entry : who) {
+                    if (avoid.contains(entry.first)) return true;
+                }
+                return false;
+            };
+            bool blocked = unwanted(s->reserved);
+            for (const std::string& p : s->players) blocked = blocked || avoid.contains(p);
+            if (blocked) continue;
+            chosen = s.get();
+            break;
         }
     }
     if (chosen == nullptr) {
@@ -136,9 +147,33 @@ Result<Seat> Fleet::reserve(const GameRef& game, const std::string& userId) {
     chosen->reserved[userId] = Clock::now() + std::chrono::duration_cast<Clock::duration>(
                                                   std::chrono::duration<double>(m_config.seatSeconds));
     m_userSession[userId] = chosen->id;
-    const std::string id = chosen->id;
-    const auto deadline = chosen->started + std::chrono::duration_cast<Clock::duration>(
-                                                std::chrono::duration<double>(m_config.readySeconds));
+    return seatWhenReady(lock, chosen->id, userId);
+}
+
+Result<Seat> Fleet::reserveIn(const std::string& session, const std::string& userId) {
+    std::unique_lock lock(m_mutex);
+    Session* target = find(session);
+    if (target == nullptr || !alive(*target) || target->stopRequested) {
+        return makeError(ErrorCode::NotFound, "That game has ended");
+    }
+    auto current = currentSessionFor(userId, target->game.gameId, target->game.version);
+    if (!current) return current.error();
+    if (current.value() != nullptr && current.value() != target) {
+        return makeError(ErrorCode::InvalidArgument, "You are in another server of this game; leave it first");
+    }
+    if (current.value() == nullptr && occupancy(*target) >= static_cast<std::size_t>(target->game.maxPlayers)) {
+        return makeError(ErrorCode::LimitExceeded, "That game is full");
+    }
+    target->reserved[userId] = Clock::now() + std::chrono::duration_cast<Clock::duration>(
+                                                  std::chrono::duration<double>(m_config.seatSeconds));
+    m_userSession[userId] = target->id;
+    return seatWhenReady(lock, target->id, userId);
+}
+
+Result<Seat> Fleet::seatWhenReady(std::unique_lock<std::mutex>& lock, const std::string& id, const std::string& userId) {
+    Session* first = find(id);
+    const auto deadline = first->started + std::chrono::duration_cast<Clock::duration>(
+                                               std::chrono::duration<double>(m_config.readySeconds));
     // Wait for a new server to say it is listening.
     while (true) {
         Session* s = find(id);
@@ -161,6 +196,17 @@ Result<Seat> Fleet::reserve(const GameRef& game, const std::string& userId) {
         }
         m_changed.wait_for(lock, std::chrono::milliseconds(100));
     }
+}
+
+std::optional<PlayerLocation> Fleet::whereIs(const std::string& userId) const {
+    std::lock_guard lock(m_mutex);
+    const auto it = m_userSession.find(userId);
+    if (it == m_userSession.end()) return std::nullopt;
+    const Session* s = find(it->second);
+    if (s == nullptr || !alive(*s) || s->stopRequested) return std::nullopt;
+    const bool playing = s->players.contains(userId);
+    if (!playing && !s->reserved.contains(userId)) return std::nullopt;
+    return PlayerLocation{s->id, s->game.gameId, s->game.version, playing};
 }
 
 std::optional<std::string> Fleet::sessionForKey(std::string_view serverKey) const {
@@ -243,6 +289,12 @@ std::optional<std::int64_t> Fleet::gameOf(const std::string& session) const {
     const Session* s = find(session);
     if (s == nullptr) return std::nullopt;
     return s->game.gameId;
+}
+
+int Fleet::versionOf(const std::string& session) const {
+    std::lock_guard lock(m_mutex);
+    const Session* s = find(session);
+    return s == nullptr ? 0 : s->game.version;
 }
 
 int Fleet::playing(std::int64_t gameId) const {

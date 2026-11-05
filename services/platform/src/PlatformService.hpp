@@ -78,11 +78,16 @@ public:
     [[nodiscard]] const crypto::PublicKey& publicKey() const { return m_key.publicKey; }
     [[nodiscard]] Fleet& fleet() { return *m_fleet; }
 
+    // Internal: shared by the service's handler groups (ServiceContext.hpp).
+    struct Context;
+
 private:
     explicit PlatformService(ServiceConfig config);
     [[nodiscard]] Status initialize();
     void registerRoutes(httplib::Server& http);
     void migrate();
+    void migrateTo1();
+    void migrateTo2();
 
     struct Impl;
     ServiceConfig m_config;
@@ -101,6 +106,7 @@ private:
     int m_port = 0;
     std::unique_ptr<Impl> m_impl;
     friend struct Impl;
+    friend struct Context;
 };
 
 } // namespace px::platform

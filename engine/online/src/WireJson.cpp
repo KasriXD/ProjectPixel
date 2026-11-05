@@ -73,6 +73,7 @@ void to_json(nlohmann::json& j, const GameInfo& v) {
          {"updated", v.updated}};
     if (v.hidden) j["hidden"] = true;
     if (!v.moderationNote.empty()) j["moderationNote"] = v.moderationNote;
+    if (!v.thumbnail.empty()) j["thumbnail"] = v.thumbnail;
 }
 void from_json(const nlohmann::json& j, GameInfo& v) {
     v.id = j.at("id").get<std::int64_t>();
@@ -92,6 +93,7 @@ void from_json(const nlohmann::json& j, GameInfo& v) {
     v.updated = j.value("updated", std::int64_t{0});
     v.hidden = j.value("hidden", false);
     v.moderationNote = j.value("moderationNote", std::string());
+    v.thumbnail = j.value("thumbnail", std::string());
 }
 
 void to_json(nlohmann::json& j, const JoinTicket& v) {
@@ -151,6 +153,135 @@ void from_json(const nlohmann::json& j, PlatformInfo& v) {
     v.apiVersion = j.at("apiVersion").get<int>();
     v.publicKey = j.at("publicKey").get<std::string>();
     v.webPlayer = j.value("webPlayer", false);
+}
+
+std::string_view joinPolicyName(JoinPolicy p) noexcept { return p == JoinPolicy::Nobody ? "nobody" : "friends"; }
+std::optional<JoinPolicy> parseJoinPolicy(std::string_view name) noexcept {
+    if (name == "friends") return JoinPolicy::Friends;
+    if (name == "nobody") return JoinPolicy::Nobody;
+    return std::nullopt;
+}
+
+void to_json(nlohmann::json& j, const Presence& v) {
+    j = {{"state", v.state}};
+    if (v.gameId != 0) {
+        j["gameId"] = v.gameId;
+        j["gameTitle"] = v.gameTitle;
+    }
+    if (v.joinable) j["joinable"] = true;
+}
+void from_json(const nlohmann::json& j, Presence& v) {
+    v.state = j.value("state", std::string("offline"));
+    v.gameId = j.value("gameId", std::int64_t{0});
+    v.gameTitle = j.value("gameTitle", std::string());
+    v.joinable = j.value("joinable", false);
+}
+
+void to_json(nlohmann::json& j, const Profile& v) {
+    j = {{"user", v.user}, {"bio", v.bio},         {"avatar", v.avatar},
+         {"relation", v.relation}, {"games", v.games}, {"friends", v.friends}};
+    if (v.relation == "self") j["joinPolicy"] = joinPolicyName(v.joinPolicy);
+    if (v.presence) j["presence"] = *v.presence;
+}
+void from_json(const nlohmann::json& j, Profile& v) {
+    v.user = j.at("user").get<UserInfo>();
+    v.bio = j.value("bio", std::string());
+    v.avatar = j.value("avatar", 0);
+    v.relation = j.value("relation", std::string("none"));
+    v.joinPolicy = parseJoinPolicy(j.value("joinPolicy", std::string("friends"))).value_or(JoinPolicy::Friends);
+    if (j.contains("presence")) v.presence = j.at("presence").get<Presence>();
+    v.games = j.value("games", std::vector<GameInfo>{});
+    v.friends = j.value("friends", 0);
+}
+
+void to_json(nlohmann::json& j, const PersonInfo& v) { j = {{"username", v.username}, {"avatar", v.avatar}}; }
+void from_json(const nlohmann::json& j, PersonInfo& v) {
+    v.username = j.at("username").get<std::string>();
+    v.avatar = j.value("avatar", 0);
+}
+
+void to_json(nlohmann::json& j, const FriendInfo& v) {
+    j = {{"username", v.username}, {"avatar", v.avatar}, {"presence", v.presence}, {"since", v.since}};
+}
+void from_json(const nlohmann::json& j, FriendInfo& v) {
+    v.username = j.at("username").get<std::string>();
+    v.avatar = j.value("avatar", 0);
+    v.presence = j.value("presence", Presence{});
+    v.since = j.value("since", std::int64_t{0});
+}
+
+void to_json(nlohmann::json& j, const FriendRequestInfo& v) {
+    j = {{"username", v.username}, {"avatar", v.avatar}, {"created", v.created}};
+}
+void from_json(const nlohmann::json& j, FriendRequestInfo& v) {
+    v.username = j.at("username").get<std::string>();
+    v.avatar = j.value("avatar", 0);
+    v.created = j.value("created", std::int64_t{0});
+}
+
+void to_json(nlohmann::json& j, const Invitation& v) {
+    j = {{"id", v.id},         {"from", v.from},           {"fromAvatar", v.fromAvatar},
+         {"gameId", v.gameId}, {"gameTitle", v.gameTitle}, {"expires", v.expires}};
+}
+void from_json(const nlohmann::json& j, Invitation& v) {
+    v.id = j.at("id").get<std::int64_t>();
+    v.from = j.at("from").get<std::string>();
+    v.fromAvatar = j.value("fromAvatar", 0);
+    v.gameId = j.value("gameId", std::int64_t{0});
+    v.gameTitle = j.value("gameTitle", std::string());
+    v.expires = j.value("expires", std::int64_t{0});
+}
+
+void to_json(nlohmann::json& j, const SocialSummary& v) {
+    j = {{"friends", v.friends}, {"incoming", v.incoming}, {"outgoing", v.outgoing}, {"invitations", v.invitations}};
+}
+void from_json(const nlohmann::json& j, SocialSummary& v) {
+    v.friends = j.value("friends", std::vector<FriendInfo>{});
+    v.incoming = j.value("incoming", std::vector<FriendRequestInfo>{});
+    v.outgoing = j.value("outgoing", std::vector<FriendRequestInfo>{});
+    v.invitations = j.value("invitations", std::vector<Invitation>{});
+}
+
+void to_json(nlohmann::json& j, const UserReportInfo& v) {
+    j = {{"id", v.id},         {"username", v.username}, {"reporter", v.reporter},     {"reason", v.reason},
+         {"state", v.state},   {"resolution", v.resolution}, {"created", v.created}};
+}
+void from_json(const nlohmann::json& j, UserReportInfo& v) {
+    v.id = j.at("id").get<std::int64_t>();
+    v.username = j.value("username", std::string());
+    v.reporter = j.value("reporter", std::string());
+    v.reason = j.value("reason", std::string());
+    v.state = j.value("state", std::string("open"));
+    v.resolution = j.value("resolution", std::string());
+    v.created = j.value("created", std::int64_t{0});
+}
+
+void to_json(nlohmann::json& j, const LeaderboardEntry& v) {
+    j = {{"rank", v.rank}, {"username", v.username}, {"avatar", v.avatar}, {"value", v.value}, {"updated", v.updated}};
+    if (!v.account.empty()) j["account"] = v.account;
+}
+void from_json(const nlohmann::json& j, LeaderboardEntry& v) {
+    v.rank = j.value("rank", 0);
+    v.username = j.at("username").get<std::string>();
+    v.avatar = j.value("avatar", 0);
+    v.value = j.at("value").get<double>();
+    v.updated = j.value("updated", std::int64_t{0});
+    v.account = j.value("account", std::string());
+}
+
+void to_json(nlohmann::json& j, const LeaderboardView& v) {
+    j = {{"id", v.id},       {"title", v.title}, {"order", v.order},
+         {"format", v.format}, {"top", v.top},   {"friends", v.friends}};
+    if (v.you) j["you"] = *v.you;
+}
+void from_json(const nlohmann::json& j, LeaderboardView& v) {
+    v.id = j.at("id").get<std::string>();
+    v.title = j.value("title", v.id);
+    v.order = j.value("order", std::string("highest"));
+    v.format = j.value("format", std::string("number"));
+    v.top = j.value("top", std::vector<LeaderboardEntry>{});
+    v.friends = j.value("friends", std::vector<LeaderboardEntry>{});
+    if (j.contains("you")) v.you = j.at("you").get<LeaderboardEntry>();
 }
 
 } // namespace px::online

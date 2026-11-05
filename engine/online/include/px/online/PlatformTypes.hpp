@@ -74,6 +74,7 @@ struct GameInfo {
     std::int64_t updated = 0;
     bool hidden = false;      // by a moderator (owner and admins see it)
     std::string moderationNote;
+    std::string thumbnail;    // hash of the picture at /games/{id}/thumbnail; empty: none
 };
 
 struct GameQuery {
@@ -121,6 +122,111 @@ struct AuditEntry {
     std::string action; // "hide_game", "ban_user", "resolve_report", ...
     std::string target;
     std::string detail;
+};
+
+// --- People (docs/social.md) ------------------------------------------------------------------
+
+inline constexpr std::size_t kMaxBioLength = 200;
+inline constexpr int kAvatarCount = 16; // pixel portraits 0-15, the same everywhere
+inline constexpr std::size_t kMaxFriends = 200;
+
+// Who may join the game you are in without an invitation.
+enum class JoinPolicy { Friends, Nobody };
+[[nodiscard]] std::string_view joinPolicyName(JoinPolicy p) noexcept; // "friends", "nobody"
+[[nodiscard]] std::optional<JoinPolicy> parseJoinPolicy(std::string_view name) noexcept;
+
+// What friends see of each other. Only friends get presence at all.
+struct Presence {
+    std::string state = "offline"; // "offline", "online" (seen in the last two minutes), "playing"
+    std::int64_t gameId = 0;       // when playing a game the viewer may see
+    std::string gameTitle;
+    bool joinable = false;         // the viewer may join them now
+};
+
+struct Profile {
+    UserInfo user;
+    std::string bio;
+    int avatar = 0;
+    JoinPolicy joinPolicy = JoinPolicy::Friends; // only in your own profile
+    // "self", "friend", "requested" (you asked them), "incoming" (they asked
+    // you), "blocked" (you blocked them), "none".
+    std::string relation = "none";
+    std::optional<Presence> presence; // friends (and yourself) only
+    std::vector<GameInfo> games;      // their public games
+    int friends = 0;
+};
+
+struct ProfileUpdate {
+    std::optional<std::string> bio;
+    std::optional<int> avatar;
+    std::optional<JoinPolicy> joinPolicy;
+};
+
+struct PersonInfo {
+    std::string username;
+    int avatar = 0;
+};
+
+struct FriendInfo {
+    std::string username;
+    int avatar = 0;
+    Presence presence;
+    std::int64_t since = 0;
+};
+
+struct FriendRequestInfo {
+    std::string username;
+    int avatar = 0;
+    std::int64_t created = 0;
+};
+
+// "Come and play with me": a friend in a game asks you to join them there.
+struct Invitation {
+    std::int64_t id = 0;
+    std::string from;
+    int fromAvatar = 0;
+    std::int64_t gameId = 0;
+    std::string gameTitle;
+    std::int64_t expires = 0;
+};
+
+// Everything a launcher shows about your friends, in one call.
+struct SocialSummary {
+    std::vector<FriendInfo> friends;
+    std::vector<FriendRequestInfo> incoming;
+    std::vector<FriendRequestInfo> outgoing;
+    std::vector<Invitation> invitations;
+};
+
+struct UserReportInfo {
+    std::int64_t id = 0;
+    std::string username; // the account reported
+    std::string reporter;
+    std::string reason;
+    std::string state = "open";
+    std::string resolution;
+    std::int64_t created = 0;
+};
+
+// --- Leaderboards (docs/leaderboards.md) -------------------------------------------------------
+
+struct LeaderboardEntry {
+    int rank = 0; // 1 = best; equal scores share a rank
+    std::string username;
+    int avatar = 0;
+    double value = 0.0;
+    std::int64_t updated = 0;
+    std::string account; // the account id: only in answers to game servers
+};
+
+struct LeaderboardView {
+    std::string id;
+    std::string title;
+    std::string order = "highest"; // "highest" or "lowest" is best
+    std::string format = "number"; // "number" or "time" (seconds)
+    std::vector<LeaderboardEntry> top;
+    std::optional<LeaderboardEntry> you;  // with a login
+    std::vector<LeaderboardEntry> friends; // with a login: you and your friends, best first
 };
 
 struct PlatformInfo {

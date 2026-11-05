@@ -5,6 +5,7 @@
 #include "px/core/Version.hpp"
 
 #include <array>
+#include <cmath>
 #include <format>
 
 namespace px::project {
@@ -153,6 +154,47 @@ void readAssets(const Json& j, const std::string& path, assets::AssetRegistry& r
     }
 }
 
+std::vector<LeaderboardDef> readLeaderboards(const Json& j, const std::string& path) {
+    if (!j.is_array()) fail(path, "expected an array of leaderboards");
+    if (j.size() > kMaxLeaderboards) {
+        fail(path, std::format("too many leaderboards ({}); the limit is {}", j.size(), kMaxLeaderboards));
+    }
+    std::vector<LeaderboardDef> out;
+    for (std::size_t i = 0; i < j.size(); ++i) {
+        const std::string itemPath = detail::indexPath(path, i);
+        ObjectReader r(j[i], itemPath);
+        LeaderboardDef b;
+        r.required("id", b.id);
+        if (!isValidLeaderboardId(b.id)) {
+            fail(detail::childPath(itemPath, "id"), "leaderboard ids are 1-32 characters: a-z, 0-9 and '_'");
+        }
+        for (const auto& other : out) {
+            if (other.id == b.id) fail(detail::childPath(itemPath, "id"), std::format("'{}' is used twice", b.id));
+        }
+        b.title = b.id;
+        r.optional("title", b.title);
+        if (b.title.empty() || b.title.size() > kMaxLeaderboardTitle) {
+            fail(detail::childPath(itemPath, "title"), std::format("must be 1 to {} characters", kMaxLeaderboardTitle));
+        }
+        for (const char c : b.title) {
+            if (static_cast<unsigned char>(c) < 0x20) fail(detail::childPath(itemPath, "title"), "must be one line");
+        }
+        std::string order = "highest";
+        r.optional("order", order);
+        const auto parsedOrder = parseLeaderboardOrder(order);
+        if (!parsedOrder) fail(detail::childPath(itemPath, "order"), "use \"highest\" or \"lowest\" (which score is best)");
+        b.order = *parsedOrder;
+        std::string format = "number";
+        r.optional("format", format);
+        const auto parsedFormat = parseScoreFormat(format);
+        if (!parsedFormat) fail(detail::childPath(itemPath, "format"), "use \"number\" or \"time\"");
+        b.format = *parsedFormat;
+        r.finish();
+        out.push_back(std::move(b));
+    }
+    return out;
+}
+
 ProjectManifest readManifest(Json& root) {
     std::vector<std::string> warnings; // project migrations do not warn
     detail::checkAndMigrate(root, "px.project", kProjectFormatVersion, kProjectMigrations, "project", warnings);
@@ -167,6 +209,7 @@ ProjectManifest readManifest(Json& root) {
     if (const Json* settings = r.find("settings")) m.settings = readSettings(*settings, "settings");
     if (const Json* input = r.find("input")) m.input = readInput(*input, "input");
     if (const Json* assetList = r.find("assets")) readAssets(*assetList, "assets", m.assets);
+    if (const Json* boards = r.find("leaderboards")) m.leaderboards = readLeaderboards(*boards, "leaderboards");
     r.required("startScene", m.startScene);
     const auto* start = m.assets.find(m.startScene);
     if (start == nullptr) {
@@ -180,6 +223,37 @@ ProjectManifest readManifest(Json& root) {
 }
 
 } // namespace
+
+std::string_view leaderboardOrderName(LeaderboardOrder order) noexcept {
+    return order == LeaderboardOrder::Lowest ? "lowest" : "highest";
+}
+std::string_view scoreFormatName(ScoreFormat format) noexcept { return format == ScoreFormat::Time ? "time" : "number"; }
+std::optional<LeaderboardOrder> parseLeaderboardOrder(std::string_view name) noexcept {
+    if (name == "highest") return LeaderboardOrder::Highest;
+    if (name == "lowest") return LeaderboardOrder::Lowest;
+    return std::nullopt;
+}
+std::optional<ScoreFormat> parseScoreFormat(std::string_view name) noexcept {
+    if (name == "number") return ScoreFormat::Number;
+    if (name == "time") return ScoreFormat::Time;
+    return std::nullopt;
+}
+bool isValidLeaderboardId(std::string_view id) noexcept {
+    if (id.empty() || id.size() > 32) return false;
+    for (const char c : id) {
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_')) return false;
+    }
+    return true;
+}
+std::string formatScore(double value, ScoreFormat format) {
+    if (format == ScoreFormat::Time) {
+        // Hundredths, rounded once, so 59.999 becomes 1:00.00, not 0:60.00.
+        const auto hundredths = static_cast<long long>(std::llround(std::max(0.0, std::min(value, 1e12)) * 100.0));
+        return std::format("{}:{:02}.{:02}", hundredths / 6000, (hundredths / 100) % 60, hundredths % 100);
+    }
+    if (value == std::floor(value) && std::abs(value) < 1e15) return std::format("{}", static_cast<long long>(value));
+    return std::format("{:.2f}", value);
+}
 
 std::string_view gameTypeName(GameType type) noexcept {
     switch (type) {
@@ -235,6 +309,16 @@ std::string serializeProjectManifest(const ProjectManifest& m) {
         actions[action.name] = std::move(keys);
     }
     root["input"] = Json{{"actions", actions}};
+    if (!m.leaderboards.empty()) {
+        Json boards = Json::array();
+        for (const auto& b : m.leaderboards) {
+            boards.push_back(Json{{"id", b.id},
+                                  {"title", b.title},
+                                  {"order", std::string(leaderboardOrderName(b.order))},
+                                  {"format", std::string(scoreFormatName(b.format))}});
+        }
+        root["leaderboards"] = std::move(boards);
+    }
 
     Json assetList = Json::array();
     for (const auto& entry : m.assets.entries()) {

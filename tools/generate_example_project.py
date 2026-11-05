@@ -555,7 +555,7 @@ def main():
     for name, (frames, fps, loop) in PLAYER_CLIPS.items():
         doc = clip_document(tex["player_sheet"], frames, fps, loop)
         (ROOT / "animations" / f"player_{name}.anim.json").write_text(dump_pretty(doc) + "\n")
-    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle")}
+    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle", "best_time")}
     drift_id = gid("asset/graph/drift")
     (ROOT / "graphs").mkdir(parents=True, exist_ok=True)
     (ROOT / "graphs" / "drift.graph.json").write_text(json.dumps(drift_graph(LEVEL_WIDTH * 16), indent=2) + "\n")
@@ -622,7 +622,8 @@ def main():
                      "properties": {"offset": [PLATFORM_TRAVEL, 0], "period": 4}}]}})
     entities.append({"id": gid("entity/level-rules"), "name": "Level Rules", "components": {
         "Scripts": [{"script": script["level_rules"],
-                     "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}}]}})
+                     "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}},
+                    {"script": script["best_time"], "properties": {"board": "fastest"}}]}})
 
     entities.append({"id": player_id, "name": "Player", "components": {
         "Transform": {"position": spawn},
@@ -672,6 +673,7 @@ def main():
             "move_up": ["Up", "W"],
             "move_down": ["Down", "S"],
             "jump": ["Space", "Z", "Up", "W"]}},
+        "leaderboards": [{"id": "fastest", "title": "Fastest coin run", "order": "lowest", "format": "time"}],
         "assets": [
             {"id": tex["tiles"], "type": "texture", "name": "Tiles", "path": "assets/tiles.png", "filter": "nearest"},
             {"id": tex["player"], "type": "texture", "name": "Player", "path": "assets/player.png", "filter": "nearest"},
@@ -688,6 +690,7 @@ def main():
             {"id": script["moving_platform"], "type": "script", "name": "Moving Platform",
              "path": "scripts/moving_platform.luau"},
             {"id": script["sparkle"], "type": "script", "name": "Sparkle", "path": "scripts/sparkle.luau"},
+            {"id": script["best_time"], "type": "script", "name": "Best Time", "path": "scripts/best_time.luau"},
             {"id": drift_id, "type": "graph", "name": "Drift", "path": "graphs/drift.graph.json"},
             {"id": prefab["coin"], "type": "prefab", "name": "Coin", "path": "prefabs/coin.prefab.json"},
             {"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"},

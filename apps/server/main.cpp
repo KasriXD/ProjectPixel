@@ -28,6 +28,7 @@
 #include "px/runtime/GameLoader.hpp"
 #if defined(PX_HAVE_PLATFORM)
 #include "px/online/PlatformClient.hpp"
+#include "px/online/PlatformLeaderboardStore.hpp"
 #include "px/online/PlatformPlayerStore.hpp"
 #endif
 
@@ -240,6 +241,7 @@ int main(int argc, char** argv) {
     const bool managed = !options->platformUrl.empty();
 #if defined(PX_HAVE_PLATFORM)
     std::unique_ptr<online::PlatformClient> platform;
+    std::shared_ptr<online::PlatformLeaderboardStore> boardStore;
     if (managed) {
         const auto key = crypto::fromHex(options->platformKey);
         const char* serverKey = std::getenv("PX_SERVER_KEY");
@@ -255,6 +257,8 @@ int main(int argc, char** argv) {
         platform->setServerKey(serverKey);
         platform->setTimeoutSeconds(10);
         serverOptions.playerStore = std::make_shared<online::PlatformPlayerStore>(*platform);
+        boardStore = std::make_shared<online::PlatformLeaderboardStore>(*platform, game->manifest.leaderboards);
+        serverOptions.leaderboards = boardStore;
     }
 #else
     if (managed) {
@@ -387,6 +391,7 @@ int main(int argc, char** argv) {
         linkStop = true;
         if (link.joinable()) link.join();
         serverOptions.playerStore.reset();
+        if (boardStore) boardStore->flush(5.0); // the last scores, while the session still exists
         (void)platform->serverEnded();
     }
 #endif

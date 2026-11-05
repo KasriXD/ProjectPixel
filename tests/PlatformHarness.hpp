@@ -3,15 +3,21 @@
 // A platform service on a free port with its data in a temporary folder,
 // for tests (test_platform.cpp, test_matchmaking.cpp).
 #include "PlatformService.hpp"
+#include "px/net/GameClient.hpp"
+#include "px/net/Udp.hpp"
+#include "px/net/WebSocket.hpp"
 #include "px/online/PlatformClient.hpp"
 #include "px/project/Package.hpp"
+#include "px/runtime/GameLoader.hpp"
 
 #include <doctest.h>
 
 #include <atomic>
 #include <filesystem>
 #include <functional>
+#include <chrono>
 #include <random>
+#include <thread>
 
 namespace pxtest {
 
@@ -75,5 +81,76 @@ inline std::vector<std::uint8_t> examplePackage(const char* name) {
 }
 
 inline bool contains(const std::string& text, std::string_view needle) { return text.find(needle) != std::string::npos; }
+
+
+// A player connected to a platform game server over UDP, in real time.
+struct OnlinePlayer {
+    std::unique_ptr<px::net::GameClient> client;
+    px::runtime::LoadedGame game;
+    std::chrono::steady_clock::time_point started = std::chrono::steady_clock::now();
+    [[nodiscard]] double clock() const {
+        return std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+    }
+
+    OnlinePlayer(px::online::PlatformClient& platform, const px::online::JoinTicket& ticket, bool webSocket = false) {
+        auto bytes = platform.downloadPackage(ticket.packageHash);
+        REQUIRE(bytes.ok());
+        auto package = px::project::decodePackage(bytes.value());
+        REQUIRE(package.ok());
+        auto fs = package->toFileSystem();
+        auto loaded = px::runtime::loadGame(*fs);
+        REQUIRE(loaded.ok());
+        game = std::move(loaded.value());
+        auto endpoint = webSocket ? px::net::connectWebSocket(ticket.webSocket) : px::net::connectUdp(ticket.host, ticket.port);
+        REQUIRE(endpoint.ok());
+        px::net::ClientOptions options;
+        options.token = ticket.token;
+        auto created = px::net::GameClient::create(game, std::move(endpoint.value()), options);
+        REQUIRE(created.ok());
+        client = std::move(created.value());
+    }
+
+    // Runs in real time for `seconds` (or until disconnected), holding `actions`.
+    void play(double seconds, std::initializer_list<std::string_view> actions = {}) {
+        std::uint32_t held = 0;
+        const px::runtime::ActionSet set(game.manifest.input);
+        for (auto a : actions) held |= 1u << set.find(a);
+        const double until = clock() + seconds;
+        auto next = std::chrono::steady_clock::now();
+        while (true) {
+            const double now = clock();
+            if (now > until || client->status() == px::net::GameClient::Status::Disconnected) break;
+            client->receive(now);
+            if (client->status() == px::net::GameClient::Status::Playing) client->tick({held, 0});
+            client->updateView(now);
+            next += std::chrono::milliseconds(16);
+            std::this_thread::sleep_until(next);
+        }
+    }
+    bool waitUntilPlaying(double seconds = 10.0) {
+        const double until = clock() + seconds;
+        while (client->status() != px::net::GameClient::Status::Playing && clock() < until &&
+               client->status() != px::net::GameClient::Status::Disconnected) {
+            client->receive(clock());
+            client->tick({});
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        return client->status() == px::net::GameClient::Status::Playing;
+    }
+};
+
+// Waits for `condition`, keeping the connected players' clients running
+// meanwhile (a client that stops answering is dropped by the server).
+template <class F>
+bool eventually(F&& condition, std::initializer_list<OnlinePlayer*> players = {}, double seconds = 20.0) {
+    const auto end = std::chrono::steady_clock::now() + std::chrono::duration<double>(seconds);
+    while (std::chrono::steady_clock::now() < end) {
+        if (condition()) return true;
+        if (players.size() == 0) std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        for (OnlinePlayer* p : players) p->play(0.05);
+    }
+    return condition();
+}
+
 
 } // namespace pxtest

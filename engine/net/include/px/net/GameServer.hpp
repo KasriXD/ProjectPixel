@@ -40,6 +40,8 @@ struct ServerOptions {
     std::string sessionId;
     // Saved player data (nullptr: none is loaded or saved).
     std::shared_ptr<IPlayerStore> playerStore;
+    // Leaderboard scores (nullptr: in memory, for this server's life).
+    std::shared_ptr<runtime::ILeaderboardStore> leaderboards;
     double saveIntervalSeconds = 30.0;
     double loadTimeoutSeconds = 15.0;
 };

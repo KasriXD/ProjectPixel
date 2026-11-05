@@ -792,8 +792,9 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
     for (const auto& m : scripting::apiReference()) {
         if (m.availability == scripting::ApiAvailability::AuthorityOnly) ++authorityOnly;
     }
-    CHECK(authorityOnly == 11); // addScore, setObjective, completeLevel, spawn, destroy, setParent, respawn,
-                                // playAnimation, Data.get, Data.set, Data.increment
+    CHECK(authorityOnly == 15); // addScore, setObjective, completeLevel, spawn, destroy, setParent, respawn,
+                                // playAnimation, Data.get, Data.set, Data.increment, Leaderboard.submit,
+                                // Leaderboard.best, Leaderboard.rank, Leaderboard.top
 }
 
 TEST_CASE("math.random is deterministic per session seed") {

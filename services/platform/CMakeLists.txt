@@ -13,8 +13,10 @@ add_library(px_platform_service STATIC
     src/Certificates.cpp
     src/Database.cpp
     src/Fleet.cpp
+    src/Leaderboards.cpp
     src/PlatformService.cpp
     src/Process.cpp
+    src/Social.cpp
     "${CMAKE_CURRENT_BINARY_DIR}/WebFiles.generated.cpp")
 target_include_directories(px_platform_service PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/src")
 target_link_libraries(px_platform_service

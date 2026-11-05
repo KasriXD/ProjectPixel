@@ -261,6 +261,137 @@ Result<std::string> PlatformClient::playerData(std::int64_t gameId, const std::s
     }
 }
 
+// --- People ---------------------------------------------------------------------------------
+
+Result<Profile> PlatformClient::profile(const std::string& username) {
+    auto body = call("GET", "/users/" + encodeQuery(username), {}, m_token.empty() ? Auth::None : Auth::User);
+    if (!body) return body.error();
+    return parseAs<Profile>(body.value(), "profile");
+}
+
+Result<Profile> PlatformClient::updateProfile(const ProfileUpdate& update) {
+    json j = json::object();
+    if (update.bio) j["bio"] = *update.bio;
+    if (update.avatar) j["avatar"] = *update.avatar;
+    if (update.joinPolicy) j["joinPolicy"] = joinPolicyName(*update.joinPolicy);
+    auto body = call("PATCH", "/me", j.dump());
+    if (!body) return body.error();
+    return parseAs<Profile>(body.value(), "profile");
+}
+
+Result<std::vector<PersonInfo>> PlatformClient::searchUsers(const std::string& prefix) {
+    auto body = call("GET", "/users?search=" + encodeQuery(prefix), {}, m_token.empty() ? Auth::None : Auth::User);
+    if (!body) return body.error();
+    return parseAs<std::vector<PersonInfo>>(body.value(), "users");
+}
+
+Result<SocialSummary> PlatformClient::social() {
+    auto body = call("GET", "/me/social");
+    if (!body) return body.error();
+    return parseAs<SocialSummary>(body.value(), "social");
+}
+
+Result<std::string> PlatformClient::requestFriend(const std::string& username) {
+    auto body = call("POST", "/friends/requests", json{{"username", username}}.dump());
+    if (!body) return body.error();
+    return parseAs<std::string>(body.value(), "status");
+}
+
+Status PlatformClient::acceptFriend(const std::string& username) {
+    auto body = call("POST", "/friends/requests/" + encodeQuery(username) + "/accept", "{}");
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::removeFriendRequest(const std::string& username) {
+    auto body = call("DELETE", "/friends/requests/" + encodeQuery(username));
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::removeFriend(const std::string& username) {
+    auto body = call("DELETE", "/friends/" + encodeQuery(username));
+    if (!body) return body.error();
+    return {};
+}
+
+Result<JoinTicket> PlatformClient::joinFriend(const std::string& username) {
+    auto body = call("POST", "/friends/" + encodeQuery(username) + "/join", "{}");
+    if (!body) return body.error();
+    return parseAs<JoinTicket>(body.value(), "ticket");
+}
+
+Status PlatformClient::invite(const std::string& username) {
+    auto body = call("POST", "/friends/" + encodeQuery(username) + "/invite", "{}");
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::dismissInvitation(std::int64_t id) {
+    auto body = call("DELETE", std::format("/invitations/{}", id));
+    if (!body) return body.error();
+    return {};
+}
+
+Result<std::vector<PersonInfo>> PlatformClient::blocked() {
+    auto body = call("GET", "/blocks");
+    if (!body) return body.error();
+    return parseAs<std::vector<PersonInfo>>(body.value(), "blocked");
+}
+
+Status PlatformClient::block(const std::string& username) {
+    auto body = call("POST", "/blocks", json{{"username", username}}.dump());
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::unblock(const std::string& username) {
+    auto body = call("DELETE", "/blocks/" + encodeQuery(username));
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::reportUser(const std::string& username, const std::string& reason) {
+    auto body = call("POST", "/users/" + encodeQuery(username) + "/reports", json{{"reason", reason}}.dump());
+    if (!body) return body.error();
+    return {};
+}
+
+// --- Leaderboards -----------------------------------------------------------------------------
+
+Result<std::vector<LeaderboardView>> PlatformClient::leaderboards(std::int64_t gameId, int limit) {
+    auto body = call("GET", std::format("/games/{}/leaderboards?limit={}", gameId, limit), {},
+                     m_token.empty() ? Auth::None : Auth::User);
+    if (!body) return body.error();
+    return parseAs<std::vector<LeaderboardView>>(body.value(), "leaderboards");
+}
+
+Status PlatformClient::clearLeaderboard(std::int64_t gameId, const std::string& board, const std::string& username) {
+    std::string path = std::format("/games/{}/leaderboards/{}", gameId, encodeQuery(board));
+    if (!username.empty()) path += "/" + encodeQuery(username);
+    auto body = call("DELETE", path);
+    if (!body) return body.error();
+    return {};
+}
+
+// --- Thumbnails -------------------------------------------------------------------------------
+
+Status PlatformClient::uploadThumbnail(std::int64_t gameId, const std::vector<std::uint8_t>& image) {
+    const std::string bytes(image.begin(), image.end());
+    auto body = call("PUT", std::format("/games/{}/thumbnail", gameId), bytes, Auth::User, "application/octet-stream");
+    if (!body) return body.error();
+    return {};
+}
+
+Result<std::vector<std::uint8_t>> PlatformClient::thumbnail(std::int64_t gameId) {
+    auto response = request("GET", std::format("/games/{}/thumbnail", gameId), {}, nullptr,
+                            m_token.empty() ? Auth::None : Auth::User);
+    if (!response) return response.error();
+    if (response->status == 404) return std::vector<std::uint8_t>{};
+    if (response->status != 200) return makeError(ErrorCode::IoError, "The platform answered {}", response->status);
+    return std::vector<std::uint8_t>(response->body.begin(), response->body.end());
+}
+
 Result<std::vector<ReportInfo>> PlatformClient::reports(bool openOnly) {
     auto body = call("GET", std::format("/admin/reports?state={}", openOnly ? "open" : "all"));
     if (!body) return body.error();
@@ -291,6 +422,48 @@ Result<std::vector<AuditEntry>> PlatformClient::audit(int limit) {
     auto body = call("GET", std::format("/admin/audit?limit={}", limit));
     if (!body) return body.error();
     return parseAs<std::vector<AuditEntry>>(body.value(), "entries");
+}
+
+Result<std::vector<UserReportInfo>> PlatformClient::userReports(bool openOnly) {
+    auto body = call("GET", std::string("/admin/user-reports?state=") + (openOnly ? "open" : "all"));
+    if (!body) return body.error();
+    return parseAs<std::vector<UserReportInfo>>(body.value(), "reports");
+}
+
+Status PlatformClient::resolveUserReport(std::int64_t reportId, const std::string& action, const std::string& note) {
+    auto body = call("POST", std::format("/admin/user-reports/{}/resolve", reportId),
+                     json{{"action", action}, {"note", note}}.dump());
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::serverSubmitScores(const std::vector<ScoreSubmission>& scores) {
+    json list = json::array();
+    for (const auto& s : scores) list.push_back({{"userId", s.userId}, {"board", s.board}, {"value", s.value}});
+    auto body = call("POST", "/server/leaderboards", json{{"scores", list}}.dump(), Auth::Server);
+    if (!body) return body.error();
+    return {};
+}
+
+Result<PlatformClient::ServerLeaderboards> PlatformClient::serverLeaderboards(int limit,
+                                                                           const std::vector<std::string>& userIds) {
+    std::string users;
+    for (const std::string& id : userIds) users += (users.empty() ? "" : ",") + encodeQuery(id);
+    auto body = call("GET", std::format("/server/leaderboards?limit={}&users={}", limit, users), {}, Auth::Server);
+    if (!body) return body.error();
+    try {
+        const json j = json::parse(body.value());
+        ServerLeaderboards out;
+        out.boards = j.at("leaderboards").get<std::vector<LeaderboardView>>();
+        if (j.contains("players")) {
+            for (const auto& [account, boards] : j["players"].items()) {
+                for (const auto& [board, entry] : boards.items()) out.players[account][board] = entry.get<LeaderboardEntry>();
+            }
+        }
+        return out;
+    } catch (const std::exception& e) {
+        return makeError(ErrorCode::InvalidData, "Unexpected answer: {}", e.what());
+    }
 }
 
 Status PlatformClient::serverReady(std::uint16_t port) {

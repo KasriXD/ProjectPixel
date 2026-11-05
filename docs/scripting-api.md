@@ -85,6 +85,17 @@ Saved player data: values kept for each player between visits (docs/platform.md#
 | `Data.set(player: Entity, key: string, value: any?)` | function | authority | Saves a number, boolean, string or vector for `player` under `key`; nil removes it. Keys are 1-50 letters, digits, '_', '-' or '.'; a player has at most 200 values (64 KiB) per game. |
 | `Data.increment(player: Entity, key: string, amount: number?): number` | function | authority | Adds `amount` (default 1) to a saved number (missing counts as 0) and returns the new value. |
 
+## Leaderboard
+
+Leaderboards declared in project.json (`leaderboards`): each player's best score, shared between everyone who plays the game on the platform (docs/leaderboards.md).
+
+| Member | Kind | Available in | Description |
+|---|---|---|---|
+| `Leaderboard.submit(player: Entity, board: string, score: number): boolean` | function | authority | Records a score for `player` (a character) on a leaderboard declared in project.json; each player keeps their best. Returns true when the score is their new best. On the platform the scores of every player of the game are kept; played locally they last until the program closes. |
+| `Leaderboard.best(player: Entity, board: string): number?` | function, pure | authority | The player's best score on the board, or nil. |
+| `Leaderboard.rank(player: Entity, board: string): number?` | function, pure | authority | The player's place on the board (1 is best; equal scores share a place), or nil without a score. |
+| `Leaderboard.top(board: string, count: number?): { {rank: number, name: string, score: number} }` | function, pure | authority | The best `count` (default 10, at most 100) scores, best first, as tables with rank, name and score. On the platform the list is refreshed from it every few seconds. |
+
 ## Events
 
 Custom events between scripts. Values must be serializable.
