@@ -301,6 +301,9 @@ private:
 // Log in, publish, your games, browse and play, moderation (PlatformPanel.cpp).
 class PlatformPanel {
 public:
+    // What the game's camera shows in the open scene, as a PNG (the catalog
+    // picture Publish sends). Empty if there is nothing to show.
+    [[nodiscard]] static std::vector<std::uint8_t> capturePicture(StudioApp& app);
     PlatformPanel();
     ~PlatformPanel();
     PlatformPanel(const PlatformPanel&) = delete;
@@ -353,6 +356,7 @@ private:
     std::string m_description;
     std::string m_notes;
     int m_visibility = 0;
+    bool m_sendPicture = true;
     // My games
     std::vector<online::GameInfo> m_mine;
     bool m_refreshMine = false;

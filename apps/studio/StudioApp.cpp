@@ -22,6 +22,7 @@
 #include <cctype>
 #include <cmath>
 #include <format>
+#include <fstream>
 
 namespace px::studio {
 
@@ -123,7 +124,8 @@ const char* studioUsage() {
            "  --reset-layout  restore the default window layout\n"
            "  --smoke-test    automated UI run used by the test suite: opens the project,\n"
            "                  edits, undoes, plays for two seconds and exits; nothing is saved\n"
-           "  --screenshot F  with --smoke-test: save a PNG of the window at the end\n";
+           "  --screenshot F  with --smoke-test: save a PNG of the window at the end\n"
+           "  --picture F     with --smoke-test: save the catalog picture Publish sends\n";
 }
 
 std::optional<StudioOptions> parseStudioArgs(int argc, char** argv, std::string& error) {
@@ -138,6 +140,12 @@ std::optional<StudioOptions> parseStudioArgs(int argc, char** argv, std::string&
                 return std::nullopt;
             }
             o.screenshotPath = fromUtf8(argv[++i]);
+        } else if (arg == "--picture") {
+            if (i + 1 >= argc) {
+                error = "--picture needs a file name";
+                return std::nullopt;
+            }
+            o.picturePath = fromUtf8(argv[++i]);
         } else if (arg == "--reset-layout") {
             o.resetLayout = true;
         } else if (arg == "--verbose") {
@@ -152,8 +160,8 @@ std::optional<StudioOptions> parseStudioArgs(int argc, char** argv, std::string&
             return std::nullopt;
         }
     }
-    if (!o.screenshotPath.empty() && !o.smokeTest) {
-        error = "--screenshot requires --smoke-test";
+    if ((!o.screenshotPath.empty() || !o.picturePath.empty()) && !o.smokeTest) {
+        error = "--screenshot and --picture require --smoke-test";
         return std::nullopt;
     }
     if (o.smokeTest && o.projectDir.empty()) {
@@ -958,6 +966,12 @@ StudioApp::Status StudioApp::iterate() {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
     drawUi();
+    if (m_options.smokeTest && !m_options.picturePath.empty() && m_frame == 2) {
+        const std::vector<std::uint8_t> png = PlatformPanel::capturePicture(*this);
+        std::ofstream out(m_options.picturePath, std::ios::binary);
+        out.write(reinterpret_cast<const char*>(png.data()), static_cast<std::streamsize>(png.size()));
+        if (png.empty() || !out) log::error("Smoke test: the catalog picture could not be made");
+    }
     if (m_options.smokeTest) runSmokeTest();
     ImGui::Render();
 

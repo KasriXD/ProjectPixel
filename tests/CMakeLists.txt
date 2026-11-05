@@ -98,7 +98,8 @@ endif()
 if(PX_STUDIO_ENABLED)
     add_test(NAME studio_smoke_headless_display
         COMMAND px_studio "${PX_EXAMPLES_DIR}/platformer" --smoke-test
-                --screenshot "${CMAKE_CURRENT_BINARY_DIR}/studio_smoke.png")
+                --screenshot "${CMAKE_CURRENT_BINARY_DIR}/studio_smoke.png"
+                --picture "${CMAKE_CURRENT_BINARY_DIR}/studio_picture.png")
     set_tests_properties(studio_smoke_headless_display PROPERTIES
         ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0"
         TIMEOUT 300)

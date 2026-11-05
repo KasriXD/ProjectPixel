@@ -48,6 +48,7 @@ struct StudioOptions {
     std::filesystem::path projectDir; // open this project at start
     bool smokeTest = false;           // scripted UI run for automated tests (see docs/studio.md)
     std::filesystem::path screenshotPath;
+    std::filesystem::path picturePath; // --picture: the catalog picture Publish would send
     bool resetLayout = false;
     bool verbose = false;
 };

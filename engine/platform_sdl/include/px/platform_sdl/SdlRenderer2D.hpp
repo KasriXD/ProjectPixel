@@ -2,6 +2,7 @@
 
 #include "px/render/Renderer2D.hpp"
 
+#include <cstdint>
 #include <vector>
 
 struct SDL_Renderer;
@@ -37,6 +38,8 @@ public:
     // again. kNoTexture on failure.
     [[nodiscard]] render::TextureHandle createRenderTarget(Vec2i size);
     bool setRenderTarget(render::TextureHandle target);
+    // The pixels of the current render target (or window) as a PNG; empty on failure.
+    [[nodiscard]] std::vector<std::uint8_t> readPixelsPng() const;
     // The SDL texture behind a handle (for UI libraries), or nullptr.
     [[nodiscard]] SDL_Texture* sdlTexture(render::TextureHandle texture) const { return lookup(texture); }
 

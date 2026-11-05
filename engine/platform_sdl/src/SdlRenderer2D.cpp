@@ -63,6 +63,25 @@ bool SdlRenderer2D::setRenderTarget(render::TextureHandle target) {
     return SDL_SetRenderTarget(m_renderer, texture);
 }
 
+std::vector<std::uint8_t> SdlRenderer2D::readPixelsPng() const {
+    std::vector<std::uint8_t> out;
+    SDL_Surface* surface = SDL_RenderReadPixels(m_renderer, nullptr);
+    if (surface == nullptr) {
+        log::warn("Could not read back the picture: {}", SDL_GetError());
+        return out;
+    }
+    SDL_IOStream* io = SDL_IOFromDynamicMem();
+    if (io != nullptr && SDL_SavePNG_IO(surface, io, false)) {
+        const Sint64 size = SDL_TellIO(io);
+        const auto* data = static_cast<const std::uint8_t*>(
+            SDL_GetPointerProperty(SDL_GetIOProperties(io), SDL_PROP_IOSTREAM_DYNAMIC_MEMORY_POINTER, nullptr));
+        if (data != nullptr && size > 0) out.assign(data, data + size);
+    }
+    if (io != nullptr) SDL_CloseIO(io);
+    SDL_DestroySurface(surface);
+    return out;
+}
+
 SDL_Texture* SdlRenderer2D::lookup(render::TextureHandle texture) const {
     if (texture == render::kNoTexture || texture > m_textures.size()) return nullptr;
     return m_textures[texture - 1];

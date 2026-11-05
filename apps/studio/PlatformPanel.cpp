@@ -10,6 +10,8 @@
 #include "px/core/Log.hpp"
 #include "px/online/PlatformClient.hpp"
 #include "px/project/Package.hpp"
+#include "px/render/SceneRenderer.hpp"
+#include "px/runtime/Movement.hpp"
 
 #include <SDL3/SDL.h>
 #include <imgui.h>
@@ -254,9 +256,12 @@ void PlatformPanel::drawPublish(StudioApp& app) {
     }
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
     ImGui::InputText("Notes", &m_notes);
+    ImGui::Checkbox("Picture of the open scene", &m_sendPicture);
+    ui::tooltip("Also send what the game's camera shows in the open scene, as the game's picture in the catalog");
     ui::tooltip("What changed in this version (shown to you in the version list)");
     ImGui::BeginDisabled(busy() || (m_linkedGame == 0 && m_title.empty()));
     if (ImGui::Button(m_linkedGame != 0 ? "Publish New Version" : "Create Game and Publish")) {
+        const std::vector<std::uint8_t> picture = m_sendPicture ? capturePicture(app) : std::vector<std::uint8_t>{};
         if (app.saveAll()) {
             const std::filesystem::path root = app.project()->root();
             const std::int64_t gameId = m_linkedGame;
@@ -274,7 +279,11 @@ void PlatformPanel::drawPublish(StudioApp& app) {
                     id = game->id;
                 }
                 auto version = c.publish(id, project::encodePackage(package.value()), notes);
-                return [version, id](PlatformPanel& p, StudioApp& a) {
+                std::string pictureError;
+                if (version && !picture.empty()) {
+                    if (auto sent = c.uploadThumbnail(id, picture); !sent) pictureError = sent.error().message;
+                }
+                return [version, id, pictureError](PlatformPanel& p, StudioApp& a) {
                     p.m_linkedGame = id;
                     p.saveLink();
                     p.m_refreshMine = true;
@@ -286,6 +295,7 @@ void PlatformPanel::drawPublish(StudioApp& app) {
                     p.m_status = std::format("Published version {} of game {} ({} KB){}", version->number, id,
                                              (version->bytes + 1023) / 1024,
                                              version->scriptErrors > 0 ? "; it had script errors when tried" : "");
+                    if (!pictureError.empty()) p.m_error = "The picture was not sent: " + pictureError;
                     a.notify(p.m_status);
                 };
             });
@@ -300,6 +310,30 @@ void PlatformPanel::drawPublish(StudioApp& app) {
         }
         ui::tooltip("Publish this project as a different game next time");
     }
+}
+
+// What the game's camera shows in the open scene, at the game's resolution,
+// as a PNG (the catalog picture). Empty if there is nothing to show.
+std::vector<std::uint8_t> PlatformPanel::capturePicture(StudioApp& app) {
+    const auto* project = app.project();
+    scene::Scene* scene = app.activeScene();
+    if (project == nullptr || scene == nullptr || app.textures() == nullptr) return {};
+    const Vec2i res = project->manifest().settings.display.virtualResolution;
+    auto& r = app.renderer();
+    const render::TextureHandle target = r.createRenderTarget(res);
+    if (target == render::kNoTexture) return {};
+    // The camera where the game puts it at the start (following its target),
+    // on a copy so the open scene is not touched.
+    scene::Scene view = *scene;
+    const Vec2 viewSize{static_cast<float>(res.x), static_cast<float>(res.y)};
+    runtime::updateCameras(view, runtime::tilemapBounds(view), viewSize);
+    r.setRenderTarget(target);
+    r.beginFrame(view.settings().backgroundColor);
+    render::renderScene(view, render::cameraForScene(view, viewSize), r, *app.textures());
+    std::vector<std::uint8_t> png = r.readPixelsPng();
+    r.setRenderTarget(render::kNoTexture);
+    r.destroyTexture(target);
+    return png;
 }
 
 void PlatformPanel::launchPlayer(StudioApp& app, std::int64_t gameId) {
