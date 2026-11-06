@@ -28,6 +28,8 @@ toolkit must not become a trap.
   per component.
 - Studio is a desktop app (`apps/studio`), built when SDL is available and the
   target is not the browser (`PX_BUILD_STUDIO`). Games never link ImGui.
+  (Since ADR 0029, px-player links it for its launcher; games still never
+  use it.)
 
 ## Alternatives considered
 - **Qt (Widgets or QML):** mature, native-looking, excellent text editing and

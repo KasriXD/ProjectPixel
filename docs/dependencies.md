@@ -12,9 +12,9 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | nlohmann/json | 3.12.0 | MIT | Downloaded release tarball, SHA-256 pinned (header-only); system package ≥ 3.11 used if found | `project` (private) |
 | stb_image | 2.30 | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file with only PNG/JPEG/BMP/TGA enabled and no stdio | `assets` (private) |
 | Luau | 0.743 (`9d7748a4`) | MIT (`third_party/luau/LICENSE.txt`; Lua 5.1 parts: `lua_LICENSE.txt`) | Vendored subset in `third_party/luau` (Common, Ast, Bytecode, Compiler, VM), see [ADR 0009](adr/0009-luau-integration.md) | `scripting` (private) |
-| Dear ImGui | 1.92.9b, docking branch (`b48d1afb`) | MIT (`third_party/imgui/LICENSE.txt`) | Vendored in `third_party/imgui` (core, SDL3 platform backend, SDL_Renderer backend, `std::string` helpers), see [ADR 0013](adr/0013-studio-ui-dear-imgui.md) | Studio only (`apps/studio`) |
+| Dear ImGui | 1.92.9b, docking branch (`b48d1afb`) | MIT (`third_party/imgui/LICENSE.txt`) | Vendored in `third_party/imgui` (core, SDL3 platform backend, SDL_Renderer backend, `std::string` helpers), see [ADR 0013](adr/0013-studio-ui-dear-imgui.md) | Studio and px-player's launcher ([ADR 0029](adr/0029-launcher-in-the-player.md)); never games |
 | ENet | 1.3.18 (`2662c0de`) | MIT (`third_party/enet/LICENSE`) | Vendored unmodified in `third_party/enet` with our own CMake target; not built for WebAssembly (`PX_ENABLE_ENET`) | `net` (private): the UDP transport |
-| cpp-httplib | 0.62.0 (`74ef3c42`) | MIT (`third_party/httplib/LICENSE`) | Vendored in `third_party/httplib`, split by its own `split.py` into `httplib.h` + `httplib.cc`; TLS through Mbed TLS | `online` (client), `services/platform` (server), `net` (WebSockets); desktop only |
+| cpp-httplib | 0.62.0 (`74ef3c42`) | MIT (`third_party/httplib/LICENSE`) | Vendored in `third_party/httplib`, split by its own `split.py` into `httplib.h` + `httplib.cc`; TLS through Mbed TLS | `online` (client: desktop and phones), `services/platform` (server), `net` (WebSockets); not in the browser |
 | Mbed TLS | 3.6.7 | Apache-2.0 | Downloaded release tarball, SHA-256 pinned, static libraries; only with the platform (`PX_ENABLE_TLS`) | HTTPS and `wss://` in cpp-httplib ([ADR 0025](adr/0025-tls-with-mbed-tls.md)) |
 | SQLite | 3.54.1 (`57520227`) | Public domain | Amalgamation (`sqlite3.c`/`sqlite3.h`) built from the official source tag with its own `make sqlite3.c`, vendored in `third_party/sqlite` | `services/platform` |
 | Monocypher | 4.0.3 (`ab2b16dd`) | BSD-2-Clause or CC0 (`third_party/monocypher/LICENCE.md`) | Vendored `monocypher.c`/`.h` | `crypto` (private): Argon2id, EdDSA, BLAKE2b |
@@ -67,8 +67,10 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 ### Dear ImGui
 - **Why:** an immediate-mode UI that lets a small team build a dense,
   dockable editor quickly, with a maintained SDL3 + SDL_Renderer backend, so
-  Studio draws through the same renderer as the game. Used only by Studio;
-  games, px-player and the server never link it.
+  Studio draws through the same renderer as the game. Used by Studio and by
+  px-player's launcher (desktop and phones, not the browser player); games
+  never use it, and px-server, px-headless and the WebAssembly player never
+  link it.
 - **Version choice:** 1.92.9b (July 2026, a patch release) rather than
   1.93.0 (October 2026, nine days old when Milestone 3 started). The docking
   branch is the officially maintained variant with docking.
@@ -124,7 +126,8 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 - **Alternatives:** Boost.Beast (large dependency), libcurl + a separate
   server library (two libraries, libcurl's build), civetweb (C, server only).
 - **TLS:** through Mbed TLS (below), with the system's certificates on each
-  OS. Also provides the WebSocket server and client for browser players
+  OS (Android: the system's certificate folder; iOS: a certificate file
+  built into the app, `PX_CA_BUNDLE`). Also provides the WebSocket server and client for browser players
   ([ADR 0024](adr/0024-websockets-for-browsers.md)).
 - **Update:** clone a tag, run `python3 split.py -o out`, copy `out/httplib.h`,
   `out/httplib.cc` and `LICENSE`, run the platform tests on every OS.

@@ -26,6 +26,7 @@ Studio Build Tools 2026). Builds and passes its smoke test in CI on Windows
 | `--verbose` | Debug messages in the Output panel |
 | `--smoke-test` | Scripted run used by the automated tests (see [Testing Studio](#testing-studio)) |
 | `--screenshot FILE` | With `--smoke-test`: save the final frame as a PNG |
+| `--picture FILE` | With `--smoke-test`: save the picture *Publish* would send of the open scene |
 
 The welcome screen creates a new project, opens a project folder, or reopens
 a recent one. For a new project you give:
@@ -277,7 +278,10 @@ closed, so you can test that your game remembers things.
   Publish*. Studio saves the project, packs it and uploads it; the platform
   checks the whole game first and says what is wrong if it refuses it.
   Afterwards *Publish New Version* uploads the current state. The link to
-  the published game is kept in the project's `.px/publish.json`.
+  the published game is kept in the project's `.px/publish.json`. With
+  *Picture of the open scene*, what the game's camera shows in the open
+  scene also becomes the game's picture in the catalog
+  ([launcher.md](launcher.md#game-pictures)).
 - **My Games**: your games with their versions, plays and players right now;
   *Edit* changes title, description, visibility and players per server and
   shows a player's saved data.

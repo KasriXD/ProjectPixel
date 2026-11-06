@@ -256,9 +256,9 @@ void PlatformPanel::drawPublish(StudioApp& app) {
     }
     ImGui::SetNextItemWidth(ImGui::GetFontSize() * 18.0f);
     ImGui::InputText("Notes", &m_notes);
+    ui::tooltip("What changed in this version (shown to you in the version list)");
     ImGui::Checkbox("Picture of the open scene", &m_sendPicture);
     ui::tooltip("Also send what the game's camera shows in the open scene, as the game's picture in the catalog");
-    ui::tooltip("What changed in this version (shown to you in the version list)");
     ImGui::BeginDisabled(busy() || (m_linkedGame == 0 && m_title.empty()));
     if (ImGui::Button(m_linkedGame != 0 ? "Publish New Version" : "Create Game and Publish")) {
         const std::vector<std::uint8_t> picture = m_sendPicture ? capturePicture(app) : std::vector<std::uint8_t>{};

@@ -10,7 +10,7 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.7.0)
+## Current status (version 0.8.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
 scripting), 3 (Studio foundation), 4 (multiplayer prototype), 5 (visual
@@ -18,8 +18,10 @@ scripting and expanded engine: prefabs, animation clips, tilesets), 6
 (the platform's core loop: accounts, publishing, catalog, game servers,
 saved player data, moderation) and 7 (cross-platform clients: browsers
 playing with desktop players, HTTPS, gamepads, touch controls, player
-settings, Android and iOS apps built in CI) are complete. See
-[ROADMAP.md](ROADMAP.md) for detail.
+settings, Android and iOS apps built in CI) and 8 (launcher and social: a
+launcher in the desktop, phone and browser apps, game pictures, profiles,
+friends with presence, joining and inviting friends, blocking, shared
+leaderboards) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
 
 | Area | Status |
 |---|---|
@@ -50,8 +52,11 @@ settings, Android and iOS apps built in CI) are complete. See
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
 | Memory safety | Unit tests, headless playthrough, player and Studio smoke tests run clean under AddressSanitizer + UBSan with leak detection |
 | Browser (WebAssembly) | Engine and tests pass under Node.js in CI; the browser build (WebGL 2) completes the scripted level and plays platform games in headless Chromium in CI. Not yet played by a person ([details](docs/platform-support.md#browser)) |
-| Android and iOS apps (px-player with a bundled game, touch controls) | Built in CI: an APK (arm64-v8a, x86_64), started on an emulated Android phone, and an iOS app, run on a simulated iPhone (UIKit, Metal). **Not tested on real phones** ([details](docs/platform-support.md#mobile)) |
-| Audio, text/fonts in games; encrypted UDP game traffic, a player launcher, profiles, friends, marketplace | Planned (Milestone 8 and later) |
+| Android and iOS apps (px-player with the launcher and a bundled game, touch controls) | Built in CI: an APK (arm64-v8a, x86_64), started on an emulated Android phone, and an iOS app, run on a simulated iPhone (UIKit, Metal); both open the launcher and play the bundled game from it. **Not tested on real phones** ([details](docs/platform-support.md#mobile)) |
+| Launcher: log in, browse games with pictures, a game's page with leaderboards, friends, profile, play and join friends; in px-player (Dear ImGui) and on the browser page | Implemented; tested against a real platform in CI (every page, playing, joining a friend, inviting from a game, saved login; the browser page at computer and phone sizes with the real WebAssembly player); used with mouse and keyboard on Linux ([guide](docs/launcher.md)) |
+| Friends and profiles: portraits, about text, requests, presence (online, playing what), joining friends, invitations, blocking (never on one server), reports about accounts | Implemented in the platform; tested with real game servers ([guide](docs/social.md)) |
+| Leaderboards: declared in `project.json`, submitted by server scripts (`Leaderboard.submit`), each player's best kept by the platform for everyone | Implemented; scores travel from game servers to the platform and back in tests; the examples' best times appear in the launcher ([guide](docs/leaderboards.md)) |
+| Audio, text/fonts in games; chat; encrypted UDP game traffic; marketplace | Planned (Milestone 9 and later) |
 
 ## Building
 
@@ -146,7 +151,8 @@ limitation.
 ### Run
 
 ```sh
-./build/dev/apps/player/px-player                      # plays examples/platformer
+./build/dev/apps/player/px-player                      # the launcher: a platform's games, or the examples on this computer
+./build/dev/apps/player/px-player examples/platformer  # plays the platformer example
 ./build/dev/apps/player/px-player examples/topdown     # the top-down example
 ./build/dev/apps/player/px-player path/to/project      # any project folder
 ./build/dev/apps/headless/px-headless examples/platformer --ticks 600
@@ -186,7 +192,10 @@ the scripting API for players, and how it works inside.
 
 In Studio: *Platform > Publish, Play and Log In...*, create an account,
 publish the open project, then *Play* it from the Play tab (it runs on a
-game server the platform starts). Or from the command line:
+game server the platform starts). Players use the launcher: start
+`px-player` without a game, log in, and see the games with their pictures,
+leaderboards and your friends ([launcher guide](docs/launcher.md)). Or from
+the command line:
 
 ```sh
 ./build/dev/apps/headless/px-headless examples/platformer --platform http://127.0.0.1:8730 \
@@ -257,6 +266,9 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [docs/studio.md](docs/studio.md): Studio guide and tutorial
 - [docs/multiplayer.md](docs/multiplayer.md): playing together, multiplayer scripting, how the networking works
 - [docs/platform.md](docs/platform.md): the platform: running it, publishing, playing, game servers, saved data, moderation, API
+- [docs/launcher.md](docs/launcher.md): the launcher in px-player and on the browser page; game pictures
+- [docs/social.md](docs/social.md): profiles, friends, presence, joining and inviting, blocking, reports
+- [docs/leaderboards.md](docs/leaderboards.md): declaring leaderboards, the script API, where scores are kept
 - [docs/project-format.md](docs/project-format.md): `project.json` and scene files
 - [docs/library-format.md](docs/library-format.md): the starter library behind the Toolbox
 - [docs/components.md](docs/components.md): generated reference of every component and field

@@ -86,6 +86,7 @@ or renaming a file therefore means editing one `path` entry.
 | `settings.display.windowScale` | no (3) | initial desktop window size multiplier, 1-16 |
 | `settings.scripting.apiVersion` | no (1) | scripting API version the project was written for; newer than the engine's is refused |
 | `input.actions` | no | action name → list of default keys. At most 32 actions; names use `a-z`, `0-9`, `_`. Order defines action ids. |
+| `leaderboards` | no | up to 8 boards `{id, title, order?: "highest"\|"lowest", format?: "number"\|"time"}` that scripts submit scores to ([leaderboards.md](leaderboards.md)); ids use `a-z`, `0-9`, `_` (1-32), titles up to 40 characters |
 | `assets` | no | asset list, see below; at most 10 000 entries |
 
 Key names: `A`-`Z`, `0`-`9`, `Space`, `Enter`, `Escape`, `Backspace`, `Tab`,
@@ -269,6 +270,7 @@ nothing else stored in the scene.
 |---|---|---|---|
 | 1 | 0.1 | Initial format; `script` assets and `settings.scripting` were added compatibly in 0.2 | |
 | 2 | 0.3 | Added `settings.gameType` | Projects of format 1 become `"platformer"` (every earlier project was one) |
+| 2 | 0.8 | `leaderboards` added compatibly (optional; older engines refuse projects that use it as an unknown field) | |
 
 ## Versioning
 

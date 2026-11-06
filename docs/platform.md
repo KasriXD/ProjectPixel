@@ -1,8 +1,8 @@
 # The platform
 
 The platform is where games are published and played: accounts, a catalog
-of games, game servers it starts on demand, saved player data and
-moderation. It is one program, **px-platform**, with an HTTP API that
+of games with pictures, game servers it starts on demand, saved player
+data, leaderboards, friends and moderation. It is one program, **px-platform**, with an HTTP API that
 Studio, the player, game servers and tools use. This is the first version
 ([ADR 0021](adr/0021-platform-service.md)): it runs well on one computer or
 a small server, and its limits are listed at the end.
@@ -115,13 +115,19 @@ server, and shows a player's saved data in your game (for debugging).
 
 ## Playing
 
-The **Play** tab lists the public games (most played, playing now or
-recently updated; search by title or description). *Play* opens the game in
-px-player. From the command line:
+Players find games in the **launcher** (px-player started without a game,
+on computers and phones) or on the **browser page** (`/play`): games with
+pictures, each game's page with its leaderboards, friends and what they
+play, joining them and inviting them ([launcher.md](launcher.md),
+[social.md](social.md), [leaderboards.md](leaderboards.md)). In Studio, the
+Platform panel's **Play** tab lists the public games (most played, playing
+now or recently updated; search by title or description). *Play* opens the
+game in px-player. From the command line:
 
 ```sh
 px-player --platform http://127.0.0.1:8730 --play 1            # as the account logged in from Studio
 px-player --platform ... --play 1 --user Bob --password '...'  # or log in here
+px-player --platform ... --play 1 --invite Ana                 # and invite a friend once in the game
 ```
 
 The player asks the platform to join, downloads the game version the
@@ -134,7 +140,9 @@ data trustworthy.
 
 With `--web-player DIR` (the `px-player.js`, `.wasm` and `.data` files of
 the WebAssembly build, `cmake --preset wasm`), the platform serves a page at
-**`/play`**: log in or make an account, pick a game, play. Browser players
+**`/play`**: log in or make an account, pick a game, play; and, as in the
+launcher, game pages with leaderboards, friends and your profile
+([launcher.md](launcher.md#the-browser)). Browser players
 join the **same game servers** as desktop players, over WebSockets
 ([ADR 0024](adr/0024-websockets-for-browsers.md)); keyboard, gamepads and
 touch screens work ([input-devices.md](input-devices.md)).
@@ -145,15 +153,17 @@ px-platform --web-player build/wasm/apps/player       # then open http://127.0.0
 
 The page asks for a join ticket, downloads the game package while the
 player loads, and starts the player with the ticket's `ws://` (or `wss://`)
-address and token. `/play#game=ID` opens a game directly (the home page
-links there). The page and its scripts are built into px-platform
+address and token. `/play#game=ID` opens a game's page (the home page
+links there); a click on *Play* starts it. The page and its scripts are built into px-platform
 (`services/platform/web`); the player files are revalidated with an ETag, so
 browsers download them again only when they change.
 
 Tested in CI: headless Chromium plays the top-down example through this
 page while a desktop bot joins the same server over UDP; both see two
 players and the level completed, over HTTP and over HTTPS with `wss://`
-(`tools/browser/crossplay.sh`).
+(`tools/browser/crossplay.sh`). The page's other parts (pictures, game
+pages, friends, profile, joining and inviting) are tested at computer and
+phone sizes (`tools/browser/social_test.sh`).
 
 ## Game servers
 
@@ -270,6 +280,8 @@ game server when it starts it.
 | `GET /games/mine` | Bearer | your games |
 | `POST /games` | Bearer | create `{title, description, visibility}` |
 | `GET /games/{id}`, `PATCH /games/{id}` | (Bearer) | read; change (owner) |
+| `GET /games/{id}/thumbnail` | (Bearer) | the game's picture (PNG, 320x180, with `ETag`); 404 without one |
+| `PUT /games/{id}/thumbnail` | Bearer | owner: a PNG or JPEG as the body (up to 4 MiB, at least 16x9), made into the picture; 30 an hour |
 | `POST /games/{id}/versions?notes=` | Bearer | publish: the package as the body |
 | `GET /games/{id}/versions` | Bearer | versions (owner) |
 | `GET /packages/{hash}` | (Bearer) | download a package of a game you may play |
@@ -284,15 +296,18 @@ game server when it starts it.
 | `POST /server/ready`, `POST /server/heartbeat` | Server | `{port}`; `{players}` → `{stop}` |
 | `GET /server/data/{userId}`, `PUT /server/data/{userId}` | Server | load; save `{data, release}` |
 | `POST /server/release/{userId}`, `POST /server/ended` | Server | a player left before loading; the server stops |
+| profiles, friends, invitations, blocks, reports about accounts | Bearer | see [social.md](social.md#http-api) |
+| `GET /games/{id}/leaderboards`, `POST /server/leaderboards`, ... | | see [leaderboards.md](leaderboards.md#http-api) |
 
 Outside `/api/v1`: `GET /` (a list of games), `GET /play` and
-`/play/play.js`, `/play/play.css` (the browser page), `GET
+`/play/play.js`, `/play/play.css`, `/play/avatars.png` (the browser page), `GET
 /play/player/px-player.{js,wasm,data}` (the WebAssembly player, with `ETag`).
 
 Rate limits (per address and account): 600 requests a minute, 20 log-ins a
 minute (10 per name), 10 new accounts an hour, 20 new games and 30
-publishes an hour, 30 joins a minute, 10 reports an hour. Over the limit:
-status 429.
+publishes an hour, 30 joins a minute (games and friends together), 10
+reports an hour, 30 friend requests an hour, 30 invitations in ten minutes,
+30 profile changes and 30 pictures an hour. Over the limit: status 429.
 
 ## Security
 
@@ -322,8 +337,14 @@ What protects what (see also [security.md](security.md)):
   has `X-Content-Type-Options: nosniff`. Text from games and accounts is
   inserted as text, never as HTML. The page never takes player arguments
   from its address (a link must not decide which server the player connects
-  to with your ticket). The session token is kept in the tab's
-  `sessionStorage`.
+  to with your ticket), and a link to `#play=` or `#join=` opens a page
+  instead of starting the player: only a click on the page starts it. The
+  session token is kept in the tab's `sessionStorage`.
+- **Pictures** are made from uploads in the same separate check process as
+  packages (512 MiB of memory, 20 s), re-encoded as PNG; only the result is
+  stored.
+- **Friends and blocks**: presence only for friends, blocked players never
+  on one server ([social.md](social.md)).
 
 Not yet (planned):
 
@@ -357,11 +378,10 @@ cache (tests use it).
 - One process with one SQLite database: fine for a small community, not for
   millions of players. Game servers run on the same computer as the
   platform.
-- No player launcher in the desktop and mobile apps yet: browsing happens in
-  Studio's Platform panel and on the browser page (`/play`).
-- No profiles, avatars, friends or invitations; no thumbnails; no
-  leaderboards or data shared between players (only per-player data).
-- Players cannot pick a server or play with friends on purpose: seats are
-  filled in order.
+- Players cannot pick a server; they reach friends by joining them or
+  being invited ([social.md](social.md)), otherwise seats are filled in
+  order.
+- No chat, no notifications outside the apps, no uploaded portraits.
+- Leaderboards keep each player's best only (no periods or history).
 - Saved data is kept per game; there is no versioning, export or deletion
   tool for it yet.

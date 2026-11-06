@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.7.0). Planned parts are
+This describes the system **as it exists now** (v0.8.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -69,12 +69,12 @@ not link SDL.
 | `physics` | `CollisionWorld`: solid grids and boxes with shapes (solid, one-way, slopes), swept per-axis AABB movement with contact flags and ground snapping | core |
 | `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; prefabs (instantiating, copying, three-way update of copies), animation clips and tilesets; game packages (`*.pxpkg`); the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
 | `scripting` | `ScriptLibrary` (compiles Luau and visual scripts at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference, visual scripts (`Graph`: node catalog generated from the API reference, compiler to Luau) | core, assets, scene, Luau (private), nlohmann/json (private) |
-| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, saved player data (`PlayerData`), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
+| `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, saved player data (`PlayerData`), leaderboards (`ILeaderboardStore`, memory store), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
 | `platform_sdl` | SDL3 window, keyboard, gamepads and touch (fingers in virtual pixels), vsync and scaling changes, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
 | `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
 | `crypto` | Secure random numbers from the OS, BLAKE2b, Argon2id passwords, EdDSA signatures, hex/base64url | core, Monocypher (private) |
-| `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS), `PlatformPlayerStore`, package cache, saved login. Desktop only | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
+| `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS: accounts, games, friends, leaderboards, pictures), `PlatformPlayerStore`, `PlatformLeaderboardStore`, game pictures (`Thumbnail`), package cache, saved login. Desktop and phones | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
 | `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
 Applications compose modules:
@@ -83,9 +83,13 @@ Applications compose modules:
   callbacks (`SDL_AppInit/Iterate/Event/Quit`) instead of owning a blocking
   loop, which is what browser and iOS builds require. The same target is the
   browser player (WebAssembly, `apps/player/web`), the Android app
-  (`libmain.so`, `platforms/android`) and the iOS app (an app bundle); on
-  phones it plays the game package that comes with the app
-  ([ADR 0026](docs/adr/0026-mobile-apps.md)).
+  (`libmain.so`, `platforms/android`) and the iOS app (an app bundle)
+  ([ADR 0026](docs/adr/0026-mobile-apps.md)). Started without a game on
+  computers and phones it opens the **launcher** (+ online + Dear ImGui):
+  log in, browse games, friends and leaderboards, play; the launcher and
+  the game share one window, handed between `Launcher` and `PlayerApp` in
+  `main.cpp` ([ADR 0029](docs/adr/0029-launcher-in-the-player.md),
+  [docs/launcher.md](docs/launcher.md)).
 - **px-headless** = project + runtime + net. Runs games with no graphics
   (automated playthroughs), joins servers as a scripted bot (`--connect`),
   and runs a server with several clients in one process over a simulated
@@ -97,14 +101,18 @@ Applications compose modules:
   cpp-httplib, Mbed TLS): the platform service ([docs/platform.md](docs/platform.md),
   [ADR 0021](docs/adr/0021-platform-service.md)), over HTTP and HTTPS. It
   also serves the browser page (`/play`, built into it from
-  `services/platform/web`) and the WebAssembly player. It runs untrusted content
+  `services/platform/web`: the browser's launcher) and the WebAssembly
+  player. Friends, presence and invitations (`Social.cpp`,
+  [ADR 0027](docs/adr/0027-friends-presence-and-blocking.md)) and
+  leaderboards (`Leaderboards.cpp`, [ADR 0028](docs/adr/0028-leaderboards.md))
+  share the service's context (`ServiceContext.hpp`). It runs untrusted content
   only in child processes (px-headless for upload checks, px-server for
   games).
 - **px-studio** = editor + render + platform_sdl + Dear ImGui. Panels draw
   and call `px_editor`; they hold only UI state, so the UI toolkit can be
   replaced without touching editing logic ([ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md),
   [ADR 0015](docs/adr/0015-studio-architecture.md)). Desktop only; games never
-  link ImGui.
+  use ImGui (px-player links it only for the launcher).
 
 ## Key boundaries
 

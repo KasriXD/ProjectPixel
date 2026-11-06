@@ -108,11 +108,11 @@
   const name = (n) => encodeURIComponent(n);
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
+  // As project::formatScore: whole numbers as they are, others with two
+  // decimals; times as m:ss.cc.
   function scoreText(value, format) {
-    if (format !== 'time') {
-      return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
-    }
-    const hundredths = Math.round(value * 100);
+    if (format !== 'time') return Number.isInteger(value) ? String(value) : value.toFixed(2);
+    const hundredths = Math.round(Math.max(0, Math.min(value, 1e12)) * 100);
     const m = Math.floor(hundredths / 6000);
     const s = Math.floor((hundredths % 6000) / 100);
     const h = hundredths % 100;

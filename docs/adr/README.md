@@ -28,5 +28,8 @@
 | [0024](0024-websockets-for-browsers.md) | Browsers join game servers over WebSockets | Accepted |
 | [0025](0025-tls-with-mbed-tls.md) | HTTPS and secure WebSockets with Mbed TLS | Accepted |
 | [0026](0026-mobile-apps.md) | Android and iOS apps from the same player | Accepted |
+| [0027](0027-friends-presence-and-blocking.md) | Friends, presence and blocking in the platform | Accepted |
+| [0028](0028-leaderboards.md) | Leaderboards declared by games, kept by the platform | Accepted |
+| [0029](0029-launcher-in-the-player.md) | The launcher lives in px-player, drawn with Dear ImGui | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

@@ -171,7 +171,8 @@ Result<Seat> Fleet::reserveIn(const std::string& session, const std::string& use
 }
 
 Result<Seat> Fleet::seatWhenReady(std::unique_lock<std::mutex>& lock, const std::string& id, const std::string& userId) {
-    Session* first = find(id);
+    const Session* first = find(id);
+    if (first == nullptr) return makeError(ErrorCode::IoError, "The game server stopped before it was ready; try again");
     const auto deadline = first->started + std::chrono::duration_cast<Clock::duration>(
                                                std::chrono::duration<double>(m_config.readySeconds));
     // Wait for a new server to say it is listening.

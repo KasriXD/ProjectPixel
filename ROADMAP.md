@@ -5,15 +5,18 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-7 are done. Milestone 7 made the clients cross-platform:
-browsers play platform games on the same game servers as desktop players
-(WebSockets, `wss://`), the platform and its clients speak HTTPS, every game
-works with gamepads and touch screens, the player has settings, and Android
-and iOS apps are built in CI. CI builds and tests on Linux, Windows (MSVC),
-macOS, WebAssembly, Android and iOS, and plays a browser and a desktop
-player together. Recommended next: people play it on real devices (a phone,
-a gamepad, a browser on another computer), then a player launcher (see
-"Recommended adjustments" below).
+Milestones 0-8 are done. Milestone 8 gave players a launcher and each
+other: px-player (computers and phones) and the browser page log in to a
+platform, show its games with pictures, each game's leaderboards, friends
+with what they play, and join or invite them; profiles, friend requests,
+blocking (blocked players never share a game server) and reports; games
+declare leaderboards and their server scripts submit scores, kept by the
+platform for everyone. CI tests the launcher against a real platform, the
+browser page with the real WebAssembly player, and the launcher on an
+emulated Android phone and a simulated iPhone. Recommended next: people
+play it on real devices and across a real network; then the platform's
+internet readiness (containers, encrypted UDP) before anything faces the
+internet (see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -22,6 +25,7 @@ a gamepad, a browser on another computer), then a player launcher (see
 | Not yet run on real macOS hardware (CI passes) | Rendering/input on Macs unconfirmed | A Mac check when one is available. Windows: played on a Windows 11 PC (2026-10-23) |
 | No real gamepad, touch screen or phone tried yet (Milestone 7 checks are automated) | Feel of the controls, layouts on real screens, notches, performance on phones unconfirmed | Founder: a gamepad on the PC; the CI-built APK on an Android phone; `/play` on a phone's browser |
 | Browser play not yet tried by a person | Input feel, audio policies, page integration unconfirmed | Founder: start px-platform with `--web-player` (the CI artifact `px-player-web`) and open `/play` |
+| The launcher and friends not yet used by people other than in automated runs (and by its developer on Linux) | Whether players find games and friends easily, how it feels on a phone | Two or three people make accounts, add each other, join and invite from a PC, a phone's browser and the Android app |
 | Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
 | Game servers run as plain processes; UDP game traffic is not encrypted | Not ready for the internet | HTTPS is in place; containers and encrypted UDP are the next platform items |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
@@ -331,13 +335,58 @@ WebAssembly, Android and iOS, and with the MinGW-w64 build under Wine 9 (all
 
 Next for the clients (not part of the milestone):
 
-- [ ] A launcher in the desktop and mobile apps (log in, browse, play), the
-      platform client enabled on phones
+- [x] A launcher in the desktop and mobile apps (log in, browse, play), the
+      platform client enabled on phones (Milestone 8)
 - [ ] Testing on real phones, gamepads and browsers by people; safe areas
 - [ ] Store builds (signing, icons, review rules); compressed web downloads
 - [ ] WebTransport for browsers on lossy networks; encrypted UDP
 
-## Milestone 8: Creator ecosystem and scaling (**Planned**)
+## Milestone 8: Launcher and social (**Done**)
+
+Scope agreed with the founder: a player launcher in the desktop, mobile and
+browser apps (log in, browse, play), profiles, friends, joining friends'
+games, and leaderboards shared between players; no money yet. Verified in
+CI on Linux (GCC, Clang, AddressSanitizer + UBSan, headless), Windows
+(MSVC), macOS, WebAssembly, Android and iOS, and with the MinGW-w64 build
+under Wine 9.
+
+- [x] Launcher in px-player ([ADR 0029](docs/adr/0029-launcher-in-the-player.md),
+      [launcher.md](docs/launcher.md)): Dear ImGui in the player's window,
+      handed to the game and back; log in or the saved login, games with
+      pictures, a game's page with leaderboards, friends, profile, games on
+      this device; keyboard, gamepad and touch (drag to scroll). CI: every
+      page, playing and joining a friend from it, the saved login, against
+      a real platform
+- [x] The same in the browser: the `/play` page with game pages,
+      leaderboards, friends, profile, joining and inviting while playing;
+      links never start the player. CI: headless Chromium with the real
+      WebAssembly player, computer and phone sizes
+- [x] Phones: the Android and iOS apps include the platform client and the
+      launcher; the bundled game plays from it (CI: emulator and simulator)
+- [x] Game pictures: 320x180, made from any picture in the separate check
+      process; Studio sends the open scene's view when publishing,
+      `px-headless --thumbnail`, served with an ETag
+- [x] Profiles and friends ([ADR 0027](docs/adr/0027-friends-presence-and-blocking.md),
+      [social.md](docs/social.md)): 16 portraits, about text, who may join;
+      requests, presence (online, playing what) for friends only
+- [x] Joining friends and invitations (from the launcher, the browser and
+      the game's menu, `--invite`); blocking keeps players off one game
+      server; reports about accounts with dismiss, clear profile, ban
+- [x] Leaderboards ([ADR 0028](docs/adr/0028-leaderboards.md),
+      [leaderboards.md](docs/leaderboards.md)): declared in `project.json`,
+      `Leaderboard.submit/best/rank/top` for authority scripts, a memory
+      copy on platform servers refreshed every 15 s, each account's best on
+      the platform; the examples and the Toolbox's *Best Time* submit the
+      fastest run
+
+Next for social (not part of the milestone):
+
+- [ ] People using it on real devices and networks
+- [ ] Chat with filtering and moderation; notifications outside the apps
+- [ ] Leaderboard periods (daily, weekly), a leaderboard editor in Studio
+- [ ] A font with more scripts in the launcher; theming
+
+## Milestone 9: Creator ecosystem and scaling (**Planned**)
 
 Persistent worlds, social hubs, collaboration, marketplace, analytics,
 monetization, advanced moderation, scalable hosting.
@@ -346,13 +395,13 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: people on real devices, then a launcher.** Run px-platform on
-   one computer of a home network (`--bind 0.0.0.0 --public-host <address>
-   --web-player ...`), let a few people play from PCs, phones' browsers and
-   the Android app, with gamepads, and fix what they hit. For people who
-   only play, a launcher in the apps matters more than Studio's panel.
-   Before anything faces the internet: game servers in containers and
-   encrypted UDP traffic.
+1. **Next: people on real devices.** Run px-platform on one computer of a
+   home network (`--bind 0.0.0.0 --public-host <address> --web-player
+   ...`), let a few people make accounts, add each other as friends and
+   play from PCs, phones' browsers and the Android app (the launcher), with
+   gamepads, and fix what they hit. Before anything faces the internet:
+   game servers in containers and encrypted UDP traffic; before chat:
+   text filtering and moderation tools.
 2. **Client-side behaviours before more visual effects**: decorative motion
    (the drifting clouds) currently runs on the server and is replicated
    (about 60 bytes per snapshot for 8 clouds). Client-realm behaviours

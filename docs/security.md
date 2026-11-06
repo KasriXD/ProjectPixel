@@ -39,6 +39,13 @@ untrusted. This page lists what is protected today and what is planned.
 | Script injection and clickjacking on the browser page | Strict Content Security Policy (scripts only from the platform, no inline scripts, `frame-ancestors 'none'`), `X-Frame-Options: DENY`, `nosniff` on every answer; game and account text inserted with `textContent` only; tested | `services/platform/web`, `PlatformService.cpp` |
 | A link steering the browser player to another server with your ticket | The `/play` page builds the player's arguments itself and ignores arguments in its address (only a few test options are read, checked against patterns) | `services/platform/web/play.js`, `apps/player/web/pre.js` |
 | Hostile WebSocket clients | The same message checks and limits as UDP; frames over 9 MiB refused; players limit per server | `net/WebSocketNative.cpp`, `GameServer` |
+| Strangers watching or reaching players | Presence (online, playing what) only for friends; friendship needs the other's acceptance; limits of 200 friends and 100 open requests, rate limits on requests, invitations and profile changes | `services/platform/Social.cpp` (ADR 0027) |
+| Unwanted contact, harassment | No free text between players; the only profile text is 200 characters, reportable, and administrators can clear it; portraits are 16 built-in pictures; blocking ends friendship, requests and invitations and keeps both people off the same game server; the blocked person is not told | `Social.cpp`, `Fleet::reserve` (avoid set), tested with real servers |
+| Joining someone's game uninvited | Joining a friend needs the friendship, their setting (friends, or an invitation tied to their server, 10 minutes) and a game you may play; the ticket is the usual signed connect token | `Social.cpp`, tested |
+| Links or other apps starting actions | On `/play`, `#play=` and `#join=` start the player only after a click on the page; Android takes only page and on-device options from other apps' intents | `web/play.js`, `PlayerActivity.java`, tested |
+| Forged scores | Only authority scripts submit; servers send scores with their server key, only for players the platform seated on them and boards of the version they run; values finite and within ±10^15; owners and administrators can clear boards (audited) | `runtime/Leaderboards.cpp`, `services/platform/Leaderboards.cpp` (ADR 0028), tested |
+| Hostile pictures | Game pictures (4 MiB at most) are decoded and scaled in the separate check process (512 MiB, 20 s), re-encoded as 320x180 PNG; only the result is stored and served | `online/Thumbnail.cpp`, `PlatformService.cpp`, tested |
+| The saved login on a device | `login.json` readable only by its user (desktop), in the app's own folder on phones; tests never save one | `online/PlatformClient.cpp`, `apps/player/Launcher.cpp` |
 
 ## Planned
 
@@ -57,7 +64,11 @@ untrusted. This page lists what is protected today and what is planned.
   encrypted transport, per-client message and bandwidth limits, kicking
   from the server.
 - **Platform**: email verification and password reset, two-factor
-  authentication, account deletion, text filtering of titles and reports.
+  authentication, account deletion, text filtering of titles, profiles and
+  reports, parental settings (for example, friends only with a parent's
+  approval).
+- **Leaderboards**: they trust the game's own rules; detecting impossible
+  scores (outliers, replays) is not done.
 - **Assets**: fuzzing the image decoders with libFuzzer (uploads are
   already decoded only in the separate check process).
 - **Fuzzing**: the project and scene parsers are good fuzzing targets

@@ -306,6 +306,14 @@ function Coin:TriggerEnter(other)
 end
 ```
 
+## Leaderboards
+
+`Leaderboard.submit(player, board, score)`, `Leaderboard.best`,
+`Leaderboard.rank` and `Leaderboard.top` work with the boards the project
+declares; on the platform the best of each account is shared by everyone
+who plays the game. Authority-only. Details:
+[leaderboards.md](leaderboards.md).
+
 ## Visual scripting
 
 Visual scripts (`*.graph.json`) are behaviours made of nodes. They compile to

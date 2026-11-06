@@ -15,8 +15,8 @@ testing. This page states what is verified and what work remains.
 | Windows x64 (MinGW-w64 GCC 13) | Yes, `-O3 -Werror` | Under Wine 9: all unit tests, scripted playthrough, and the client (SDL `windows` driver, `direct3d` renderer) | Cross-compiled on Linux; screenshots inspected. Not yet run on real Windows |
 | Windows x64 (MSVC 2022) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `windows-2022`. Not yet run interactively on real hardware |
 | macOS arm64 (Apple Clang) | Yes | Unit tests, playthrough and windowless client test pass | GitHub Actions `macos-14`. Not yet run in a real window; needs macOS 13.3+ |
-| Android (arm64-v8a, x86_64) | Yes: APK from Gradle + NDK, plays a bundled game | On an emulated phone (Android 14, x86_64) in CI: loads the game from the APK's assets, opens in landscape with SDL's `android` driver and `opengles2` renderer, the back button opens the menu; **not tested on a device** | GitHub Actions *Android app*, *Android app (emulator)* ([below](#android)) |
-| iOS (simulator, arm64) | Yes: app bundle from Xcode | On a simulated iPhone 16 Pro in CI: loads the bundled game from the app bundle, opens with SDL's `uikit` driver and `metal` renderer, runs 900 frames; **not tested on a device** | GitHub Actions *iOS app (simulator)* ([below](#ios)) |
+| Android (arm64-v8a, x86_64) | Yes: APK from Gradle + NDK, with the launcher and a bundled game | On an emulated phone (Android 14, x86_64) in CI: opens the launcher (three starts), starts the bundled game from it (SDL's `android` driver and `opengles2` renderer, landscape), the back button opens the game's menu, a game returns to the launcher; **not tested on a device** | GitHub Actions *Android app*, *Android app (emulator)* ([below](#android)) |
+| iOS (simulator, arm64) | Yes: app bundle from Xcode, with the launcher | On a simulated iPhone 16 Pro in CI: plays the bundled game 900 frames (SDL's `uikit` driver and `metal` renderer), opens the launcher, starts the game from it and gets it back; **not tested on a device** | GitHub Actions *iOS app (simulator)* ([below](#ios)) |
 | WebAssembly under Node.js (engine, Luau, tests) | Yes: Emscripten 6.0.13 | All unit tests and the scripted playthrough pass | Experimental CI job |
 | Browser (WebAssembly + WebGL) | Yes: `px-player.html` | Yes in headless Chromium (WebGL 2.0): scripted level completed | Experimental CI job; not yet played by a person |
 
@@ -63,9 +63,12 @@ Direct3D 11/12 or Metal for `SDL_Renderer`. Known requirements:
 ## Mobile
 
 **Status: built in CI; not tested on devices.** Decision: [ADR 0026](adr/0026-mobile-apps.md).
-The apps are px-player playing one game that comes with them
-(`game.pxpkg`), with touch controls generated from the game's actions and
-gamepad support ([input-devices.md](input-devices.md)). The back button
+The apps are px-player: they open the launcher (log in to a platform,
+browse its games, friends and leaderboards, play and join friends;
+[launcher.md](launcher.md)), and the game that comes with them
+(`game.pxpkg`) plays from its *On this device* list without a platform.
+Touch controls are generated from the game's actions, and gamepads work
+([input-devices.md](input-devices.md)). In a game, the back button
 (Android) opens the menu; leaving the app pauses the game.
 
 ### Android
@@ -96,7 +99,7 @@ Logs: `adb logcat -s SDL SDL/APP`.
 px-headless examples/platformer --pack game.pxpkg
 cmake -S . -B build/ios -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphonesimulator \
     -DCMAKE_OSX_ARCHITECTURES=arm64 -DPX_BUILD_STUDIO=OFF -DPX_BUILD_TESTS=OFF \
-    -DPX_ENABLE_PLATFORM=OFF -DPX_GAME_PACKAGE=$PWD/game.pxpkg
+    -DPX_GAME_PACKAGE=$PWD/game.pxpkg
 cmake --build build/ios --config Release --target px_player -- -sdk iphonesimulator CODE_SIGNING_ALLOWED=NO
 xcrun simctl install booted build/ios/apps/player/Release-iphonesimulator/px-player.app
 xcrun simctl launch --console-pty booted dev.px.player
@@ -105,16 +108,18 @@ xcrun simctl launch --console-pty booted dev.px.player
 Needs Xcode 15.3+ (iOS 16.3 or later on the device, for C++20 `<format>`).
 For a device, open `build/ios/px.xcodeproj` in Xcode, choose your team for
 signing and build `px_player` for the device. CI builds the simulator app,
-runs it on a simulated iPhone (screenshot and log attached as
-`ios-simulator-app`).
+runs it on a simulated iPhone: the game on its own, the launcher, and the
+launcher starting the game and getting it back (screenshots and logs
+attached as `ios-simulator-app`). To log in to HTTPS platforms from iOS, add
+`-DPX_CA_BUNDLE=/path/to/roots.pem` ([launcher.md](launcher.md#phones-and-tablets)).
 
 ### Not done yet on mobile
 
 - Testing on real phones and tablets: performance, touch feel, safe areas
   (the on-screen controls ignore notches today), losing the GPU context,
   audio rules.
-- Choosing and joining platform games from the apps (needs a launcher
-  screen; the platform client is not enabled in the apps yet).
+- Using the launcher on real phones (it runs on the emulator and simulator
+  in CI); iOS needs a certificate file for HTTPS platforms.
 - Store builds: signing keys, app icons for every size, store rules for
   user-generated content.
 
