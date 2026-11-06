@@ -54,7 +54,7 @@ jobs:
             build: windows-debug
             test: windows-debug
           - name: macOS Apple Clang
-            os: macos-14
+            os: macos-15  # GitHub stopped accepting macos-14 (seen 2026-11-06)
             configure: dev
             build: dev
             test: dev
