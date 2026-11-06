@@ -35,9 +35,13 @@ void usage() {
                  "                   [--max-servers N] [--headless FILE] [--server FILE] [--no-rate-limits]\n"
                  "                   [--https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]]\n"
                  "                   [--web-player DIR]   (px-player.js/.wasm/.data: play in browsers at /play)\n"
+                 "                   [--server-memory MIB] [--server-cpu PERCENT] [--no-sandbox]\n"
+                 "                        (each game server: memory, share of a processor before it is stopped\n"
+                 "                         (0: no limit), and whether it locks itself down; docs/security.md)\n"
                  "       px-platform --data DIR --make-admin NAME\n"
                  "       px-platform --data DIR --dev-certificate HOST[,HOST...]   (self-signed, for testing HTTPS)\n"
-                 "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n",
+                 "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n"
+                 "          --server-memory 1024 --server-cpu 100\n",
                  version::productName, version::string);
 }
 
@@ -103,6 +107,12 @@ int main(int argc, char** argv) {
                 config.serverExe = value();
             } else if (arg == "--no-rate-limits") {
                 config.rateLimits = false;
+            } else if (arg == "--server-memory") {
+                config.serverMemoryMiB = static_cast<std::size_t>(std::stoul(value()));
+            } else if (arg == "--server-cpu") {
+                config.serverCpuPercent = std::stoi(value());
+            } else if (arg == "--no-sandbox") {
+                config.sandbox = false;
             } else if (arg == "--make-admin") {
                 makeAdmin = value();
             } else if (arg == "--https-port") {

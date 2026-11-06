@@ -277,8 +277,13 @@ struct PlatformService::Impl : PlatformService::Context {
         ProcessOptions options;
         options.args = {"--check-package", upload.string(), "--output", checked.string(), "--ticks",
                         std::to_string(s.m_config.checkTicks)};
+        if (s.m_config.sandbox) options.args.push_back("--sandbox");
         options.memoryLimitMiB = s.m_config.checkMemoryMiB;
         options.cpuLimitSeconds = static_cast<int>(s.m_config.checkTimeoutSeconds) + 5;
+        options.cleanEnvironment = true;
+        options.singleProcess = true;
+        options.maxOpenFiles = 64;
+        options.maxFileSizeMiB = 512;
         auto run = runProcess(s.m_config.headlessExe, options, s.m_config.checkTimeoutSeconds);
         if (!run) throw std::runtime_error(run.error().message);
         if (run->timedOut) fail(422, "check_failed", "The game took too long to load and was not accepted");
@@ -377,8 +382,13 @@ struct PlatformService::Impl : PlatformService::Context {
         }
         ProcessOptions options;
         options.args = {"--check-thumbnail", upload.string(), "--output", made.string()};
+        if (s.m_config.sandbox) options.args.push_back("--sandbox");
         options.memoryLimitMiB = 512;
         options.cpuLimitSeconds = 25;
+        options.cleanEnvironment = true;
+        options.singleProcess = true;
+        options.maxOpenFiles = 64;
+        options.maxFileSizeMiB = 16;
         auto run = runProcess(s.m_config.headlessExe, options, 20.0);
         if (!run) throw std::runtime_error(run.error().message);
         if (run->timedOut || run->exitCode != 0) {
@@ -1127,6 +1137,8 @@ Status PlatformService::start() {
     fleet.portCount = m_config.serverPortCount;
     fleet.maxServers = m_config.maxServers;
     fleet.memoryLimitMiB = m_config.serverMemoryMiB;
+    fleet.cpuLimitPercent = m_config.serverCpuPercent;
+    fleet.sandbox = m_config.sandbox;
     fleet.platformKeyHex = crypto::toHex(m_key.publicKey);
     if (m_https) {
         fleet.tlsCert = m_config.tlsCert.string();

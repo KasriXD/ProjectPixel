@@ -37,6 +37,8 @@ struct ServiceConfig {
     std::uint16_t serverPortCount = 100;
     std::size_t maxServers = 20;
     std::size_t serverMemoryMiB = 1024;
+    int serverCpuPercent = 100;             // a server using more than this for 30 s is stopped (0: no limit)
+    bool sandbox = true;                    // game servers and checks lock themselves down (Linux)
     std::size_t checkMemoryMiB = 2048;
     double checkTimeoutSeconds = 60.0;
     int checkTicks = 120;

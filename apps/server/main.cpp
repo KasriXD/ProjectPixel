@@ -25,6 +25,7 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
+#include "px/core/Sandbox.hpp"
 #include "px/core/Version.hpp"
 #include "px/crypto/Encoding.hpp"
 #include "px/net/GameServer.hpp"
@@ -47,6 +48,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -87,10 +89,34 @@ struct Options {
     std::string tlsCert;        // wss:// for browsers on https:// pages
     std::string tlsKey;
     std::string identityFile;   // the server's identity key for encrypted traffic (kept across restarts)
+    bool sandbox = false;       // lock the process down once the game is read (platform servers)
 };
 
 std::filesystem::path fromUtf8(const std::string& path) {
     return std::filesystem::path(std::u8string(path.begin(), path.end()));
+}
+
+Result<std::vector<std::uint8_t>> readBinaryFile(const std::string& path) {
+    std::ifstream in(fromUtf8(path), std::ios::binary);
+    if (!in) return makeError(ErrorCode::IoError, "Cannot read {}", path);
+    return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+// The TCP port of an http(s) URL (the platform the server reports to).
+std::optional<std::uint16_t> urlPort(std::string_view url) {
+    if (url.empty()) return std::nullopt;
+    const bool https = url.starts_with("https://");
+    const std::size_t hostStart = url.find("://");
+    if (hostStart == std::string_view::npos) return std::nullopt;
+    std::string_view rest = url.substr(hostStart + 3);
+    rest = rest.substr(0, rest.find('/'));
+    const std::size_t colon = rest.rfind(':');
+    if (colon == std::string_view::npos || rest.ends_with(']')) return static_cast<std::uint16_t>(https ? 443 : 80);
+    int port = 0;
+    const auto digits = rest.substr(colon + 1);
+    const auto [ptr, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), port);
+    if (ec != std::errc() || ptr != digits.data() + digits.size() || port < 1 || port > 65535) return std::nullopt;
+    return static_cast<std::uint16_t>(port);
 }
 
 Result<std::string> readTextFile(const std::string& path) {
@@ -168,6 +194,9 @@ void printUsage() {
                  "  --tls-cert FILE      with --tls-key: secure WebSockets (wss://), for https:// pages\n"
                  "  --identity-file FILE the server's key for encrypted traffic, kept in FILE (made if\n"
                  "                       missing), so players can check it with --server-key\n"
+                 "  --sandbox            once the game is read, lock the process down (Linux: no new\n"
+                 "                       programs or processes, files read-only as needed, TCP ports\n"
+                 "                       limited; the platform starts its servers this way)\n"
                  "\n"
                  "Players join with: px-player --connect <address>[:port] [project-dir]\n"
                  "Stop the server with Ctrl+C.\n",
@@ -221,6 +250,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
             (arg == "--tls-cert" ? o.tlsCert : o.tlsKey) = v;
+        } else if (arg == "--sandbox") {
+            o.sandbox = true;
         } else if (arg == "--identity-file") {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
@@ -257,11 +288,46 @@ int main(int argc, char** argv) {
     }
     if (options->verbose) log::setMinLevel(log::Level::Debug);
 
+    auto identity = loadIdentity(*options);
+    if (!identity) {
+        log::error("{}", identity.error().message);
+        return 1;
+    }
+
+    // The game's bytes are read before the sandbox and only looked at inside it.
+    const bool isPackage = options->projectDir.ends_with(".pxpkg");
+    std::vector<std::uint8_t> packageBytes;
+    if (isPackage) {
+        auto bytes = readBinaryFile(options->projectDir);
+        if (!bytes) {
+            log::error("{}", bytes.error().message);
+            return 1;
+        }
+        packageBytes = std::move(*bytes);
+    }
+    const int wsPort = options->webSocketPort < 0 ? options->port : options->webSocketPort;
+    if (options->sandbox) {
+        sandbox::Rules rules;
+        rules.readable = sandbox::systemReadablePaths();
+        if (!isPackage) rules.readable.emplace_back(fromUtf8(options->projectDir));
+        for (const std::string* f : {&options->tlsCert, &options->tlsKey}) {
+            if (!f->empty()) rules.readable.emplace_back(fromUtf8(*f));
+        }
+        if (wsPort > 0) rules.bindPorts.push_back(static_cast<std::uint16_t>(wsPort));
+        if (const auto port = urlPort(options->platformUrl)) rules.connectPorts = {*port, 53};
+        auto entered = sandbox::enter(rules);
+        if (!entered) {
+            log::error("Sandbox: {}", entered.error().message);
+            return 1;
+        }
+        log::info("Sandbox: {}", entered->describe());
+    }
+
     std::unique_ptr<IFileSystem> files;
-    if (options->projectDir.ends_with(".pxpkg")) {
-        auto package = project::readPackageFile(options->projectDir);
+    if (isPackage) {
+        auto package = project::decodePackage(packageBytes);
         if (!package) {
-            log::error("{}", package.error().message);
+            log::error("{}: {}", options->projectDir, package.error().message);
             return 1;
         }
         files = package->toFileSystem();
@@ -285,7 +351,6 @@ int main(int argc, char** argv) {
         }
         endpoints.push_back(std::move(udp.value()));
     }
-    const int wsPort = options->webSocketPort < 0 ? options->port : options->webSocketPort;
     if (wsPort > 0 && net::webSocketServerSupported()) {
         net::WebSocketServerOptions ws;
         ws.port = static_cast<std::uint16_t>(wsPort);
@@ -311,11 +376,6 @@ int main(int argc, char** argv) {
     const int tickRate = std::max(1, game->manifest.settings.tickRate);
     serverOptions.snapshotInterval = std::max(1, tickRate / std::min(options->snapshotRate, tickRate));
     serverOptions.restartDelaySeconds = options->restartDelay;
-    auto identity = loadIdentity(*options);
-    if (!identity) {
-        log::error("{}", identity.error().message);
-        return 1;
-    }
     serverOptions.identity = *identity;
     const std::string identityText = net::encodeServerKey(identity->publicKey);
     crypto::wipe(identity->secret);

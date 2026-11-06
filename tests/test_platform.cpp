@@ -1,5 +1,6 @@
 // The platform service through its HTTP API: accounts, games, publishing,
 // the catalog and moderation (docs/platform.md).
+#include "Fleet.hpp"
 #include "PlatformHarness.hpp"
 #include "px/crypto/Crypto.hpp"
 #include "px/crypto/Encoding.hpp"
@@ -414,4 +415,38 @@ TEST_CASE("Platform: joining starts a game server; players play there and their 
     REQUIRE(mod.setGameHidden(game->id, true, "test").ok());
     bobPlays.play(8.0);
     CHECK(bobPlays.client->status() == net::GameClient::Status::Disconnected);
+}
+
+TEST_CASE("Platform: the processor watch stops only servers that stay over their share") {
+    using px::platform::CpuWatch;
+    // Limit 100 % of one processor, samples 5 s apart, 30 s of grace.
+    SUBCASE("a busy moment is fine") {
+        CpuWatch watch(100, 5.0, 30.0);
+        double cpu = 0.0;
+        CHECK_FALSE(watch.sample(0.0, cpu));
+        for (int s = 5; s <= 120; s += 5) {
+            cpu += s == 40 ? 9.0 : 0.5; // one 5 s burst at 180 %, otherwise 10 %
+            CHECK_FALSE(watch.sample(s, cpu));
+        }
+        CHECK(watch.percent() == doctest::Approx(10.0));
+    }
+    SUBCASE("a server stuck at full speed is stopped after the grace period") {
+        CpuWatch watch(100, 5.0, 30.0);
+        double cpu = 0.0;
+        CHECK_FALSE(watch.sample(0.0, cpu));
+        int stoppedAt = 0;
+        for (int s = 5; s <= 120 && stoppedAt == 0; s += 5) {
+            cpu += 7.5; // 150 %: two threads spinning
+            if (watch.sample(s, cpu)) stoppedAt = s;
+        }
+        CHECK(stoppedAt == 30);
+        CHECK(watch.percent() == doctest::Approx(150.0));
+    }
+    SUBCASE("samples closer than the interval are ignored, and 0 means no limit") {
+        CpuWatch watch(0, 5.0, 0.0);
+        CHECK_FALSE(watch.sample(0.0, 0.0));
+        CHECK_FALSE(watch.sample(1.0, 50.0));
+        CHECK_FALSE(watch.sample(10.0, 100.0));
+        CHECK(watch.percent() == doctest::Approx(1000.0));
+    }
 }

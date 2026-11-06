@@ -19,6 +19,7 @@
 
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
+#include "px/core/Sandbox.hpp"
 #include "px/core/Version.hpp"
 #include "px/project/Animation.hpp"
 #include "px/project/Package.hpp"
@@ -65,6 +66,7 @@ struct Options {
     std::string checkPackage; // --check-package FILE: validate an uploaded package (platform)
     std::string checkOutput;  // --output FILE: the checked package, images re-encoded
     std::string checkThumbnail; // --check-thumbnail FILE: make a 320x180 PNG of a picture (platform)
+    bool sandbox = false;       // --sandbox: checks run locked down once the files are open
     std::string thumbnail;      // --thumbnail FILE: with --publish, the game's picture
     int traceEvery = 0; // print the player state every N ticks (0 = off)
     // Multiplayer tools (NetTools.hpp).
@@ -234,6 +236,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             o.checkOutput = needValue();
         } else if (arg == "--check-thumbnail") {
             o.checkThumbnail = needValue();
+        } else if (arg == "--sandbox") {
+            o.sandbox = true;
         } else if (arg == "--thumbnail") {
             o.thumbnail = needValue();
         } else if (arg == "--help" || arg == "-h") {
@@ -252,6 +256,26 @@ std::optional<Options> parseArgs(int argc, char** argv) {
     return o;
 }
 
+// Checks look at untrusted uploads: with --sandbox the input is read and the
+// output opened first, then the process is locked down (no files, no
+// network, no other processes; docs/security.md).
+bool enterCheckSandbox(const Options& o) {
+    if (!o.sandbox) return true;
+    sandbox::Rules rules;
+    rules.readable = sandbox::systemReadablePaths();
+    auto entered = sandbox::enter(rules);
+    if (!entered) {
+        std::fprintf(stderr, "sandbox: %s\n", entered.error().message.c_str());
+        return false;
+    }
+    return true;
+}
+
+bool writeAll(std::FILE* out, std::span<const std::uint8_t> bytes) {
+    const bool ok = std::fwrite(bytes.data(), 1, bytes.size(), out) == bytes.size();
+    return std::fclose(out) == 0 && ok;
+}
+
 // The platform's thumbnail check: the picture becomes a 320x180 PNG in --output.
 int checkThumbnailCommand(const Options& o) {
 #if defined(PX_HAVE_PLATFORM)
@@ -260,22 +284,26 @@ int checkThumbnailCommand(const Options& o) {
         std::fprintf(stderr, "%s\n", bytes.error().message.c_str());
         return 1;
     }
-    auto png = online::makeThumbnail(bytes.value());
-    if (!png) {
-        std::fprintf(stderr, "%s\n", png.error().message.c_str());
-        return 1;
-    }
     if (o.checkOutput.empty()) {
         std::fprintf(stderr, "--check-thumbnail needs --output FILE\n");
         return 2;
     }
     std::FILE* out = std::fopen(o.checkOutput.c_str(), "wb");
-    if (out == nullptr || std::fwrite(png->data(), 1, png->size(), out) != png->size()) {
-        if (out != nullptr) std::fclose(out);
+    if (out == nullptr) {
         std::fprintf(stderr, "cannot write %s\n", o.checkOutput.c_str());
         return 1;
     }
-    std::fclose(out);
+    if (!enterCheckSandbox(o)) return 1;
+    auto png = online::makeThumbnail(bytes.value());
+    if (!png) {
+        std::fprintf(stderr, "%s\n", png.error().message.c_str());
+        std::fclose(out);
+        return 1;
+    }
+    if (!writeAll(out, png.value())) {
+        std::fprintf(stderr, "cannot write %s\n", o.checkOutput.c_str());
+        return 1;
+    }
     return 0;
 #else
     (void)o;
@@ -290,9 +318,24 @@ int checkThumbnailCommand(const Options& o) {
 int checkPackageCommand(const Options& o) {
 #if defined(PX_HAVE_PLATFORM)
     log::setMinLevel(log::Level::Error); // stdout is the report; keep game logs out of it
-    auto package = project::readPackageFile(o.checkPackage);
+    auto bytes = readLocalFile(o.checkPackage);
+    if (!bytes) {
+        std::fprintf(stderr, "%s\n", bytes.error().message.c_str());
+        return 1;
+    }
+    std::FILE* out = nullptr;
+    if (!o.checkOutput.empty()) {
+        out = std::fopen(o.checkOutput.c_str(), "wb");
+        if (out == nullptr) {
+            std::fprintf(stderr, "cannot write %s\n", o.checkOutput.c_str());
+            return 1;
+        }
+    }
+    if (!enterCheckSandbox(o)) return 1;
+    auto package = project::decodePackage(bytes.value());
     if (!package) {
         std::fprintf(stderr, "%s\n", package.error().message.c_str());
+        if (out != nullptr) std::fclose(out);
         return 1;
     }
     online::PackageCheckOptions check;
@@ -300,13 +343,12 @@ int checkPackageCommand(const Options& o) {
     auto report = online::checkPackage(package.value(), check);
     if (!report) {
         std::fprintf(stderr, "%s\n", report.error().message.c_str());
+        if (out != nullptr) std::fclose(out);
         return 1;
     }
-    if (!o.checkOutput.empty()) {
-        if (auto written = project::writePackageFile(o.checkOutput, package.value()); !written) {
-            std::fprintf(stderr, "%s\n", written.error().message.c_str());
-            return 1;
-        }
+    if (out != nullptr && !writeAll(out, project::encodePackage(package.value()))) {
+        std::fprintf(stderr, "cannot write %s\n", o.checkOutput.c_str());
+        return 1;
     }
     const std::string json = online::reportToJson(report.value());
     std::printf("%s\n", json.c_str());

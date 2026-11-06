@@ -1,6 +1,9 @@
 #include "Process.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <chrono>
+#include <cstdio>
 #include <cstring>
 #include <format>
 #include <thread>
@@ -15,12 +18,42 @@
 #include <sys/resource.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#if defined(__APPLE__)
+#include <libproc.h>
+#include <mach/mach_time.h>
+#endif
 extern char** environ;
 #endif
 
 namespace px::platform {
 
 using Clock = std::chrono::steady_clock;
+
+namespace {
+// Variables a child with a clean environment keeps (ProcessOptions::cleanEnvironment).
+bool keptVariable(std::string_view name) {
+    static constexpr std::string_view kept[] = {
+        "PATH", "LANG", "LC_ALL", "LC_CTYPE", "TZ", "TMPDIR", "SSL_CERT_FILE", "SSL_CERT_DIR", "PX_PLATFORM_CA",
+        "ASAN_OPTIONS", "UBSAN_OPTIONS", "LSAN_OPTIONS",
+#if defined(_WIN32)
+        "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "TEMP", "TMP", "PATHEXT", "COMSPEC", "NUMBER_OF_PROCESSORS",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROGRAMDATA", "ALLUSERSPROFILE", "WINEPREFIX",
+#endif
+    };
+    for (const auto k : kept) {
+#if defined(_WIN32)
+        if (name.size() == k.size() &&
+            std::equal(name.begin(), name.end(), k.begin(), [](char a, char b) { return std::toupper(static_cast<unsigned char>(a)) == b; })) {
+            return true;
+        }
+#else
+        if (name == k) return true;
+#endif
+    }
+    return false;
+}
+} // namespace
+
 
 // AddressSanitizer reserves terabytes of address space, so an address-space
 // limit would stop sanitized children from starting at all.
@@ -76,11 +109,17 @@ void appendQuoted(std::wstring& cmd, const std::wstring& arg) {
     cmd += L'"';
 }
 
-std::wstring environmentBlock(const std::vector<std::pair<std::string, std::string>>& extra) {
+std::wstring environmentBlock(const std::vector<std::pair<std::string, std::string>>& extra, bool clean) {
     std::wstring block;
     if (wchar_t* env = GetEnvironmentStringsW()) {
         for (const wchar_t* p = env; *p != 0; p += wcslen(p) + 1) {
             std::wstring entry(p);
+            if (clean) {
+                const std::size_t eq = entry.find(L'=', 1);
+                std::string name;
+                for (std::size_t i = 0; i < eq && i < entry.size(); ++i) name += static_cast<char>(entry[i] < 128 ? entry[i] : '?');
+                if (!keptVariable(name)) continue;
+            }
             bool replaced = false;
             for (const auto& [k, v] : extra) {
                 const std::wstring key = widen(k) + L"=";
@@ -154,7 +193,7 @@ Result<std::unique_ptr<Process>> Process::start(const std::filesystem::path& pro
         cmd += L' ';
         appendQuoted(cmd, widen(a));
     }
-    std::wstring env = environmentBlock(options.env);
+    std::wstring env = environmentBlock(options.env, options.cleanEnvironment);
     PROCESS_INFORMATION pi{};
     const BOOL ok = CreateProcessW(program.wstring().c_str(), cmd.data(), nullptr, nullptr, TRUE,
                                    CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT |
@@ -173,12 +212,25 @@ Result<std::unique_ptr<Process>> Process::start(const std::filesystem::path& pro
     // limited in memory.
     HANDLE job = CreateJobObjectW(nullptr, nullptr);
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION;
     if (options.memoryLimitMiB > 0) {
         limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_PROCESS_MEMORY;
         limits.ProcessMemoryLimit = options.memoryLimitMiB * 1024 * 1024;
     }
+    if (options.singleProcess) {
+        limits.BasicLimitInformation.LimitFlags |= JOB_OBJECT_LIMIT_ACTIVE_PROCESS;
+        limits.BasicLimitInformation.ActiveProcessLimit = 1;
+    }
     SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    if (options.singleProcess) {
+        // No clipboard, desktop, global atoms, other processes' windows or system settings.
+        JOBOBJECT_BASIC_UI_RESTRICTIONS ui{};
+        ui.UIRestrictionsClass = JOB_OBJECT_UILIMIT_DESKTOP | JOB_OBJECT_UILIMIT_DISPLAYSETTINGS |
+                                 JOB_OBJECT_UILIMIT_EXITWINDOWS | JOB_OBJECT_UILIMIT_GLOBALATOMS |
+                                 JOB_OBJECT_UILIMIT_HANDLES | JOB_OBJECT_UILIMIT_READCLIPBOARD |
+                                 JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS | JOB_OBJECT_UILIMIT_WRITECLIPBOARD;
+        SetInformationJobObject(job, JobObjectBasicUIRestrictions, &ui, sizeof(ui));
+    }
     AssignProcessToJobObject(job, pi.hProcess);
     ResumeThread(pi.hThread);
     CloseHandle(pi.hThread);
@@ -215,6 +267,15 @@ Process::~Process() {
 }
 
 long long Process::pid() const { return static_cast<long long>(m_pid); }
+
+std::optional<double> Process::cpuSeconds() const {
+    FILETIME created{}, exited{}, kernel{}, user{};
+    if (m_process == nullptr || !GetProcessTimes(m_process, &created, &exited, &kernel, &user)) return std::nullopt;
+    const auto ticks = [](const FILETIME& t) {
+        return (static_cast<unsigned long long>(t.dwHighDateTime) << 32) | t.dwLowDateTime;
+    };
+    return static_cast<double>(ticks(kernel) + ticks(user)) * 1e-7; // 100 ns units
+}
 
 std::optional<int> Process::exitCode() {
     if (m_exit) return m_exit;
@@ -262,6 +323,7 @@ Result<std::unique_ptr<Process>> Process::start(const std::filesystem::path& pro
     std::vector<std::string> envStore;
     for (char** e = environ; *e != nullptr; ++e) {
         std::string_view entry(*e);
+        if (options.cleanEnvironment && !keptVariable(entry.substr(0, entry.find('=')))) continue;
         bool replaced = false;
         for (const auto& [k, v] : options.env) {
             if (entry.starts_with(k + "=")) replaced = true;
@@ -287,6 +349,8 @@ Result<std::unique_ptr<Process>> Process::start(const std::filesystem::path& pro
     const int closeUpTo = maxFd > 0 && maxFd < 65536 ? static_cast<int>(maxFd) : 65536;
     const rlim_t memory = kAddressLimitWorks ? static_cast<rlim_t>(options.memoryLimitMiB) * 1024 * 1024 : 0;
     const rlim_t cpu = static_cast<rlim_t>(options.cpuLimitSeconds);
+    const rlim_t openFiles = static_cast<rlim_t>(options.maxOpenFiles);
+    const rlim_t fileSize = static_cast<rlim_t>(options.maxFileSizeMiB) * 1024 * 1024;
 
     const pid_t pid = fork();
     if (pid < 0) {
@@ -305,6 +369,18 @@ Result<std::unique_ptr<Process>> Process::start(const std::filesystem::path& pro
         if (cpu > 0) {
             struct rlimit r{cpu, cpu + 1};
             setrlimit(RLIMIT_CPU, &r);
+        }
+        {
+            struct rlimit r{0, 0}; // no core files: they would hold the process's memory on disk
+            setrlimit(RLIMIT_CORE, &r);
+        }
+        if (openFiles > 0) {
+            struct rlimit r{openFiles, openFiles};
+            setrlimit(RLIMIT_NOFILE, &r);
+        }
+        if (fileSize > 0) {
+            struct rlimit r{fileSize, fileSize};
+            setrlimit(RLIMIT_FSIZE, &r);
         }
         dup2(devNull, 0);
         if (options.capture) {
@@ -344,6 +420,39 @@ Process::~Process() {
 }
 
 long long Process::pid() const { return m_pid; }
+
+std::optional<double> Process::cpuSeconds() const {
+    if (m_pid <= 0) return std::nullopt;
+#if defined(__linux__)
+    // /proc/<pid>/stat: fields 14 and 15 are user and system time in clock ticks.
+    const std::string path = std::format("/proc/{}/stat", m_pid);
+    const int fd = open(path.c_str(), O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return std::nullopt;
+    char buffer[1024];
+    const ssize_t n = read(fd, buffer, sizeof(buffer) - 1);
+    close(fd);
+    if (n <= 0) return std::nullopt;
+    buffer[n] = 0;
+    const char* p = std::strrchr(buffer, ')'); // the name may hold spaces
+    if (p == nullptr) return std::nullopt;
+    unsigned long long user = 0;
+    unsigned long long system = 0;
+    if (std::sscanf(p + 1, " %*c %*d %*d %*d %*d %*d %*u %*u %*u %*u %*u %llu %llu", &user, &system) != 2) {
+        return std::nullopt;
+    }
+    const long hz = sysconf(_SC_CLK_TCK);
+    return hz > 0 ? static_cast<double>(user + system) / static_cast<double>(hz) : std::optional<double>();
+#elif defined(__APPLE__)
+    rusage_info_v2 info{};
+    if (proc_pid_rusage(m_pid, RUSAGE_INFO_V2, reinterpret_cast<rusage_info_t*>(&info)) != 0) return std::nullopt;
+    mach_timebase_info_data_t base{};
+    mach_timebase_info(&base);
+    const double ns = static_cast<double>(info.ri_user_time + info.ri_system_time) * base.numer / base.denom;
+    return ns * 1e-9;
+#else
+    return std::nullopt;
+#endif
+}
 
 std::optional<int> Process::exitCode() {
     if (m_exit || m_pid <= 0) return m_exit;

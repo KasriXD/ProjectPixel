@@ -31,6 +31,10 @@ struct FleetConfig {
     std::uint16_t portCount = 100;
     std::size_t maxServers = 20;
     std::size_t memoryLimitMiB = 1024;
+    int cpuLimitPercent = 100;        // of one processor, over cpuGraceSeconds; 0: no limit
+    double cpuSampleSeconds = 5.0;
+    double cpuGraceSeconds = 30.0;
+    bool sandbox = true;              // px-server --sandbox
     std::string platformKeyHex;       // public key servers check tokens with
     std::string tlsCert;              // given to servers for wss:// (browsers on https pages)
     std::string tlsKey;
@@ -65,6 +69,29 @@ struct SessionInfo {
     std::size_t players = 0;
     std::size_t reserved = 0;
     long long pid = 0;
+    double cpuPercent = 0.0; // of one processor, over the last few seconds
+};
+
+// Decides when a game server has used too much processor time: more than
+// `limitPercent` of one processor in every sample (taken at least
+// `sampleSeconds` apart) for `graceSeconds`.
+class CpuWatch {
+public:
+    CpuWatch(int limitPercent, double sampleSeconds, double graceSeconds)
+        : m_limit(limitPercent), m_sampleSeconds(sampleSeconds), m_graceSeconds(graceSeconds) {}
+    // `now` and `cpuSeconds` only grow. True once the server should stop.
+    [[nodiscard]] bool sample(double now, double cpuSeconds);
+    [[nodiscard]] double percent() const { return m_percent; }
+
+private:
+    int m_limit;
+    double m_sampleSeconds;
+    double m_graceSeconds;
+    bool m_started = false;
+    double m_at = 0.0;
+    double m_cpu = 0.0;
+    double m_percent = 0.0;
+    double m_overSince = -1.0;
 };
 
 class Fleet {
@@ -129,6 +156,7 @@ private:
         std::map<std::string, Clock::time_point> lastSeen;
         Clock::time_point started;
         Clock::time_point lastHeartbeat;
+        std::optional<CpuWatch> cpu; // FleetConfig::cpuLimitPercent
     };
 
     [[nodiscard]] Result<Session*> startSession(const GameRef& game);

@@ -22,6 +22,13 @@ struct ProcessOptions {
     bool capture = false;              // collect stdout and stderr (runProcess)
     std::size_t memoryLimitMiB = 0;    // 0: none. POSIX: address space; Windows: job memory
     int cpuLimitSeconds = 0;           // 0: none (POSIX only)
+    // Untrusted content: the child gets only `env` and the few variables a
+    // program needs to run (PATH, locale, time zone, certificate locations;
+    // on Windows the system folders), never the service's other settings.
+    bool cleanEnvironment = false;
+    int maxOpenFiles = 0;              // 0: inherited (POSIX)
+    std::size_t maxFileSizeMiB = 0;    // largest file it may write, logs included (POSIX; 0: none)
+    bool singleProcess = false;        // it may not start other processes (Windows job; Linux: its sandbox)
 };
 
 class Process {
@@ -41,6 +48,8 @@ public:
     [[nodiscard]] std::string output() const { return m_out; }
     [[nodiscard]] std::string errors() const { return m_err; }
     [[nodiscard]] long long pid() const;
+    // Processor time used so far (user + system), in seconds; nullopt if unknown.
+    [[nodiscard]] std::optional<double> cpuSeconds() const;
 
 private:
     Process() = default;

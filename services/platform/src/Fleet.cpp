@@ -29,6 +29,26 @@ const Fleet::Session* Fleet::find(const std::string& id) const {
     return it == m_sessions.end() ? nullptr : it->second.get();
 }
 
+bool CpuWatch::sample(double now, double cpuSeconds) {
+    if (!m_started) {
+        m_started = true;
+        m_at = now;
+        m_cpu = cpuSeconds;
+        return false;
+    }
+    if (now - m_at < m_sampleSeconds) return false;
+    m_percent = (cpuSeconds - m_cpu) / (now - m_at) * 100.0;
+    m_at = now;
+    m_cpu = cpuSeconds;
+    const bool over = m_limit > 0 && m_percent > m_limit;
+    if (!over) {
+        m_overSince = -1.0;
+        return false;
+    }
+    if (m_overSince < 0.0) m_overSince = now - m_sampleSeconds; // the sample covered that time already
+    return now - m_overSince >= m_graceSeconds;
+}
+
 std::size_t Fleet::occupancy(const Session& s) const {
     std::set<std::string> seats(s.players.begin(), s.players.end());
     for (const auto& [user, until] : s.reserved) seats.insert(user);
@@ -89,6 +109,13 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
     if (!m_config.tlsCert.empty()) {
         options.args.insert(options.args.end(), {"--tls-cert", m_config.tlsCert, "--tls-key", m_config.tlsKey});
     }
+    if (m_config.sandbox) options.args.push_back("--sandbox");
+    // Untrusted games: nothing of the service's environment, one process,
+    // bounded memory, files and log size (docs/security.md#game-servers).
+    options.cleanEnvironment = true;
+    options.singleProcess = true;
+    options.maxOpenFiles = 1024;
+    options.maxFileSizeMiB = 256;
     // Secrets go in the environment, not on the command line where other users could read them.
     options.env = {{"PX_SERVER_KEY", key.value()}, {"PX_SERVER_IDENTITY", net::encodeIdentity(*identity)}};
     crypto::wipe(identity->secret);
@@ -360,6 +387,20 @@ void Fleet::maintain() {
             endSession(*s, "asked to stop");
             continue;
         }
+        // A server that keeps more than its share of a processor busy (a
+        // script stuck in a loop, or worse) is stopped.
+        if (s->process) {
+            if (const auto cpu = s->process->cpuSeconds()) {
+                if (!s->cpu) s->cpu.emplace(m_config.cpuLimitPercent, m_config.cpuSampleSeconds, m_config.cpuGraceSeconds);
+                const double t = std::chrono::duration<double>(now - s->started).count();
+                if (s->cpu->sample(t, *cpu)) {
+                    endSession(*s, std::format("used {:.0f}% of a processor for too long (limit {}%)",
+                                               s->cpu->percent(), m_config.cpuLimitPercent)
+                                       .c_str());
+                    continue;
+                }
+            }
+        }
         for (auto it = s->reserved.begin(); it != s->reserved.end();) {
             if (it->second >= now) {
                 ++it;
@@ -402,6 +443,7 @@ std::vector<SessionInfo> Fleet::sessions() const {
         info.players = s->players.size();
         info.reserved = s->reserved.size();
         info.pid = s->process ? s->process->pid() : 0;
+        info.cpuPercent = s->cpu ? s->cpu->percent() : 0.0;
         out.push_back(info);
     }
     return out;

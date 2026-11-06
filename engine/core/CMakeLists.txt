@@ -8,6 +8,7 @@ px_add_module(core
         src/Keys.cpp
         src/Log.cpp
         src/Result.cpp
+        src/Sandbox.cpp
         src/Time.cpp)
 
 target_include_directories(px_core PUBLIC "${CMAKE_CURRENT_BINARY_DIR}/generated")
