@@ -18,7 +18,7 @@
 namespace px::net {
 
 inline constexpr std::uint32_t kProtocolMagic = 0x31584E50; // "PNX1" in memory order
-inline constexpr std::uint16_t kProtocolVersion = 2; // 2: Hello carries a connect token
+inline constexpr std::uint16_t kProtocolVersion = 3; // 2: Hello carries a connect token; 3: encrypted (Secure.hpp)
 inline constexpr std::uint16_t kDefaultPort = 7777;
 
 // Clients only ever send small messages; anything larger is refused.
@@ -51,6 +51,7 @@ enum class DisconnectReason : std::uint8_t {
     Left = 8,            // the client said goodbye
     NotAuthorized = 9,   // no valid connect token (platform servers)
     DataUnavailable = 10, // the player's saved data could not be loaded
+    ServerUnverified = 11, // the server could not prove it is the one expected (Secure.hpp)
 };
 [[nodiscard]] const char* describeReason(DisconnectReason reason);
 // Text for a transport disconnect code (game reasons or kReasonRefused/kReasonLost).

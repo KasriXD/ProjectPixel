@@ -7,6 +7,7 @@
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
+#include "px/net/Secure.hpp"
 #include "px/net/Udp.hpp"
 #include "px/net/WebSocket.hpp"
 #include "px/render/SceneRenderer.hpp"
@@ -82,6 +83,8 @@ const char* playerUsage() {
            "                      or local:N start a game (with --frames, the game also runs N frames)\n"
            "  --package FILE      play a game package (*.pxpkg) instead of a project folder\n"
            "  --token TEXT        with --connect: the connect token of a platform ticket\n"
+           "  --server-key KEY    with --connect: the key the server must prove (a ticket's serverKey,\n"
+           "                      or what px-server logs); traffic is encrypted either way\n"
            "  --scale N           initial window scale (default: from the project)\n"
            "\n"
            "  In game: arrows/WASD move, Space/Z/W jump, R restart, F5 reload scripts and\n"
@@ -191,13 +194,13 @@ std::optional<PlayerOptions> parsePlayerArgs(int argc, char** argv, std::string&
             o.open = v;
         } else if (arg == "--touch") {
             o.touch = true;
-        } else if (arg == "--package" || arg == "--token") {
+        } else if (arg == "--package" || arg == "--token" || arg == "--server-key") {
             const char* v = value();
             if (v == nullptr) {
                 error = std::format("{} needs a value", arg);
                 return std::nullopt;
             }
-            (arg == "--package" ? o.packagePath : o.token) = v;
+            (arg == "--package" ? o.packagePath : arg == "--token" ? o.token : o.serverKey) = v;
         } else if (arg == "--help" || arg == "-h") {
             error.clear();
             return std::nullopt;
@@ -477,6 +480,7 @@ px::Status PlayerApp::preparePlatformGame() {
     if (!package) return package.error();
     m_files = package->toFileSystem();
     m_ticketToken = ticket->token;
+    m_ticketServerKey = ticket->serverKey;
     m_ticketAddress = std::format("{}:{}", ticket->host, ticket->port);
     return {};
 #else
@@ -525,6 +529,12 @@ px::Status PlayerApp::startNetwork() {
                                : m_options.playerName.empty() ? defaultPlayerName()
                                                               : m_options.playerName;
     clientOptions.token = !m_ticketToken.empty() ? m_ticketToken : m_options.token;
+    const std::string& serverKey = !m_ticketServerKey.empty() ? m_ticketServerKey : m_options.serverKey;
+    if (!serverKey.empty()) {
+        auto key = net::decodeServerKey(serverKey);
+        if (!key) return makeError(ErrorCode::InvalidArgument, "--server-key: {}", key.error().message);
+        clientOptions.serverKey = *key;
+    }
     auto client = net::GameClient::create(m_game, std::move(endpoint.value()), clientOptions);
     if (!client) return client.error();
     m_net = std::move(client.value());

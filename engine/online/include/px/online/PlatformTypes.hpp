@@ -102,6 +102,7 @@ struct JoinTicket {
     int version = 0;
     std::string packageHash; // the game version the server runs
     std::string webSocket;   // "wss://host:port/play" (or ws://): the same server, for browsers
+    std::string serverKey;   // the identity the server must prove (net::decodeServerKey; empty: not checked)
 };
 
 struct ReportInfo {

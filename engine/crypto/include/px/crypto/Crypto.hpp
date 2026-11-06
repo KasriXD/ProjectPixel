@@ -4,6 +4,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -64,6 +65,40 @@ struct SigningKey {
 };
 [[nodiscard]] Signature sign(const SigningKey& key, std::span<const std::uint8_t> message);
 [[nodiscard]] bool verify(const PublicKey& key, std::span<const std::uint8_t> message, const Signature& signature);
+
+// --- Keyed hashing -------------------------------------------------------------------------
+
+// BLAKE2b-256 keyed with `key` (1-64 bytes): a MAC, and the key derivation
+// of the game traffic's encryption.
+[[nodiscard]] Hash256 keyedHash256(std::span<const std::uint8_t> key, std::span<const std::uint8_t> data);
+
+// --- Key exchange (X25519) ----------------------------------------------------------------
+
+struct KeyExchangeKey {
+    std::array<std::uint8_t, 32> secret{}; // keep private
+    PublicKey publicKey{};
+    [[nodiscard]] static Result<KeyExchangeKey> generate();
+    [[nodiscard]] static KeyExchangeKey fromSecret(std::span<const std::uint8_t, 32> secret);
+};
+
+// The raw shared secret of `mine` and `theirs` (hash it before use), or
+// nullopt when `theirs` is a weak key that gives an all-zero result.
+[[nodiscard]] std::optional<std::array<std::uint8_t, 32>> keyExchange(const KeyExchangeKey& mine, const PublicKey& theirs);
+
+// --- Authenticated encryption (XChaCha20-Poly1305) ----------------------------------------
+
+using SecretKey = std::array<std::uint8_t, 32>;
+using Nonce = std::array<std::uint8_t, 24>;
+using Mac = std::array<std::uint8_t, 16>;
+
+// Encrypts `plain` into `cipher` (the same size; they may be the same
+// memory) and authenticates it together with `extra` (not encrypted). A
+// nonce must never repeat with the same key.
+void seal(std::span<std::uint8_t> cipher, Mac& mac, const SecretKey& key, const Nonce& nonce,
+          std::span<const std::uint8_t> extra, std::span<const std::uint8_t> plain);
+// The reverse; false (and `plain` not written) if anything was changed.
+[[nodiscard]] bool open(std::span<std::uint8_t> plain, const Mac& mac, const SecretKey& key, const Nonce& nonce,
+                        std::span<const std::uint8_t> extra, std::span<const std::uint8_t> cipher);
 
 // Overwrites memory that held a secret (not optimized away).
 void wipe(std::span<std::uint8_t> secret);

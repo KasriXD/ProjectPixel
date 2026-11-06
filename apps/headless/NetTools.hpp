@@ -16,6 +16,7 @@ struct NetToolOptions {
     std::string connectAddress;
     std::string playerName;
     std::string token; // connect token (platform game servers)
+    std::string serverKey; // the identity the server must prove (empty: not checked)
     // --net-test
     int clients = 2;
     double latencyMs = 0.0;

@@ -44,6 +44,10 @@ struct ServerOptions {
     std::shared_ptr<runtime::ILeaderboardStore> leaderboards;
     double saveIntervalSeconds = 30.0;
     double loadTimeoutSeconds = 15.0;
+    // The server's long-lived key for encrypted traffic (Secure.hpp): the
+    // platform gives its servers one and tells players to expect it. Without
+    // one, traffic is still encrypted but players cannot check the server.
+    std::optional<crypto::KeyExchangeKey> identity;
 };
 
 struct ServerClientInfo {

@@ -3,6 +3,7 @@
 #include "px/core/Log.hpp"
 #include "px/crypto/Crypto.hpp"
 #include "px/crypto/Encoding.hpp"
+#include "px/net/Secure.hpp"
 
 #include <format>
 
@@ -61,6 +62,11 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
     auto key = crypto::randomToken(32);
     if (!key) return key.error();
     session->keyHash = keyHash(key.value());
+    // Its identity for encrypted game traffic: players' tickets say which key
+    // to expect, so nobody can stand in for the server (docs/multiplayer.md#encryption).
+    auto identity = crypto::KeyExchangeKey::generate();
+    if (!identity) return identity.error();
+    session->identity = net::encodeServerKey(identity->publicKey);
     session->game = game;
     session->port = port;
     session->started = Clock::now();
@@ -83,7 +89,9 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
     if (!m_config.tlsCert.empty()) {
         options.args.insert(options.args.end(), {"--tls-cert", m_config.tlsCert, "--tls-key", m_config.tlsKey});
     }
-    options.env = {{"PX_SERVER_KEY", key.value()}}; // not on the command line, where other users could read it
+    // Secrets go in the environment, not on the command line where other users could read them.
+    options.env = {{"PX_SERVER_KEY", key.value()}, {"PX_SERVER_IDENTITY", net::encodeIdentity(*identity)}};
+    crypto::wipe(identity->secret);
     options.outputFile = m_config.logDir / std::format("server-{}.log", session->id);
     options.memoryLimitMiB = m_config.memoryLimitMiB;
     auto process = Process::start(m_config.serverExe, options);
@@ -185,7 +193,7 @@ Result<Seat> Fleet::seatWhenReady(std::unique_lock<std::mutex>& lock, const std:
         if (s->state == Session::State::Ready) {
             const std::string ws = std::format("{}://{}:{}/play", m_config.tlsCert.empty() ? "ws" : "wss",
                                                m_config.publicHost, s->port);
-            return Seat{s->id, m_config.publicHost, s->port, ws};
+            return Seat{s->id, m_config.publicHost, s->port, ws, s->identity};
         }
         if (s->process->exitCode()) {
             endSession(*s, "exited while starting");

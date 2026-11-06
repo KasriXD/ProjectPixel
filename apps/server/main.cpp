@@ -6,6 +6,12 @@
 //             [--snapshot-rate HZ] [--restart-delay SECONDS] [--ticks N] [--verbose]
 //             [--platform URL --session ID --platform-key HEX] [--empty-timeout SECONDS]
 //             [--websocket-port N | --no-websocket] [--tls-cert FILE --tls-key FILE]
+//             [--identity-file FILE]
+//
+// Game traffic is always encrypted (docs/multiplayer.md#encryption). The
+// server's identity key comes from the platform (PX_SERVER_IDENTITY), from
+// --identity-file (created if missing), or is made up for this run; its
+// public half is logged so players can check it with --server-key.
 //
 // Players join over UDP (desktop) or WebSockets (browsers) on the same port
 // number (TCP for WebSockets), into the same game.
@@ -22,6 +28,7 @@
 #include "px/core/Version.hpp"
 #include "px/crypto/Encoding.hpp"
 #include "px/net/GameServer.hpp"
+#include "px/net/Secure.hpp"
 #include "px/net/Udp.hpp"
 #include "px/net/WebSocket.hpp"
 #include "px/project/Package.hpp"
@@ -38,9 +45,12 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -76,7 +86,66 @@ struct Options {
     int webSocketPort = -1;     // -1: the same number as the UDP port; 0: none
     std::string tlsCert;        // wss:// for browsers on https:// pages
     std::string tlsKey;
+    std::string identityFile;   // the server's identity key for encrypted traffic (kept across restarts)
 };
+
+std::filesystem::path fromUtf8(const std::string& path) {
+    return std::filesystem::path(std::u8string(path.begin(), path.end()));
+}
+
+Result<std::string> readTextFile(const std::string& path) {
+    std::ifstream in(fromUtf8(path), std::ios::binary);
+    if (!in) return makeError(ErrorCode::IoError, "Cannot read {}", path);
+    std::ostringstream text;
+    text << in.rdbuf();
+    return text.str();
+}
+
+// A file only its owner can read: made empty and restricted before the secret goes in.
+Status writeSecretFile(const std::string& path, const std::string& content) {
+    const auto file = fromUtf8(path);
+    {
+        std::ofstream create(file, std::ios::binary | std::ios::trunc);
+        if (!create) return makeError(ErrorCode::IoError, "Cannot write {}", path);
+    }
+    std::error_code ec;
+    std::filesystem::permissions(file, std::filesystem::perms::owner_read | std::filesystem::perms::owner_write,
+                                 std::filesystem::perm_options::replace, ec);
+    std::ofstream out(file, std::ios::binary | std::ios::trunc);
+    out << content;
+    if (!out) return makeError(ErrorCode::IoError, "Cannot write {}", path);
+    return {};
+}
+
+// The server's identity for encrypted game traffic: from the platform, a
+// key file, or new for this run.
+Result<crypto::KeyExchangeKey> loadIdentity(const Options& o) {
+    if (const char* given = std::getenv("PX_SERVER_IDENTITY"); given != nullptr && *given != 0) {
+        auto key = net::decodeIdentity(given);
+#if defined(_WIN32)
+        _putenv_s("PX_SERVER_IDENTITY", "");
+#else
+        unsetenv("PX_SERVER_IDENTITY");
+#endif
+        return key;
+    }
+    if (o.identityFile.empty()) return crypto::KeyExchangeKey::generate();
+    std::error_code ec;
+    if (std::filesystem::exists(o.identityFile, ec)) {
+        auto text = readTextFile(o.identityFile);
+        if (!text) return text.error();
+        std::string trimmed = *text;
+        while (!trimmed.empty() && (trimmed.back() == '\n' || trimmed.back() == '\r' || trimmed.back() == ' ')) trimmed.pop_back();
+        auto key = net::decodeIdentity(trimmed);
+        if (!key) return makeError(ErrorCode::InvalidArgument, "{}: {}", o.identityFile, key.error().message);
+        return key;
+    }
+    auto key = crypto::KeyExchangeKey::generate();
+    if (!key) return key.error();
+    if (auto written = writeSecretFile(o.identityFile, net::encodeIdentity(*key) + "\n"); !written) return written.error();
+    log::info("Made a new server identity in {}", o.identityFile);
+    return key;
+}
 
 void printUsage() {
     std::fprintf(stderr,
@@ -97,6 +166,8 @@ void printUsage() {
                  "  --websocket-port N   TCP port for browsers (WebSockets; default: the UDP port number)\n"
                  "  --no-websocket       UDP only\n"
                  "  --tls-cert FILE      with --tls-key: secure WebSockets (wss://), for https:// pages\n"
+                 "  --identity-file FILE the server's key for encrypted traffic, kept in FILE (made if\n"
+                 "                       missing), so players can check it with --server-key\n"
                  "\n"
                  "Players join with: px-player --connect <address>[:port] [project-dir]\n"
                  "Stop the server with Ctrl+C.\n",
@@ -150,6 +221,10 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
             (arg == "--tls-cert" ? o.tlsCert : o.tlsKey) = v;
+        } else if (arg == "--identity-file") {
+            const char* v = value();
+            if (v == nullptr) return std::nullopt;
+            o.identityFile = v;
         } else if (arg == "--empty-timeout") {
             const char* v = value();
             if (v == nullptr) return std::nullopt;
@@ -236,6 +311,14 @@ int main(int argc, char** argv) {
     const int tickRate = std::max(1, game->manifest.settings.tickRate);
     serverOptions.snapshotInterval = std::max(1, tickRate / std::min(options->snapshotRate, tickRate));
     serverOptions.restartDelaySeconds = options->restartDelay;
+    auto identity = loadIdentity(*options);
+    if (!identity) {
+        log::error("{}", identity.error().message);
+        return 1;
+    }
+    serverOptions.identity = *identity;
+    const std::string identityText = net::encodeServerKey(identity->publicKey);
+    crypto::wipe(identity->secret);
 
     // Platform mode: tokens, saved data, heartbeats.
     const bool managed = !options->platformUrl.empty();
@@ -275,9 +358,11 @@ int main(int argc, char** argv) {
     log::info("{} server {}: '{}' on UDP port {}, up to {} players, {} ticks/s, {} snapshots/s",
               version::productName, version::string, game->manifest.name, options->port, options->maxPlayers,
               tickRate, tickRate / serverOptions.snapshotInterval);
+    log::info("Game traffic is encrypted; the server's key is {}", identityText);
     if (!managed) {
-        log::info("Players join with: px-player --connect <this computer's address>:{} <project>. Ctrl+C stops.",
-                  options->port);
+        log::info("Players join with: px-player --connect <this computer's address>:{} <project>, and can check "
+                  "this server with --server-key {}. Ctrl+C stops.",
+                  options->port, identityText);
     }
 
 #if defined(PX_HAVE_PLATFORM)

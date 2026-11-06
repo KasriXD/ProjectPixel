@@ -4,6 +4,7 @@
 
 #include "monocypher.h"
 
+#include <algorithm>
 #include <charconv>
 #include <cstring>
 #include <format>
@@ -101,6 +102,53 @@ bool constantTimeEqual(std::span<const std::uint8_t> a, std::span<const std::uin
 }
 
 void wipe(std::span<std::uint8_t> secret) { crypto_wipe(secret.data(), secret.size()); }
+
+Hash256 keyedHash256(std::span<const std::uint8_t> key, std::span<const std::uint8_t> data) {
+    Hash256 out{};
+    crypto_blake2b_keyed(out.data(), out.size(), key.data(), std::min<std::size_t>(key.size(), 64), data.data(),
+                         data.size());
+    return out;
+}
+
+// --- Key exchange -------------------------------------------------------------------------
+
+Result<KeyExchangeKey> KeyExchangeKey::generate() {
+    std::array<std::uint8_t, 32> secret{};
+    if (auto s = randomBytes(secret); !s) return s.error();
+    KeyExchangeKey key = fromSecret(secret);
+    crypto_wipe(secret.data(), secret.size());
+    return key;
+}
+
+KeyExchangeKey KeyExchangeKey::fromSecret(std::span<const std::uint8_t, 32> secret) {
+    KeyExchangeKey key;
+    std::copy(secret.begin(), secret.end(), key.secret.begin());
+    crypto_x25519_public_key(key.publicKey.data(), key.secret.data());
+    return key;
+}
+
+std::optional<std::array<std::uint8_t, 32>> keyExchange(const KeyExchangeKey& mine, const PublicKey& theirs) {
+    std::array<std::uint8_t, 32> shared{};
+    crypto_x25519(shared.data(), mine.secret.data(), theirs.data());
+    const std::array<std::uint8_t, 32> zero{};
+    if (crypto_verify32(shared.data(), zero.data()) == 0) return std::nullopt; // a low-order point
+    return shared;
+}
+
+// --- Authenticated encryption ---------------------------------------------------------------
+
+void seal(std::span<std::uint8_t> cipher, Mac& mac, const SecretKey& key, const Nonce& nonce,
+          std::span<const std::uint8_t> extra, std::span<const std::uint8_t> plain) {
+    crypto_aead_lock(cipher.data(), mac.data(), key.data(), nonce.data(), extra.data(), extra.size(), plain.data(),
+                     std::min(plain.size(), cipher.size()));
+}
+
+bool open(std::span<std::uint8_t> plain, const Mac& mac, const SecretKey& key, const Nonce& nonce,
+          std::span<const std::uint8_t> extra, std::span<const std::uint8_t> cipher) {
+    if (plain.size() < cipher.size()) return false;
+    return crypto_aead_unlock(plain.data(), mac.data(), key.data(), nonce.data(), extra.data(), extra.size(),
+                              cipher.data(), cipher.size()) == 0;
+}
 
 // --- Passwords ----------------------------------------------------------------------------
 

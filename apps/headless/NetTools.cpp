@@ -4,6 +4,7 @@
 #include "px/net/GameClient.hpp"
 #include "px/net/GameServer.hpp"
 #include "px/net/Loopback.hpp"
+#include "px/net/Secure.hpp"
 #include "px/net/Udp.hpp"
 #include "px/net/WebSocket.hpp"
 
@@ -41,6 +42,14 @@ int runBot(const runtime::LoadedGame& game, const NetToolOptions& options) {
     net::ClientOptions clientOptions;
     clientOptions.playerName = options.playerName.empty() ? std::string("Bot") : options.playerName;
     clientOptions.token = options.token;
+    if (!options.serverKey.empty()) {
+        auto key = net::decodeServerKey(options.serverKey);
+        if (!key) {
+            log::error("--server-key: {}", key.error().message);
+            return 2;
+        }
+        clientOptions.serverKey = *key;
+    }
     auto created = net::GameClient::create(game, std::move(endpoint.value()), clientOptions);
     if (!created) {
         log::error("{}", created.error().message);
@@ -161,7 +170,9 @@ int runNetTest(const runtime::LoadedGame& game, const NetToolOptions& options) {
             runtime::InputFrame frame;
             if (c.status() == net::GameClient::Status::Playing) {
                 joined[i] = true;
-                if (i == 0 && script) frame = script->next();
+                // The script is made for the first player's start (who that is
+                // depends on which handshake finishes first).
+                if (c.player() == 1 && script) frame = script->next();
             }
             c.tick(frame);
             c.updateView(time);

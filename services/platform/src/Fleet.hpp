@@ -44,6 +44,7 @@ struct Seat {
     std::string host;
     std::uint16_t port = 0;   // UDP, and TCP for WebSockets
     std::string webSocket;    // ws:// or wss:// URL of the same server
+    std::string serverKey;    // the server's identity for encrypted traffic (net::encodeServerKey)
 };
 
 // Where a player is: the session holding them, while they play there or
@@ -117,6 +118,7 @@ private:
     struct Session {
         std::string id;
         std::string keyHash; // hex BLAKE2b of the server key
+        std::string identity; // public half of the server's key for encrypted game traffic (base64url)
         GameRef game;
         std::uint16_t port = 0;
         enum class State { Starting, Ready, Ended } state = State::Starting;

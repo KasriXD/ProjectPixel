@@ -1,4 +1,5 @@
 #include "px/net/GameClient.hpp"
+#include "px/net/Secure.hpp"
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
@@ -56,6 +57,8 @@ Result<std::unique_ptr<GameClient>> GameClient::create(const runtime::LoadedGame
                                                        std::unique_ptr<INetEndpoint> endpoint,
                                                        const ClientOptions& options) {
     if (!endpoint) return makeError(ErrorCode::InvalidArgument, "The client needs a network endpoint");
+    // Every game message is encrypted (Secure.hpp).
+    endpoint = secureClient(std::move(endpoint), {options.serverKey, kMaxServerMessageBytes});
     std::unique_ptr<GameClient> client(new GameClient(game, std::move(endpoint), options));
     client->m_ids.assignInitial(client->m_view);
     client->m_initial = captureWorld(client->m_view, client->m_ids, 0);

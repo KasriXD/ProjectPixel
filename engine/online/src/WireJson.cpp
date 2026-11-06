@@ -100,6 +100,7 @@ void to_json(nlohmann::json& j, const JoinTicket& v) {
     j = {{"token", v.token},     {"host", v.host},       {"port", v.port},
          {"session", v.session}, {"expires", v.expires}, {"version", v.version},
          {"packageHash", v.packageHash}, {"webSocket", v.webSocket}};
+    if (!v.serverKey.empty()) j["serverKey"] = v.serverKey;
 }
 void from_json(const nlohmann::json& j, JoinTicket& v) {
     v.token = j.at("token").get<std::string>();
@@ -110,6 +111,7 @@ void from_json(const nlohmann::json& j, JoinTicket& v) {
     v.version = j.at("version").get<int>();
     v.packageHash = j.at("packageHash").get<std::string>();
     v.webSocket = j.value("webSocket", std::string());
+    v.serverKey = j.value("serverKey", std::string());
 }
 
 void to_json(nlohmann::json& j, const ReportInfo& v) {

@@ -12,6 +12,7 @@ add_executable(px_tests
     test_editor.cpp
     test_multiplayer.cpp
     test_net.cpp
+    test_secure.cpp
     test_netgame.cpp
     test_prefabs.cpp
     test_animation.cpp

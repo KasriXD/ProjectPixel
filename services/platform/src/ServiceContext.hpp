@@ -359,6 +359,7 @@ struct PlatformService::Context {
         ticket.version = version;
         ticket.packageHash = packageHash;
         ticket.webSocket = seat.webSocket;
+        ticket.serverKey = seat.serverKey;
         std::lock_guard lock(s.m_dbMutex);
         auto st = db().prepare("UPDATE games SET plays = plays + 1 WHERE id = ?1");
         st.bind(1, gameId);

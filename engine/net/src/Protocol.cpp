@@ -43,6 +43,8 @@ const char* describeReason(DisconnectReason reason) {
         case DisconnectReason::Left: return "left the game";
         case DisconnectReason::NotAuthorized: return "the server did not accept the join ticket";
         case DisconnectReason::DataUnavailable: return "your saved data could not be loaded";
+        case DisconnectReason::ServerUnverified:
+            return "the server could not prove it is the one you were sent to (someone may be in between)";
     }
     return "disconnected";
 }
@@ -50,7 +52,7 @@ const char* describeReason(DisconnectReason reason) {
 std::string describeDisconnect(std::uint32_t code) {
     if (code == kReasonRefused) return "could not connect (no server there, or it is full)";
     if (code == kReasonLost) return "the connection was lost";
-    if (code <= static_cast<std::uint32_t>(DisconnectReason::DataUnavailable)) {
+    if (code <= static_cast<std::uint32_t>(DisconnectReason::ServerUnverified)) {
         return describeReason(static_cast<DisconnectReason>(code));
     }
     return std::format("disconnected (code {})", code);

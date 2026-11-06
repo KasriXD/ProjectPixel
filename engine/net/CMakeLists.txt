@@ -11,6 +11,7 @@ px_add_module(net
         src/Loopback.cpp
         src/Protocol.cpp
         src/Replication.cpp
+        src/Secure.cpp
         src/Udp.cpp
     DEPS
         px::core

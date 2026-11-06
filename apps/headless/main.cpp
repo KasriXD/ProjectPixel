@@ -69,6 +69,7 @@ struct Options {
     int traceEvery = 0; // print the player state every N ticks (0 = off)
     // Multiplayer tools (NetTools.hpp).
     std::string connectAddress;
+    std::string serverKey; // --server-key: the identity the server must prove
     std::string playerName;
     bool netTest = false;
     int clients = 2;
@@ -100,7 +101,7 @@ void printUsage() {
                  "       px-headless <project-dir> --resave   (rewrite project.json, scenes, prefabs,\n"
                  "                                             animations, tilesets and visual scripts\n"
                  "                                             as Studio saves them)\n"
-                 "       px-headless <project-dir> --connect ADDRESS[:PORT] [--name NAME]\n"
+                 "       px-headless <project-dir> --connect ADDRESS[:PORT] [--name NAME] [--server-key KEY]\n"
                  "                   [--input-script FILE] [--ticks N] [--expect-joined] [--expect-players N]\n"
                  "                                            (join a px-server as a scripted bot)\n"
                  "       px-headless <project-dir> --net-test [--clients N] [--latency MS] [--jitter MS]\n"
@@ -170,6 +171,10 @@ std::optional<Options> parseArgs(int argc, char** argv) {
             const char* v = needValue();
             if (v == nullptr) return std::nullopt;
             o.connectAddress = v;
+        } else if (arg == "--server-key") {
+            const char* v = needValue();
+            if (v == nullptr) return std::nullopt;
+            o.serverKey = v;
         } else if (arg == "--name") {
             const char* v = needValue();
             if (v == nullptr) return std::nullopt;
@@ -416,6 +421,7 @@ int playCommand(const Options& o, headless::NetToolOptions net) {
     }
     net.connectAddress = std::format("{}:{}", ticket->host, ticket->port);
     net.token = ticket->token;
+    net.serverKey = ticket->serverKey;
     log::info("Joining game {} version {} at {}", o.game, ticket->version, net.connectAddress);
     return headless::runBot(game.value(), net);
 }
@@ -612,6 +618,7 @@ int main(int argc, char** argv) {
     if (!options->connectAddress.empty() || options->netTest) {
         headless::NetToolOptions net;
         net.connectAddress = options->connectAddress;
+        net.serverKey = options->serverKey;
         net.playerName = options->playerName;
         net.clients = options->clients;
         net.latencyMs = options->latencyMs;

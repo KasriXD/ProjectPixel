@@ -636,6 +636,7 @@
       noUrlArguments: true,
       pxPackage: pkg,
       arguments: ['--package', '/game.pxpkg', '--connect', ticket.webSocket, '--token', ticket.token,
+        ...(ticket.serverKey ? ['--server-key', ticket.serverKey] : []),
         '--name', user.username, ...testArguments()],
       print: playerLine,
       printErr: playerLine,

@@ -1,4 +1,5 @@
 #include "px/net/GameServer.hpp"
+#include "px/net/Secure.hpp"
 
 #include "px/core/Log.hpp"
 #include "px/core/Version.hpp"
@@ -29,7 +30,13 @@ Result<std::unique_ptr<GameServer>> GameServer::create(const runtime::LoadedGame
                                                        std::unique_ptr<INetEndpoint> endpoint,
                                                        const ServerOptions& options) {
     if (!endpoint) return makeError(ErrorCode::InvalidArgument, "The server needs a network endpoint");
+    // Every game message is encrypted (Secure.hpp).
+    SecureServerOptions secure;
+    secure.identity = options.identity;
+    secure.maxMessageBytes = kMaxClientMessageBytes;
+    endpoint = secureServer(std::move(endpoint), std::move(secure));
     std::unique_ptr<GameServer> server(new GameServer(game, std::move(endpoint), options));
+    if (server->m_options.identity) crypto::wipe(server->m_options.identity->secret); // the secure layer keeps it
     server->m_options.maxPlayers = std::clamp<std::size_t>(options.maxPlayers, 1, runtime::kMaxPlayers);
     server->m_options.snapshotInterval = std::clamp(options.snapshotInterval, 1, 60);
     server->m_tickRate = std::max(1, game.manifest.settings.tickRate);

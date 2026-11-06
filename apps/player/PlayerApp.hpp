@@ -51,6 +51,7 @@ struct PlayerOptions {
     bool touch = false;                    // --touch: show touch controls; the mouse acts as a finger
     std::string packagePath;               // --package FILE: play a game package (the browser page uses it)
     std::string token;                     // --token TEXT: connect token for --connect (from a ticket)
+    std::string serverKey;                 // --server-key KEY: the identity the server must prove (from a ticket)
     // Started from the launcher: leaving the game returns to it. With a
     // platform login, the menu can invite friends (platformUrl + platformToken).
     bool fromLauncher = false;
@@ -147,7 +148,8 @@ private:
 
     PlayerOptions m_options;
     std::unique_ptr<IFileSystem> m_files; // the project folder, or a downloaded package
-    std::string m_ticketToken;            // platform: connect token for the game server
+    std::string m_ticketToken;
+    std::string m_ticketServerKey;            // platform: connect token for the game server
     std::string m_ticketAddress;          // platform: "host:port" of the game server
     std::string m_platformName;           // platform: the account name
     runtime::LoadedGame m_game; // manifest, start scene and compiled scripts

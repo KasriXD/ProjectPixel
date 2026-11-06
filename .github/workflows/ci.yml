@@ -105,6 +105,20 @@ jobs:
           if [ $status -ne 0 ]; then echo "::error title=Launcher check::${body}"; exit 1; fi
           echo "::notice title=Launcher check::${body}"
 
+      # Game traffic is encrypted: packets of a real game captured on the
+      # loopback interface carry neither the player's nor the game's name.
+      - name: Encrypted game traffic on the wire
+        if: matrix.name == 'Linux GCC'
+        shell: bash
+        run: |
+          set +e
+          sudo python3 tools/net/capture_check.py build/dev examples/platformer > capture-check.log 2>&1
+          status=$?
+          cat capture-check.log
+          body=$(tail -c 3000 capture-check.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          if [ $status -ne 0 ]; then echo "::error title=Encrypted traffic::${body}"; exit 1; fi
+          echo "::notice title=Encrypted traffic::${body}"
+
       - name: Upload launcher results
         if: always() && matrix.name == 'Linux GCC'
         uses: actions/upload-artifact@v4

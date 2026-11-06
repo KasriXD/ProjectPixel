@@ -1,6 +1,7 @@
 #pragma once
 
 #include "px/core/Result.hpp"
+#include "px/crypto/Crypto.hpp"
 #include "px/net/Protocol.hpp"
 #include "px/net/Replication.hpp"
 #include "px/net/Transport.hpp"
@@ -25,6 +26,9 @@ namespace px::net {
 struct ClientOptions {
     std::string playerName;
     std::string token; // connect token from the platform (online::JoinTicket), for platform servers
+    // The server must prove this key (online::JoinTicket::serverKey). Without
+    // it the traffic is encrypted but any server is accepted.
+    std::optional<crypto::PublicKey> serverKey;
     // How far in the past other entities are drawn. Negative: automatic
     // (two snapshot intervals plus two ticks, about 100 ms by default).
     double interpolationDelaySeconds = -1.0;

@@ -747,6 +747,7 @@ void Launcher::play(std::int64_t gameId, const std::string& title) {
         options.packagePath = toUtf8(file);
         options.connectAddress = net::udpSupported() ? std::format("{}:{}", ticket->host, ticket->port) : ticket->webSocket;
         options.token = ticket->token;
+        options.serverKey = ticket->serverKey;
         return [options](Launcher& l) {
             log::info("Launcher: playing {} on {}", options.gameTitle, options.connectAddress);
             l.m_launch = options;
@@ -770,6 +771,7 @@ void Launcher::joinFriend(const std::string& name, const std::string& title) {
         options.packagePath = toUtf8(file);
         options.connectAddress = net::udpSupported() ? std::format("{}:{}", ticket->host, ticket->port) : ticket->webSocket;
         options.token = ticket->token;
+        options.serverKey = ticket->serverKey;
         return [name, options](Launcher& l) {
             log::info("Launcher: joining {} in {}", name, options.gameTitle);
             l.m_launch = options;
