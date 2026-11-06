@@ -192,3 +192,19 @@ dialog h2 { margin-top: 0; }
   .hint { display: none; }
   nav { order: 3; flex-basis: 100%; }
 }
+
+/* Accounts (docs/accounts.md) */
+button.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; font-size: .92rem; }
+button.danger { background: transparent; color: var(--danger); border-color: var(--danger); }
+#delete-dialog button.danger[type=submit] { background: var(--danger); color: #1b0606; }
+.account { display: grid; gap: 1.2rem; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); align-items: start; }
+.account section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .8rem 1rem 1rem; display: grid; gap: .6rem; }
+.account h3 { margin: 0; font-size: 1rem; }
+.account p { margin: 0; }
+.account p.buttons:has(> [hidden]:only-child) { display: none; }
+#email-state.unconfirmed { color: var(--accent); }
+#email-state.confirmed { color: var(--good); }
+/* Without a browser player the page still has games, friends and accounts. */
+.only-app { display: none; }
+body.no-player .only-app { display: block; }
+body.no-player .needs-player { display: none !important; }

@@ -11,10 +11,12 @@ px_embed_files(OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/WebFiles.generated.cpp"
           "avatars.png=${_px_web}/avatars.png=image/png")
 
 add_library(px_platform_service STATIC
+    src/Accounts.cpp
     src/Certificates.cpp
     src/Database.cpp
     src/Fleet.cpp
     src/Leaderboards.cpp
+    src/Mail.cpp
     src/PlatformService.cpp
     src/Process.cpp
     src/Social.cpp

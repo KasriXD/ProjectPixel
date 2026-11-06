@@ -34,6 +34,29 @@
         <button type="button" id="register" class="secondary">Create account</button>
       </div>
     </form>
+    <p id="forgot-line" hidden><button type="button" id="forgot" class="link">Forgot your password?</button></p>
+  </section>
+
+  <section id="forgot-page" hidden>
+    <h1>Forgot your password?</h1>
+    <p class="lead">Give your name or your email address. If your account has a confirmed email address, a link to choose a new password is sent there.</p>
+    <form id="forgot-form">
+      <label>Name or email address <input id="forgot-name" autocomplete="username" required maxlength="254" spellcheck="false" autocapitalize="off"></label>
+      <div class="buttons">
+        <button type="submit">Send the link</button>
+        <button type="button" id="forgot-back" class="secondary">Back to logging in</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="reset-page" hidden>
+    <h1>Choose a new password</h1>
+    <p class="lead">You will be logged out everywhere, then you can log in with the new password.</p>
+    <form id="reset-form">
+      <label>New password <input id="reset-password" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+      <label>The same again <input id="reset-repeat" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+      <div class="buttons"><button type="submit">Save the new password</button></div>
+    </form>
   </section>
 
   <section id="catalog" hidden>
@@ -61,7 +84,8 @@
         <p class="meta" id="details-owner"></p>
         <p id="details-description"></p>
         <p class="meta" id="details-stats"></p>
-        <div class="buttons"><button type="button" id="details-play">Play</button></div>
+        <div class="buttons"><button type="button" id="details-play" class="needs-player">Play</button></div>
+        <p class="meta only-app">Play this game in the Project Pixel app: this platform has no browser player.</p>
         <ul id="details-friends" class="people"></ul>
       </div>
     </div>
@@ -141,12 +165,50 @@
     <h2>Blocked</h2>
     <ul id="blocked-list" class="people"></ul>
     <p id="no-blocked" class="meta" hidden>Nobody. Blocked players cannot add you, invite you or play in the same game as you.</p>
+
+    <h2>Account</h2>
+    <div class="account">
+      <section aria-labelledby="email-heading">
+        <h3 id="email-heading">Email address</h3>
+        <p id="email-state" class="meta"></p>
+        <p class="buttons"><button type="button" id="resend-email" class="secondary" hidden>Send the link again</button></p>
+        <form id="email-form">
+          <label>Email address <input id="email" type="email" autocomplete="email" maxlength="254" spellcheck="false" autocapitalize="off"></label>
+          <label>Your password <input id="email-password" type="password" autocomplete="current-password" required maxlength="200"></label>
+          <div class="buttons"><button type="submit">Save the address</button></div>
+        </form>
+        <p id="no-mail" class="meta" hidden>This platform does not send email, so addresses and password resets are not available here.</p>
+      </section>
+      <section aria-labelledby="password-heading">
+        <h3 id="password-heading">Password</h3>
+        <form id="password-form">
+          <label>Current password <input id="current-password" type="password" autocomplete="current-password" required maxlength="200"></label>
+          <label>New password <input id="new-password" type="password" autocomplete="new-password" required minlength="8" maxlength="200"></label>
+          <div class="buttons"><button type="submit">Change the password</button></div>
+        </form>
+        <p class="meta">You stay logged in here; everywhere else you are logged out.</p>
+      </section>
+      <section aria-labelledby="data-heading">
+        <h3 id="data-heading">Your data</h3>
+        <p class="meta">Everything this platform keeps about you, as a JSON file.</p>
+        <p class="buttons"><button type="button" id="export" class="secondary">Download your data</button></p>
+        <p class="meta">Deleting your account removes your games, friends, scores and saved progress for good.</p>
+        <p class="buttons"><button type="button" id="delete-account" class="danger">Delete your account…</button></p>
+      </section>
+    </div>
   </section>
 
-  <section id="unavailable" hidden>
-    <h1>No browser play here</h1>
-    <p class="lead">This platform has no browser player installed. Play its games with the Project Pixel player app.</p>
-  </section>
+  <dialog id="delete-dialog">
+    <form id="delete-form">
+      <h2>Delete your account?</h2>
+      <p class="meta">Your games, friends, scores and saved progress go for good. Nobody can undo this.</p>
+      <label>Your password <input id="delete-password" type="password" autocomplete="current-password" required maxlength="200"></label>
+      <div class="buttons">
+        <button type="submit" class="danger">Delete for good</button>
+        <button type="button" id="delete-cancel" class="secondary">Keep my account</button>
+      </div>
+    </form>
+  </dialog>
 
   <dialog id="report-dialog">
     <form method="dialog" id="report-form">

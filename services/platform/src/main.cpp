@@ -36,9 +36,14 @@ void usage() {
                  "                   [--https-port N --tls-cert FILE --tls-key FILE [--https-bind ADDRESS]]\n"
                  "                   [--web-player DIR]   (px-player.js/.wasm/.data: play in browsers at /play)\n"
                  "                   [--server-memory MIB] [--server-cpu PERCENT] [--no-sandbox]\n"
+                 "                   [--public-url URL] [--require-verified-email]\n"
+                 "                   [--smtp smtps://HOST:465|smtp://HOST:587 --mail-from ADDRESS [--smtp-user NAME]\n"
+                 "                    [--smtp-ca FILE]] | [--mail-dir DIR]   (email: address checks, password\n"
+                 "                    resets; the SMTP password comes from PX_SMTP_PASSWORD; docs/accounts.md)\n"
                  "                        (each game server: memory, share of a processor before it is stopped\n"
                  "                         (0: no limit), and whether it locks itself down; docs/security.md)\n"
                  "       px-platform --data DIR --make-admin NAME\n"
+                 "       px-platform --data DIR --reset-link NAME [--public-url URL]   (a password reset link, 1 hour)\n"
                  "       px-platform --data DIR --dev-certificate HOST[,HOST...]   (self-signed, for testing HTTPS)\n"
                  "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n"
                  "          --server-memory 1024 --server-cpu 100\n",
@@ -64,6 +69,7 @@ int main(int argc, char** argv) {
     platform::ServiceConfig config;
     config.dataDir = "platform-data";
     std::string makeAdmin;
+    std::string resetLink;
     std::string devCertificate;
     const std::filesystem::path self = std::filesystem::absolute(argv[0]);
     config.headlessExe = findTool(self, "px-headless", PX_HEADLESS_PATH);
@@ -113,6 +119,22 @@ int main(int argc, char** argv) {
                 config.serverCpuPercent = std::stoi(value());
             } else if (arg == "--no-sandbox") {
                 config.sandbox = false;
+            } else if (arg == "--public-url") {
+                config.publicUrl = value();
+            } else if (arg == "--smtp") {
+                config.mail.server = value();
+            } else if (arg == "--smtp-user") {
+                config.mail.user = value();
+            } else if (arg == "--smtp-ca") {
+                config.mail.caFile = value();
+            } else if (arg == "--mail-from") {
+                config.mail.from = value();
+            } else if (arg == "--mail-dir") {
+                config.mail.outbox = value();
+            } else if (arg == "--require-verified-email") {
+                config.requireVerifiedEmail = true;
+            } else if (arg == "--reset-link") {
+                resetLink = value();
             } else if (arg == "--make-admin") {
                 makeAdmin = value();
             } else if (arg == "--https-port") {
@@ -157,6 +179,11 @@ int main(int argc, char** argv) {
                   cert.string(), key.string(), cert.string(), key.string(), cert.string());
         return 0;
     }
+    if (const char* password = std::getenv("PX_SMTP_PASSWORD")) config.mail.password = password;
+    if (!config.mail.server.empty() && config.mail.from.empty()) {
+        log::error("--smtp needs --mail-from ADDRESS (the sender of the platform's email)");
+        return 2;
+    }
     if (config.httpsPort != 0 && (config.tlsCert.empty() || config.tlsKey.empty())) {
         log::error("--https-port needs --tls-cert and --tls-key");
         return 2;
@@ -165,6 +192,16 @@ int main(int argc, char** argv) {
     if (!service) {
         log::error("{}", service.error().message);
         return 1;
+    }
+    if (!resetLink.empty()) {
+        auto link = (*service)->passwordResetLink(resetLink);
+        if (!link) {
+            log::error("{}", link.error().message);
+            return 1;
+        }
+        std::printf("%s\n", link->c_str());
+        log::info("Give this link to '{}' (it works once, for an hour)", resetLink);
+        return 0;
     }
     if (!makeAdmin.empty()) {
         if (auto s = (*service)->setRole(makeAdmin, online::Role::Admin); !s) {

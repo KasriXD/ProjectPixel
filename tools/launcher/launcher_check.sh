@@ -28,7 +28,8 @@ url="http://127.0.0.1:$port"
 export SDL_VIDEO_DRIVER=dummy SDL_RENDER_DRIVER=software SDL_FRAMEBUFFER_ACCELERATION=0
 export PX_PLATFORM_DIR="$out/player-data" # the launcher's login and downloads
 
-"$platform" --data "$data" --port "$port" --no-rate-limits --server-ports 28400:20 > "$out/platform.log" 2>&1 &
+"$platform" --data "$data" --port "$port" --no-rate-limits --server-ports 28400:20 --mail-dir "$data/outbox" \
+  > "$out/platform.log" 2>&1 &
 platform_pid=$!
 bot_pid=
 cleanup() {
@@ -106,6 +107,7 @@ launch games --frames 30
 launch game --open "game:$game" --frames 30
 launch friends --open friends --frames 30
 launch you --open you --frames 30
+launch account --open account --frames 30
 grep -q "Saved screenshot" "$out/launcher-games.log" || fail "no screenshot"
 
 # Playing from the launcher: the game, then back to the launcher.

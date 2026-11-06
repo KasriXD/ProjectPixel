@@ -286,7 +286,7 @@ struct Social {
         pattern += '%';
         std::lock_guard lock(c.dbMutex());
         auto st = c.db().prepare(
-            "SELECT username, avatar FROM users WHERE username LIKE ?1 ESCAPE '\\' AND banned = 0 ORDER BY username "
+            "SELECT username, avatar FROM users WHERE username LIKE ?1 ESCAPE '\\' AND banned = 0 AND deleted = 0 ORDER BY username "
             "COLLATE NOCASE LIMIT 20");
         st.bind(1, pattern);
         json people = json::array();

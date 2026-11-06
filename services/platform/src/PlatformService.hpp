@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Mail.hpp"
+
 #include "Fleet.hpp"
 #include "RateLimiter.hpp"
 #include "px/core/Result.hpp"
@@ -57,6 +59,11 @@ struct ServiceConfig {
     // build, served at /play/player/. Empty: no browser play.
     std::filesystem::path webPlayerDir;
     std::size_t threads = 32; // joins wait for new game servers, which call back on other threads
+    // Accounts (docs/accounts.md): email for address checks and password
+    // resets, and where the links in it point.
+    MailConfig mail;
+    std::string publicUrl;             // what people open; default: the HTTPS address, else the HTTP one
+    bool requireVerifiedEmail = false; // publishing needs a confirmed email address
 };
 
 class PlatformService {
@@ -79,6 +86,11 @@ public:
     [[nodiscard]] Status setRole(std::string_view username, online::Role role);
     [[nodiscard]] const crypto::PublicKey& publicKey() const { return m_key.publicKey; }
     [[nodiscard]] Fleet& fleet() { return *m_fleet; }
+    [[nodiscard]] Mailer& mailer() { return *m_mailer; }
+    // A password reset link for an account (operators: px-platform --reset-link NAME), valid for an hour.
+    [[nodiscard]] Result<std::string> passwordResetLink(std::string_view username);
+    // The address people open: links in emails point there.
+    [[nodiscard]] std::string publicUrl() const;
 
     // Internal: shared by the service's handler groups (ServiceContext.hpp).
     struct Context;
@@ -90,6 +102,7 @@ private:
     void migrate();
     void migrateTo1();
     void migrateTo2();
+    void migrateTo3();
 
     struct Impl;
     ServiceConfig m_config;
@@ -97,6 +110,7 @@ private:
     std::mutex m_dbMutex;
     crypto::SigningKey m_key;
     std::unique_ptr<Fleet> m_fleet;
+    std::unique_ptr<Mailer> m_mailer;
     std::unique_ptr<httplib::Server> m_http;
     std::unique_ptr<httplib::Server> m_https; // an httplib::SSLServer
     std::thread m_httpsListener;

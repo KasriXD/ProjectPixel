@@ -78,6 +78,12 @@ private:
     void refreshProfile();
     void saveProfile();
     void searchPeople();
+    void refreshAccount();
+    void saveEmail();
+    void changePassword();
+    void requestPasswordReset();
+    void deleteAccount();
+    void endLogin(); // logged out here: the saved login goes too
     void requestFriend(const std::string& name);
     void play(std::int64_t gameId, const std::string& title);
     void joinFriend(const std::string& name, const std::string& title);
@@ -99,6 +105,8 @@ private:
     void drawPersonMenu(const std::string& name, bool isFriend);
     void drawYou();
     void drawReportPopup();
+    void drawAccount();
+    void drawDeletePopup();
     void drawMessages();
     void avatar(int index, float size);
     [[nodiscard]] bool gameCard(const online::GameInfo& game, float width);
@@ -166,6 +174,19 @@ private:
     std::vector<online::PersonInfo> m_blocked;
     std::string m_reportName; // the report popup is open for this account
     std::string m_reportReason;
+
+    // Your account (docs/accounts.md)
+    std::optional<online::AccountSettings> m_account;
+    std::string m_email;
+    std::string m_emailPassword;   // confirms a new address
+    std::string m_currentPassword; // changing the password
+    std::string m_newPassword;
+    bool m_forgot = false;         // the login page shows "forgot your password?"
+    std::string m_forgotName;
+    bool m_deleting = false;       // the delete popup is open
+    int m_scrollToAccount = 0;      // --open account: frames left to scroll there
+    float m_accountTop = -1.0f;     // where the account settings start (screen y), this frame
+    std::string m_deletePassword;
 
     std::vector<DeviceGame> m_local;
 

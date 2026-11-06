@@ -61,6 +61,25 @@ public:
     // A player's saved data in one of your games (owners and admins), as JSON.
     [[nodiscard]] Result<std::string> playerData(std::int64_t gameId, const std::string& username);
 
+    // --- Your account (docs/accounts.md) ---------------------------------------------------
+    [[nodiscard]] Result<AccountSettings> account();
+    // Sets the email address (empty removes it); the platform mails a link to confirm it.
+    [[nodiscard]] Status setEmail(const std::string& email, const std::string& password);
+    [[nodiscard]] Status resendVerification();
+    // The token from a confirmation link (".../play#verify=TOKEN"); returns the account name.
+    [[nodiscard]] Result<std::string> verifyEmail(const std::string& token);
+    // A name or an email address; the answer does not say whether one matched.
+    [[nodiscard]] Status requestPasswordReset(const std::string& nameOrEmail);
+    // The token from a reset link (".../play#reset=TOKEN"); returns the account
+    // name. Every session of the account ends.
+    [[nodiscard]] Result<std::string> completePasswordReset(const std::string& token, const std::string& password);
+    // Your other sessions end; this one stays.
+    [[nodiscard]] Status changePassword(const std::string& current, const std::string& password);
+    // Deletes the account and its games for good; logs out.
+    [[nodiscard]] Status deleteAccount(const std::string& password);
+    // Everything the platform keeps about you, as JSON.
+    [[nodiscard]] Result<std::string> exportData();
+
     // --- People (docs/social.md) -----------------------------------------------------------
     [[nodiscard]] Result<Profile> profile(const std::string& username);
     [[nodiscard]] Result<Profile> updateProfile(const ProfileUpdate& update);

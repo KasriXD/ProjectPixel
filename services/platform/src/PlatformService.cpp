@@ -1,6 +1,7 @@
 #include "PlatformService.hpp"
 #include "ServiceContext.hpp"
 #include "Leaderboards.hpp"
+#include "Accounts.hpp"
 #include "Social.hpp"
 
 #include "Database.hpp"
@@ -163,6 +164,7 @@ struct PlatformService::Impl : PlatformService::Context {
 
     void createGame(const httplib::Request& req, httplib::Response& res) {
         const User user = requireUser(req);
+        requireCheckedEmail(user);
         limit("create-game:" + std::to_string(user.id), 20, 3600);
         const json body = parseBody(req);
         const std::string title =
@@ -235,12 +237,11 @@ struct PlatformService::Impl : PlatformService::Context {
         sendJson(res, 200, {{"game", gameJson(*gameById(id), user)}});
     }
 
-    std::filesystem::path packagePath(const std::string& hash) const {
-        return s.m_config.dataDir / "packages" / hash.substr(0, 2) / (hash + ".pxpkg");
-    }
+
 
     void publish(const httplib::Request& req, httplib::Response& res) {
         const User user = requireUser(req);
+        requireCheckedEmail(user);
         const std::int64_t id = pathId(req);
         {
             std::lock_guard lock(s.m_dbMutex);
@@ -344,9 +345,7 @@ struct PlatformService::Impl : PlatformService::Context {
     }
 
     // --- thumbnails -------------------------------------------------------------------------
-    std::filesystem::path thumbnailPath(const std::string& hash) const {
-        return s.m_config.dataDir / "thumbnails" / (hash + ".png");
-    }
+
 
     void uploadThumbnail(const httplib::Request& req, httplib::Response& res) {
         const User user = requireUser(req);
@@ -874,6 +873,7 @@ void PlatformService::migrate() {
     const auto version = st.integer(0);
     if (version < 1) migrateTo1();
     if (version < 2) migrateTo2();
+    if (version < 3) migrateTo3();
 }
 
 void PlatformService::migrateTo1() {
@@ -1008,6 +1008,39 @@ COMMIT;
 )SQL");
 }
 
+// Version 3 (0.9.0): email addresses, links for checking them and resetting
+// passwords, deleted accounts.
+void PlatformService::migrateTo3() {
+    m_db->exec(R"SQL(
+BEGIN;
+ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT '';
+ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX users_email ON users(email) WHERE email <> '';
+CREATE TABLE account_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    purpose TEXT NOT NULL,
+    email TEXT NOT NULL DEFAULT '',
+    created INTEGER NOT NULL,
+    expires INTEGER NOT NULL);
+CREATE INDEX account_tokens_user ON account_tokens(user_id);
+PRAGMA user_version = 3;
+COMMIT;
+)SQL");
+}
+
+std::string PlatformService::publicUrl() const {
+    if (!m_config.publicUrl.empty()) {
+        std::string u = m_config.publicUrl;
+        while (u.ends_with('/')) u.pop_back();
+        return u;
+    }
+    const std::string host = m_config.publicHost.empty() ? std::string("127.0.0.1") : m_config.publicHost;
+    if (m_config.httpsPort != 0) return std::format("https://{}:{}", host, m_httpsPort != 0 ? m_httpsPort : m_config.httpsPort);
+    return std::format("http://{}:{}", host, m_port != 0 ? m_port : m_config.port);
+}
+
 std::string PlatformService::url() const {
     const std::string host = m_config.bindAddress == "0.0.0.0" ? "127.0.0.1" : m_config.bindAddress;
     return std::format("http://{}:{}", host, m_port);
@@ -1034,13 +1067,14 @@ void PlatformService::registerRoutes(httplib::Server& http) {
     http.Get("/", bind(&Impl::home));
     registerSocialRoutes(http, i);
     registerLeaderboardRoutes(http, i);
+    registerAccountRoutes(http, i);
     http.Get("/play", bind(&Impl::playPage));
     http.Get("/play/", i.wrap([](const httplib::Request&, httplib::Response& res) { res.set_redirect("/play"); }));
     http.Get(R"(/play/(play\.(?:js|css)|avatars\.png))", bind(&Impl::playPage));
     http.Get(R"(/play/player/(px-player\.(?:js|wasm|data)))", bind(&Impl::playerFile));
     http.Get("/api/v1/platform", i.wrap([this](const httplib::Request&, httplib::Response& res) {
         online::PlatformInfo info{m_config.name, std::string(version::string), online::kPlatformApiVersion,
-                                  crypto::toHex(m_key.publicKey), m_impl->hasWebPlayer()};
+                                  crypto::toHex(m_key.publicKey), m_impl->hasWebPlayer(), m_mailer->enabled()};
         sendJson(res, 200, info);
     }));
     http.Post("/api/v1/accounts", bind(&Impl::registerAccount));
@@ -1145,6 +1179,13 @@ Status PlatformService::start() {
         fleet.tlsKey = m_config.tlsKey.string();
     }
     m_fleet = std::make_unique<Fleet>(fleet);
+    MailConfig mail = m_config.mail;
+    if (mail.from.empty()) mail.from = std::format("{} <noreply@localhost>", m_config.name);
+    m_mailer = std::make_unique<Mailer>(std::move(mail));
+    if (m_mailer->enabled()) {
+        log::info("Email: {}", !m_config.mail.outbox.empty() ? "written to " + m_config.mail.outbox.string()
+                                                             : "sent through " + m_config.mail.server);
+    }
 
     m_running = true;
     m_listener = std::thread([this] { m_http->listen_after_bind(); });
@@ -1158,9 +1199,11 @@ Status PlatformService::start() {
             if (ticks % (4 * 3600) == 0) {
                 try {
                     std::lock_guard lock(m_dbMutex);
-                    auto st = m_db->prepare("DELETE FROM sessions WHERE expires < ?1");
-                    st.bind(1, now());
-                    st.run();
+                    for (const char* sql : {"DELETE FROM sessions WHERE expires < ?1", "DELETE FROM account_tokens WHERE expires < ?1"}) {
+                        auto st = m_db->prepare(sql);
+                        st.bind(1, now());
+                        st.run();
+                    }
                 } catch (const std::exception& e) {
                     log::error("Cleaning up sessions: {}", e.what());
                 }

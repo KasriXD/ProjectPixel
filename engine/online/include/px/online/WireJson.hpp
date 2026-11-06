@@ -22,6 +22,8 @@ void to_json(nlohmann::json& j, const AuditEntry& v);
 void from_json(const nlohmann::json& j, AuditEntry& v);
 void to_json(nlohmann::json& j, const PlatformInfo& v);
 void from_json(const nlohmann::json& j, PlatformInfo& v);
+void to_json(nlohmann::json& j, const AccountSettings& v);
+void from_json(const nlohmann::json& j, AccountSettings& v);
 void to_json(nlohmann::json& j, const Presence& v);
 void from_json(const nlohmann::json& j, Presence& v);
 void to_json(nlohmann::json& j, const Profile& v);

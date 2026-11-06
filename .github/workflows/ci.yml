@@ -221,7 +221,7 @@ jobs:
             echo "::$3 title=$1::${body}"
           }
           {
-            sudo apt-get install -y --no-install-recommends python3-pil &&
+            sudo apt-get update -qq && sudo apt-get install -y --no-install-recommends python3-pil &&
             (cd tools/browser && npm install --no-save --no-audit --no-fund playwright@1.49.1 &&
              npx playwright install --with-deps chromium)
           } > browser-setup.log 2>&1
@@ -343,6 +343,29 @@ jobs:
           done
           exit $failed
 
+      # Accounts on the page (which runs without a browser player here): an
+      # address confirmed from the mail, changing and resetting the password,
+      # downloading the data and deleting the account (docs/accounts.md). The
+      # mail goes into files, and through a real SMTP server that insists on
+      # STARTTLS (aiosmtpd, with a development certificate).
+      - name: Accounts in the browser
+        shell: bash
+        run: |
+          set +e
+          python3 -m pip install --break-system-packages --quiet aiosmtpd==1.4.6 > accounts-setup.log 2>&1 ||
+            { cat accounts-setup.log; exit 1; }
+          failed=0
+          for run in "files desktop" "smtp phone"; do
+            set -- $run
+            tools/browser/accounts_test.sh build/headless "accounts-$1-$2" "$1" "$2" > "accounts-$1-$2.log" 2>&1
+            status=$?
+            cat "accounts-$1-$2.log"
+            body=$(tail -c 6000 "accounts-$1-$2.log" | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+            if [ $status -ne 0 ]; then echo "::error title=Accounts page ($1, $2)::${body}"; failed=1;
+            else echo "::notice title=Accounts page ($1, $2)::${body}"; fi
+          done
+          exit $failed
+
       - name: Upload cross-play results
         if: always()
         uses: actions/upload-artifact@v4
@@ -355,6 +378,9 @@ jobs:
             social-*.log
             social-*/*.png
             social-*/*.log
+            accounts-*.log
+            accounts-*/*.png
+            accounts-*/*.log
 
   android:
     name: Android app
@@ -441,9 +467,11 @@ jobs:
       - name: What the screen showed
         if: always()
         run: |
-          sudo apt-get install -y --no-install-recommends python3-pil > /dev/null 2>&1
+          # (Only a look at the screenshots: nothing here fails the job.)
+          python3 -c "import PIL" 2> /dev/null ||
+            python3 -m pip install --break-system-packages --quiet pillow > /dev/null 2>&1 || true
           for shot in android-run/android-launcher.png android-run/android-game.png android-run/android-menu.png; do
-            [ -f "$shot" ] && { echo "== $shot"; python3 tools/browser/ascii_screenshot.py "$shot"; }
+            if [ -f "$shot" ]; then echo "== $shot"; python3 tools/browser/ascii_screenshot.py "$shot" || true; fi
           done
 
       - uses: actions/upload-artifact@v4

@@ -236,6 +236,15 @@ struct PlatformInfo {
     int apiVersion = kPlatformApiVersion;
     std::string publicKey; // hex: verifies connect tokens
     bool webPlayer = false; // games can be played in a browser at /play
+    bool mail = false;      // the platform sends email (password resets work)
+};
+
+// Your account's private settings (GET /me/account, docs/accounts.md).
+struct AccountSettings {
+    std::string email;          // empty: none
+    bool emailVerified = false;
+    bool mail = false;          // the platform can send email
+    bool emailRequiredToPublish = false;
 };
 
 } // namespace px::online

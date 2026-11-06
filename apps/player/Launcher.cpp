@@ -532,8 +532,11 @@ void Launcher::openStartPage() {
         openPage(Page::Friends);
     } else if (open == "you") {
         openPage(Page::You);
+    } else if (open == "account") {
+        openPage(Page::You);
+        m_scrollToAccount = 3;
     } else {
-        if (!open.empty()) fail(std::format("--open {}: not a page (game:ID, play:ID, join:NAME, friends, you)", open));
+        if (!open.empty()) fail(std::format("--open {}: not a page (game:ID, play:ID, join:NAME, friends, you, account)", open));
         openPage(Page::Games);
     }
 }
@@ -543,6 +546,11 @@ void Launcher::logOut() {
         (void)c.logout();
         return {};
     }, false);
+    endLogin();
+    notice("Logged out");
+}
+
+void Launcher::endLogin() {
     online::forgetLogin(m_dataDir);
     ++m_session;
     log::info("Launcher: logged out");
@@ -553,8 +561,14 @@ void Launcher::logOut() {
     m_social = {};
     m_games.clear();
     m_suggestions.clear();
+    m_account.reset();
+    m_emailPassword.clear();
+    m_currentPassword.clear();
+    m_newPassword.clear();
+    m_deletePassword.clear();
+    m_deleting = false;
+    m_forgot = false;
     m_page = Page::Login;
-    notice("Logged out");
 }
 
 // --- Pages and requests ----------------------------------------------------------------------------------
@@ -663,6 +677,76 @@ void Launcher::refreshProfile() {
             l.m_blocked = blocked;
         };
     }, false);
+    refreshAccount();
+}
+
+// --- Your account (docs/accounts.md) ----------------------------------------------------------
+
+void Launcher::refreshAccount() {
+    run([](online::PlatformClient& c) -> Apply {
+        auto account = c.account();
+        if (!account) return {}; // an older platform: no account settings
+        return [account = *account](Launcher& l) {
+            l.m_account = account;
+            l.m_email = account.email;
+        };
+    }, false);
+}
+
+void Launcher::saveEmail() {
+    const std::string email = trim(m_email);
+    const std::string password = std::exchange(m_emailPassword, {});
+    run([email, password](online::PlatformClient& c) -> Apply {
+        if (auto saved = c.setEmail(email, password); !saved) return [m = saved.error().message](Launcher& l) { l.fail(m); };
+        return [email](Launcher& l) {
+            l.notice(email.empty() ? std::string("Your email address is removed")
+                                   : std::format("A link is on its way to {}: open it to confirm the address", email));
+            l.refreshAccount();
+        };
+    });
+}
+
+void Launcher::changePassword() {
+    if (m_newPassword.size() < online::kMinPasswordLength) {
+        return fail(std::format("Passwords have at least {} characters", online::kMinPasswordLength));
+    }
+    const std::string current = std::exchange(m_currentPassword, {});
+    const std::string password = std::exchange(m_newPassword, {});
+    run([current, password](online::PlatformClient& c) -> Apply {
+        if (auto changed = c.changePassword(current, password); !changed) {
+            return [m = changed.error().message](Launcher& l) { l.fail(m); };
+        }
+        return [](Launcher& l) { l.notice("Your password is changed. Everywhere else, you are logged out."); };
+    });
+}
+
+void Launcher::requestPasswordReset() {
+    const std::string url = trim(m_url);
+    const std::string name = trim(m_forgotName);
+    if (url.empty()) return fail("Enter the platform's address");
+    if (name.empty()) return fail("Enter your name or email address");
+    run([url, name](online::PlatformClient&) -> Apply {
+        online::PlatformClient c(url);
+        c.setTimeoutSeconds(kRequestTimeoutSeconds);
+        if (auto sent = c.requestPasswordReset(name); !sent) return [m = sent.error().message](Launcher& l) { l.fail(m); };
+        return [](Launcher& l) {
+            l.m_forgot = false;
+            l.notice("If an account with a confirmed email address matches, a link to choose a new password is on its way.");
+        };
+    });
+}
+
+void Launcher::deleteAccount() {
+    const std::string password = std::exchange(m_deletePassword, {});
+    m_deleting = false;
+    run([password](online::PlatformClient& c) -> Apply {
+        if (auto deleted = c.deleteAccount(password); !deleted) return [m = deleted.error().message](Launcher& l) { l.fail(m); };
+        return [](Launcher& l) {
+            l.endLogin();
+            l.m_username.clear();
+            l.notice("Your account is deleted");
+        };
+    });
 }
 
 void Launcher::saveProfile() {
@@ -959,6 +1043,7 @@ void Launcher::drawFrame() {
     }
     ImGui::EndDisabled();
     drawReportPopup();
+    drawDeletePopup();
     ImGui::EndChild();
     if (messages) drawMessages();
     ImGui::End();
@@ -1060,6 +1145,24 @@ void Launcher::drawLogin() {
     ImGui::TextUnformatted("Platform");
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::InputTextWithHint("##url", "https://example.com", &m_url);
+    if (m_forgot) {
+        ImGui::Dummy({0.0f, px(4.0f)});
+        heading("Forgot your password?", 20.0f);
+        mutedText("Give your name or email address. If your account has a confirmed email address, a link to choose a "
+                  "new password is sent there.");
+        ImGui::TextUnformatted("Name or email address");
+        ImGui::SetNextItemWidth(-FLT_MIN);
+        const bool send = ImGui::InputText("##forgot", &m_forgotName, ImGuiInputTextFlags_EnterReturnsTrue);
+        const float halfWidth = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
+        if (accentButton("Send the link", {halfWidth, 0.0f}) || send) requestPasswordReset();
+        ImGui::SameLine();
+        if (ImGui::Button("Back", {halfWidth, 0.0f})) {
+            m_forgot = false;
+            m_error.clear();
+        }
+        endColumn();
+        return;
+    }
     ImGui::TextUnformatted("Name");
     ImGui::SetNextItemWidth(-FLT_MIN);
     bool submit = ImGui::InputText("##name", &m_username, ImGuiInputTextFlags_EnterReturnsTrue);
@@ -1072,6 +1175,15 @@ void Launcher::drawLogin() {
     if (accentButton("Log in", {half, 0.0f}) || submit) tryLogin(false);
     ImGui::SameLine();
     if (ImGui::Button("Create an account", {half, 0.0f})) tryLogin(true);
+    ImGui::PushStyleColor(ImGuiCol_Button, rgb(0, 0, 0, 0.0f));
+    ImGui::PushStyleColor(ImGuiCol_Text, kMuted);
+    if (ImGui::SmallButton("Forgot your password?")) {
+        m_forgot = true;
+        m_forgotName = trim(m_username);
+        m_error.clear();
+        m_notice.clear();
+    }
+    ImGui::PopStyleColor(2);
     ImGui::Dummy({0.0f, px(14.0f)});
     drawLocalGames();
     endColumn();
@@ -1563,12 +1675,110 @@ void Launcher::drawYou() {
         ImGui::PopID();
     }
 
-    ImGui::SeparatorText("Account");
-    mutedText(std::format("Logged in to {}", m_platformUrl));
-    if (ImGui::Button("Log out")) logOut();
+    drawAccount();
     ImGui::Dummy({0.0f, px(10.0f)});
     drawLocalGames();
     endColumn();
+    // --open account: the page scrolls to the account settings once they are there.
+    // (Again for a few frames: the page knows its new height a frame late.)
+    if (m_scrollToAccount > 0 && m_accountTop >= 0.0f) {
+        ImGui::SetScrollFromPosY(m_accountTop - ImGui::GetWindowPos().y - px(8.0f), 0.0f);
+        --m_scrollToAccount;
+    }
+}
+
+void Launcher::drawAccount() {
+    m_accountTop = m_account ? ImGui::GetCursorScreenPos().y : -1.0f;
+    ImGui::SeparatorText("Email address");
+    if (!m_account) {
+        mutedText("Loading...");
+    } else {
+        const online::AccountSettings& a = *m_account;
+        if (a.email.empty()) {
+            mutedText("No email address. With a confirmed one you can reset a forgotten password.");
+        } else {
+            ImGui::PushStyleColor(ImGuiCol_Text, a.emailVerified ? kGood : kAccent);
+            ImGui::TextWrapped("%s", std::format("{} · {}", a.email, a.emailVerified ? "confirmed"
+                                                                                      : "not confirmed yet: open the link sent there")
+                                         .c_str());
+            ImGui::PopStyleColor();
+        }
+        if (a.emailRequiredToPublish && !a.emailVerified) mutedText("Publishing games on this platform needs a confirmed address.");
+        if (!a.mail) {
+            mutedText("This platform does not send email, so addresses and password resets are not available here.");
+        } else {
+            if (!a.email.empty() && !a.emailVerified && ImGui::Button("Send the link again")) {
+                run([](online::PlatformClient& c) -> Apply {
+                    if (auto sent = c.resendVerification(); !sent) return [m = sent.error().message](Launcher& l) { l.fail(m); };
+                    return [](Launcher& l) { l.notice("The link is sent again"); };
+                });
+            }
+            ImGui::TextUnformatted("Email address");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputTextWithHint("##email", "you@example.com", &m_email);
+            limitUtf8(m_email, 254);
+            ImGui::TextUnformatted("Your password");
+            ImGui::SetNextItemWidth(-FLT_MIN);
+            ImGui::InputText("##email-password", &m_emailPassword, ImGuiInputTextFlags_Password);
+            ImGui::BeginDisabled(trim(m_email) == a.email || m_emailPassword.empty());
+            if (accentButton("Save the address")) saveEmail();
+            ImGui::EndDisabled();
+        }
+    }
+
+    ImGui::SeparatorText("Password");
+    ImGui::TextUnformatted("Current password");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##current-password", &m_currentPassword, ImGuiInputTextFlags_Password);
+    ImGui::TextUnformatted("New password");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    ImGui::InputText("##new-password", &m_newPassword, ImGuiInputTextFlags_Password);
+    ImGui::BeginDisabled(m_currentPassword.empty() || m_newPassword.empty());
+    if (accentButton("Change the password")) changePassword();
+    ImGui::EndDisabled();
+    mutedText("You stay logged in here; everywhere else you are logged out.");
+
+    ImGui::SeparatorText("Account");
+    mutedText(std::format("Logged in to {}", m_platformUrl));
+    if (ImGui::Button("Log out")) logOut();
+    ImGui::Dummy({0.0f, px(6.0f)});
+    mutedText(std::format("Download everything the platform keeps about you from your page in a browser: {}/play#you",
+                          m_platformUrl));
+    ImGui::PushStyleColor(ImGuiCol_Text, kErrorColor);
+    if (ImGui::Button("Delete your account...")) {
+        m_deleting = true;
+        m_deletePassword.clear();
+    }
+    ImGui::PopStyleColor();
+}
+
+void Launcher::drawDeletePopup() {
+    if (!m_deleting) return;
+    if (!ImGui::IsPopupOpen("Delete")) ImGui::OpenPopup("Delete");
+    ImGui::SetNextWindowSize({std::min(px(460.0f), ImGui::GetIO().DisplaySize.x - px(20.0f)), 0.0f});
+    if (!ImGui::BeginPopupModal("Delete", nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoTitleBar)) return;
+    heading("Delete your account?", 20.0f);
+    mutedText("Your games, friends, scores and saved progress go for good. Nobody can undo this.");
+    ImGui::TextUnformatted("Your password");
+    ImGui::SetNextItemWidth(-FLT_MIN);
+    const bool enter = ImGui::InputText("##delete-password", &m_deletePassword,
+                                        ImGuiInputTextFlags_Password | ImGuiInputTextFlags_EnterReturnsTrue);
+    ImGui::BeginDisabled(m_deletePassword.empty());
+    ImGui::PushStyleColor(ImGuiCol_Button, kErrorColor);
+    ImGui::PushStyleColor(ImGuiCol_Text, rgb(34, 12, 10));
+    if (ImGui::Button("Delete for good") || (enter && !m_deletePassword.empty())) {
+        deleteAccount();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::PopStyleColor(2);
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    if (ImGui::Button("Keep my account")) {
+        m_deleting = false;
+        m_deletePassword.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
 }
 
 } // namespace px::player

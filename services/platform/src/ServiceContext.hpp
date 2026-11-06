@@ -232,7 +232,7 @@ struct PlatformService::Context {
     }
 
     std::optional<User> userByName(std::string_view name) {
-        auto st = db().prepare("SELECT id, username, role, banned, created FROM users WHERE username = ?1 COLLATE NOCASE");
+        auto st = db().prepare("SELECT id, username, role, banned, created FROM users WHERE username = ?1 COLLATE NOCASE AND deleted = 0");
         st.bind(1, name);
         if (!st.step()) return std::nullopt;
         return User{st.integer(0), st.text(1), st.text(2) == "admin" ? Role::Admin : Role::User, st.integer(3) != 0,
@@ -277,6 +277,27 @@ struct PlatformService::Context {
         auto session = key.empty() || key.size() > 100 ? std::nullopt : s.m_fleet->sessionForKey(key);
         if (!session) fail(401, "not_a_server", "Unknown game server");
         return *session;
+    }
+
+    // --requireVerifiedEmail: publishing needs a confirmed address.
+    void requireCheckedEmail(const User& user) {
+        if (!s.m_config.requireVerifiedEmail) return;
+        std::lock_guard lock(s.m_dbMutex);
+        auto st = db().prepare("SELECT email_verified FROM users WHERE id = ?1");
+        st.bind(1, user.id);
+        if (!st.step() || st.integer(0) == 0) {
+            fail(403, "email_unverified", "Confirm your email address first (on your account page)");
+        }
+    }
+
+    Mailer& mailer() { return *s.m_mailer; }
+
+    // Where packages (by content hash) and game pictures are kept.
+    std::filesystem::path packagePath(const std::string& hash) const {
+        return s.m_config.dataDir / "packages" / hash.substr(0, 2) / (hash + ".pxpkg");
+    }
+    std::filesystem::path thumbnailPath(const std::string& hash) const {
+        return s.m_config.dataDir / "thumbnails" / (hash + ".png");
     }
 
     User requireAdmin(const httplib::Request& req) {

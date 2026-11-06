@@ -147,7 +147,8 @@ void to_json(nlohmann::json& j, const PlatformInfo& v) {
          {"engineVersion", v.engineVersion},
          {"apiVersion", v.apiVersion},
          {"publicKey", v.publicKey},
-         {"webPlayer", v.webPlayer}};
+         {"webPlayer", v.webPlayer},
+         {"mail", v.mail}};
 }
 void from_json(const nlohmann::json& j, PlatformInfo& v) {
     v.name = j.at("name").get<std::string>();
@@ -155,6 +156,20 @@ void from_json(const nlohmann::json& j, PlatformInfo& v) {
     v.apiVersion = j.at("apiVersion").get<int>();
     v.publicKey = j.at("publicKey").get<std::string>();
     v.webPlayer = j.value("webPlayer", false);
+    v.mail = j.value("mail", false);
+}
+
+void to_json(nlohmann::json& j, const AccountSettings& v) {
+    j = {{"email", v.email},
+         {"emailVerified", v.emailVerified},
+         {"mail", v.mail},
+         {"emailRequiredToPublish", v.emailRequiredToPublish}};
+}
+void from_json(const nlohmann::json& j, AccountSettings& v) {
+    v.email = j.value("email", std::string());
+    v.emailVerified = j.value("emailVerified", false);
+    v.mail = j.value("mail", false);
+    v.emailRequiredToPublish = j.value("emailRequiredToPublish", false);
 }
 
 std::string_view joinPolicyName(JoinPolicy p) noexcept { return p == JoinPolicy::Nobody ? "nobody" : "friends"; }

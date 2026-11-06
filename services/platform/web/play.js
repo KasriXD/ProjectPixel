@@ -6,12 +6,15 @@
 //
 // Pages (the address's #): games, game=ID (a game's page), play=ID,
 // join=NAME (a friend's game), friends, you. play= and join= start the
-// player only after a click on this page (see route()).
+// player only after a click on this page (see route()). Links in the
+// platform's email: verify=TOKEN confirms an address, reset=TOKEN chooses a
+// new password (docs/accounts.md); the token leaves the address at once.
+// Without a browser player the page still has games, friends and accounts.
 'use strict';
 
 (() => {
   const $ = (id) => document.getElementById(id);
-  const sections = ['login', 'catalog', 'details', 'game', 'friends', 'you', 'unavailable'];
+  const sections = ['login', 'forgot-page', 'reset-page', 'catalog', 'details', 'game', 'friends', 'you'];
   const store = {
     get: (k) => { try { return sessionStorage.getItem(k); } catch { return null; } },
     set: (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* private mode */ } },
@@ -28,6 +31,8 @@
   let suggestTimer = 0;
   let pollTimer = 0;
   let boards = [];
+  let platform = { webPlayer: false, mail: false };
+  let resetToken = null;
   const pictures = new Map(); // "id:hash" -> object URL
   const invited = new Set();
 
@@ -96,8 +101,9 @@
     return data;
   }
 
-  // Runs an action; errors go to the message line.
+  // Runs an action; errors go to the message line (an earlier one goes away).
   async function act(fn) {
+    message('');
     try {
       await fn();
     } catch (e) {
@@ -189,25 +195,50 @@
     location.href = '/play';
   }
 
+  // Logged out by the platform (a new password, a deleted account): back to
+  // logging in on this page, keeping what it says.
+  function loggedOut() {
+    token = null;
+    user = null;
+    profile = null;
+    store.del('px.token');
+    clearInterval(pollTimer);
+    $('who').hidden = true;
+    $('nav').hidden = true;
+    $('invitations').hidden = true;
+    history.replaceState(null, '', location.pathname + location.search);
+    show('login');
+  }
+
   // --- Pages ------------------------------------------------------------------------------------
 
   function route() {
+    const hash = decodeURIComponent(location.hash.slice(1));
+    let link;
+    if ((link = /^verify=([A-Za-z0-9_-]{16,100})$/.exec(hash))) {
+      confirmEmail(link[1]);
+      return;
+    }
+    if ((link = /^reset=([A-Za-z0-9_-]{16,100})$/.exec(hash))) {
+      resetPage(link[1]);
+      return;
+    }
     if (!user) {
       show('login');
+      $('forgot-line').hidden = !platform.mail;
       $('username').focus();
       return;
     }
-    const hash = decodeURIComponent(location.hash.slice(1));
     // Playing and joining start only from a click on this page: a link from
     // elsewhere opens the game's page or the friends page instead.
     const asked = store.get('px.intent') === location.hash;
     store.del('px.intent');
     let m;
     if ((m = /^play=(\d{1,18})$/.exec(hash))) {
-      if (asked) play(m[1]);
+      if (asked && platform.webPlayer) play(m[1]);
       else details(m[1]);
     } else if ((m = /^join=([A-Za-z0-9_]{1,32})$/.exec(hash))) {
-      if (asked) joinFriend(m[1]);
+      if (asked && platform.webPlayer) joinFriend(m[1]);
       else friendsPage();
     } else if ((m = /^game=(\d{1,18})$/.exec(hash))) details(m[1]);
     else if (hash === 'friends') friendsPage();
@@ -246,7 +277,7 @@
           el('span', { className: 'title' }, g.title));
         const playing = g.playing ? `, ${g.playing} playing now` : '';
         const meta = el('span', { className: 'meta' }, `by ${g.owner.username} · ${plural(g.plays, 'play', 'plays')}${playing}`);
-        const play = el('button', { type: 'button', dataset: { game: String(g.id) } }, 'Play');
+        const play = el('button', { type: 'button', className: 'needs-player', dataset: { game: String(g.id) } }, 'Play');
         play.addEventListener('click', () => go(`#play=${g.id}`));
         list.append(el('li', null, open, meta, play));
       }
@@ -280,7 +311,7 @@
       for (const f of social.friends) {
         if (f.presence.state !== 'playing' || f.presence.gameId !== game.id) continue;
         here.append(el('li', null, avatar(f.avatar), el('span', { className: 'playing-text' }, `${f.username} is playing`),
-          f.presence.joinable ? button('Join', () => go(`#join=${name(f.username)}`), 'secondary') : null));
+          f.presence.joinable ? button('Join', () => go(`#join=${name(f.username)}`), 'secondary needs-player') : null));
       }
       boards = leaderboards;
       drawBoards();
@@ -390,8 +421,9 @@
     for (const f of social.friends) {
       const state = el('span', { className: 'presence ' + f.presence.state }, presenceText(f.presence));
       let action = null;
-      if (f.presence.joinable) action = button('Join', () => go(`#join=${name(f.username)}`));
+      if (f.presence.joinable && platform.webPlayer) action = button('Join', () => go(`#join=${name(f.username)}`));
       else if (f.presence.state === 'playing' && f.presence.gameId) {
+        // (Without a browser player: the game's page says to use the app.)
         action = button('See the game', () => go(`#game=${f.presence.gameId}`), 'secondary');
       }
       list.append(el('li', null, avatar(f.avatar, true),
@@ -498,6 +530,7 @@
           await youPage();
         }), 'secondary'))));
       $('no-blocked').hidden = blocked.length > 0;
+      await loadAccount();
     });
   }
 
@@ -510,6 +543,137 @@
       $('who-avatar').className = `avatar av${profile.avatar}`;
       notice('Saved.');
     });
+  }
+
+  // --- Your account (docs/accounts.md) -------------------------------------------------------
+
+  // The address without its #token, so it stays out of the history.
+  function forgetLink() {
+    history.replaceState(null, '', location.pathname + location.search + (user ? '#you' : ''));
+  }
+
+  async function confirmEmail(t) {
+    forgetLink();
+    try {
+      const data = await api('POST', '/api/v1/email-verifications', { token: t });
+      route();
+      notice(`Thank you: ${data.email} is confirmed for ${data.username}.`);
+    } catch (e) {
+      route();
+      message(e.message);
+    }
+  }
+
+  function resetPage(t) {
+    resetToken = t;
+    forgetLink();
+    show('reset-page');
+    message('');
+    $('reset-password').focus();
+  }
+
+  async function completeReset() {
+    const password = $('reset-password').value;
+    if (password !== $('reset-repeat').value) {
+      message('The two passwords are not the same.');
+      return;
+    }
+    await act(async () => {
+      const data = await api('POST', '/api/v1/password-resets/complete', { token: resetToken, password });
+      resetToken = null;
+      $('reset-password').value = '';
+      $('reset-repeat').value = '';
+      loggedOut(); // every session ended, this page's too
+      $('forgot-line').hidden = !platform.mail;
+      $('username').value = data.username;
+      $('password').focus();
+      notice('Your password is changed. Log in with the new one.');
+    });
+  }
+
+  async function requestReset() {
+    const n = $('forgot-name').value.trim();
+    if (!n) {
+      message('Enter your name or email address.');
+      return;
+    }
+    await act(async () => {
+      const data = await api('POST', '/api/v1/password-resets', { name: n });
+      notice(data.status);
+    });
+  }
+
+  function drawAccount(acc) {
+    const state = $('email-state');
+    state.className = 'meta';
+    if (!acc.email) {
+      state.textContent = 'No email address. With a confirmed one you can reset a forgotten password.';
+    } else if (acc.emailVerified) {
+      state.textContent = `${acc.email} · confirmed`;
+      state.classList.add('confirmed');
+    } else {
+      state.textContent = `${acc.email} · not confirmed yet: open the link sent there`;
+      state.classList.add('unconfirmed');
+    }
+    if (acc.emailRequiredToPublish && !acc.emailVerified) {
+      state.textContent += '. Publishing games on this platform needs a confirmed address.';
+    }
+    $('resend-email').hidden = !acc.mail || !acc.email || acc.emailVerified;
+    $('email-form').hidden = !acc.mail && !acc.email;
+    $('no-mail').hidden = acc.mail;
+    $('email').value = acc.email;
+    $('email-password').value = '';
+  }
+
+  async function loadAccount() {
+    drawAccount(await api('GET', '/api/v1/me/account'));
+  }
+
+  async function saveEmail() {
+    const email = $('email').value.trim();
+    await act(async () => {
+      await api('PUT', '/api/v1/me/email', { email, password: $('email-password').value });
+      await loadAccount();
+      notice(email ? `A link is on its way to ${email.toLowerCase()}: open it to confirm the address.` : 'Your email address is removed.');
+    });
+  }
+
+  async function changePassword() {
+    await act(async () => {
+      await api('PUT', '/api/v1/me/password', { current: $('current-password').value, password: $('new-password').value });
+      $('current-password').value = '';
+      $('new-password').value = '';
+      notice('Your password is changed. Everywhere else, you are logged out.');
+    });
+  }
+
+  async function exportData() {
+    await act(async () => {
+      const res = await fetch('/api/v1/me/export', { headers: { Authorization: 'Bearer ' + token } });
+      if (!res.ok) throw new Error(`Could not download your data (${res.status})`);
+      const url = URL.createObjectURL(await res.blob());
+      const a = el('a', { href: url, download: `${user.username}-account.json` });
+      document.body.append(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+    });
+  }
+
+  async function deleteAccount() {
+    const password = $('delete-password').value;
+    message('');
+    try {
+      const data = await api('DELETE', '/api/v1/me', { password });
+      $('delete-dialog').close();
+      $('delete-password').value = '';
+      loggedOut();
+      $('forgot-line').hidden = !platform.mail;
+      notice(data.games ? `Your account and its ${plural(data.games, 'game', 'games')} are deleted.` : 'Your account is deleted.');
+    } catch (e) {
+      $('delete-dialog').close();
+      message(e.message);
+    }
   }
 
   // --- Playing -----------------------------------------------------------------------------------
@@ -690,6 +854,28 @@
     $('profile').addEventListener('submit', (e) => { e.preventDefault(); saveProfile(); });
     $('bio').addEventListener('input', () => { $('bio-count').textContent = `${$('bio').value.length} / 200`; });
     $('report-cancel').addEventListener('click', () => $('report-dialog').close());
+    $('forgot').addEventListener('click', () => {
+      show('forgot-page');
+      message('');
+      $('forgot-name').value = $('username').value.trim();
+      $('forgot-name').focus();
+    });
+    $('forgot-back').addEventListener('click', () => route());
+    $('forgot-form').addEventListener('submit', (e) => { e.preventDefault(); requestReset(); });
+    $('reset-form').addEventListener('submit', (e) => { e.preventDefault(); completeReset(); });
+    $('email-form').addEventListener('submit', (e) => { e.preventDefault(); saveEmail(); });
+    $('resend-email').addEventListener('click', () => act(async () => {
+      await api('POST', '/api/v1/me/email/verification', {});
+      notice('The link is sent again.');
+    }));
+    $('password-form').addEventListener('submit', (e) => { e.preventDefault(); changePassword(); });
+    $('export').addEventListener('click', exportData);
+    $('delete-account').addEventListener('click', () => {
+      $('delete-password').value = '';
+      $('delete-dialog').showModal();
+    });
+    $('delete-cancel').addEventListener('click', () => $('delete-dialog').close());
+    $('delete-form').addEventListener('submit', (e) => { e.preventDefault(); deleteAccount(); });
     $('report-form').addEventListener('submit', () => {
       const reason = $('report-reason').value.trim();
       if (!reason) return;
@@ -704,12 +890,12 @@
     window.addEventListener('hashchange', () => { if (!started) route(); });
     try {
       const info = await api('GET', '/api/v1/platform');
+      platform = { webPlayer: !!info.webPlayer, mail: !!info.mail };
       $('platform-name').textContent = info.name;
-      document.title = 'Play · ' + info.name;
-      if (!info.webPlayer) {
-        show('unavailable');
-        return;
-      }
+      document.title = (info.webPlayer ? 'Play · ' : '') + info.name;
+      document.body.classList.toggle('no-player', !info.webPlayer);
+      if (!info.webPlayer) $('login').querySelector('.lead').textContent =
+        'Log in, or make an account, to see the games here, your friends and their best scores. Play the games in the Project Pixel app.';
     } catch (e) {
       message('Could not reach the platform: ' + e.message);
       return;

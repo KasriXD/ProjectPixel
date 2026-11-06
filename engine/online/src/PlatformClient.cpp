@@ -172,6 +172,59 @@ Result<UserInfo> PlatformClient::me() {
     return parseAs<UserInfo>(body.value(), "user");
 }
 
+// --- Your account -----------------------------------------------------------------------------
+
+Result<AccountSettings> PlatformClient::account() {
+    auto body = call("GET", "/me/account");
+    if (!body) return body.error();
+    return parseAs<AccountSettings>(body.value());
+}
+
+Status PlatformClient::setEmail(const std::string& email, const std::string& password) {
+    auto body = call("PUT", "/me/email", json{{"email", email}, {"password", password}}.dump());
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::resendVerification() {
+    auto body = call("POST", "/me/email/verification", "{}");
+    if (!body) return body.error();
+    return {};
+}
+
+Result<std::string> PlatformClient::verifyEmail(const std::string& token) {
+    auto body = call("POST", "/email-verifications", json{{"token", token}}.dump(), Auth::None);
+    if (!body) return body.error();
+    return parseAs<std::string>(body.value(), "username");
+}
+
+Status PlatformClient::requestPasswordReset(const std::string& nameOrEmail) {
+    auto body = call("POST", "/password-resets", json{{"name", nameOrEmail}}.dump(), Auth::None);
+    if (!body) return body.error();
+    return {};
+}
+
+Result<std::string> PlatformClient::completePasswordReset(const std::string& token, const std::string& password) {
+    auto body = call("POST", "/password-resets/complete", json{{"token", token}, {"password", password}}.dump(), Auth::None);
+    if (!body) return body.error();
+    return parseAs<std::string>(body.value(), "username");
+}
+
+Status PlatformClient::changePassword(const std::string& current, const std::string& password) {
+    auto body = call("PUT", "/me/password", json{{"current", current}, {"password", password}}.dump());
+    if (!body) return body.error();
+    return {};
+}
+
+Status PlatformClient::deleteAccount(const std::string& password) {
+    auto body = call("DELETE", "/me", json{{"password", password}}.dump());
+    if (!body) return body.error();
+    m_token.clear();
+    return {};
+}
+
+Result<std::string> PlatformClient::exportData() { return call("GET", "/me/export"); }
+
 Result<std::vector<GameInfo>> PlatformClient::games(const GameQuery& q) {
     auto body = call("GET", std::format("/games?search={}&sort={}&limit={}&offset={}", encodeQuery(q.search),
                                         encodeQuery(q.sort), q.limit, q.offset),
