@@ -15,7 +15,7 @@ else()
 endif()
 
 project(px
-    VERSION 0.8.0
+    VERSION 0.9.0
     DESCRIPTION "2D user-generated game platform: engine, runtime and tools"
     LANGUAGES C CXX)
 

@@ -228,7 +228,8 @@ and under 2 kB/s back.
 ### Protocol
 
 Messages start with a type byte; numbers are little-endian, most are
-variable-length (`net/Bytes.hpp`). Protocol version 2 (`net/Protocol.hpp`):
+variable-length (`net/Bytes.hpp`). Protocol version 3 (`net/Protocol.hpp`;
+version 3 is the [encrypted](#encryption) one):
 
 | Message | Direction | Delivery | Content |
 |---|---|---|---|
@@ -236,7 +237,7 @@ variable-length (`net/Bytes.hpp`). Protocol version 2 (`net/Protocol.hpp`):
 | Input | client -> server | unreliable | newest snapshot received, newest input sequence number, up to 32 frames |
 | Goodbye | client -> server | reliable | (leaving) |
 | Welcome | server -> client | reliable | player id, tick rate, snapshot interval, server name |
-| Reject | server -> client | reliable | reason code and text (version 2 adds "not authorized" and "saved data unavailable"), then the connection is closed |
+| Reject | server -> client | reliable | reason code and text (version 2 adds "not authorized" and "saved data unavailable", version 3 "server unverified"), then the connection is closed |
 | Snapshot | server -> client | unreliable | level epoch, tick, baseline tick, newest input used, world change |
 
 The game hash covers the engine and protocol versions, the replication
@@ -252,6 +253,37 @@ WebSockets, which browser builds use: each WebSocket message is a type
 byte (0 data, 1 disconnect with a 32-bit reason) and the payload
 ([ADR 0024](adr/0024-websockets-for-browsers.md)).
 
+### Encryption
+
+Every connection is encrypted, on UDP and WebSockets alike
+([ADR 0030](adr/0030-encrypted-game-traffic.md)). A secure layer
+(`net/Secure.cpp`) sits between the transport and the messages above:
+
+| Message | Content |
+|---|---|
+| ClientHello (0xC1) | `PXSC`, version 1, the client's fresh X25519 key |
+| ServerHello (0xC2) | version, the server's fresh X25519 key, its identity key (or zeros) |
+| Data (0xD0 reliable, 0xD1 unreliable) | 8-byte counter, the message encrypted with XChaCha20-Poly1305, 16-byte tag |
+
+Both sides hash the two hellos (BLAKE2b) and derive one key per direction
+from the shared secrets (the fresh keys, and the server's identity key when
+it has one). Counters never repeat; unreliable messages may arrive late or
+out of order but not twice (a 128-message window). A connection that sends
+more than 16 messages that do not decrypt is closed. The overhead is 25
+bytes per message.
+
+**Who the server is.** The platform makes an identity key for each game
+server it starts and puts the public half in the ticket (`serverKey`); the
+player refuses a server that cannot prove it holds it ("the server could
+not prove it is the one you were sent to"). A server you start yourself
+makes a key and prints it ("Game traffic is encrypted; the server's key is
+..."): give it to players as `--server-key` (keep it with
+`--identity-file FILE`). Without `--server-key`, traffic is still
+encrypted, but a player cannot tell who is at the other end.
+
+Players and servers from before 0.9.0 cannot talk to newer ones: an old
+player gets a readable "update your player" rejection.
+
 ## Testing
 
 | Test | What it does |
@@ -263,6 +295,8 @@ byte (0 data, 1 disconnect with a 32-bit reason) and the payload
 | `net_udp_localhost` | the same machinery over real UDP sockets |
 | `server_starts_and_stops` | `px-server` runs and exits cleanly |
 | `unit_tests` (`test_websocket.cpp`) | the WebSocket transport: messages both ways, disconnect reasons, a full server; a UDP player and a WebSocket player in one game |
+| `unit_tests` (`test_secure.cpp`) | encryption both ways, replayed, changed and reordered messages, the server's identity (right, wrong, a substituted handshake), answers to older players |
+| CI *Encrypted game traffic on the wire* | captures a real game on loopback and checks that no player name, script text or other plaintext appears (`tools/net/capture_check.py`) |
 | CI *Browser cross-play* | headless Chromium plays the top-down route on a platform game server while a desktop bot is there over UDP (`tools/browser/crossplay.sh`) |
 
 Two tools help with networking work:
@@ -283,9 +317,9 @@ server's (`--udp` uses real sockets instead of the simulation).
 
 - **Servers you start yourself are open:** anyone who can reach the port can
   join and names are not verified (platform servers check signed tickets,
-  [platform.md](platform.md#joining-a-game)). Traffic is not encrypted
-  anywhere yet. Run your own servers only among people you trust
-  ([security.md](security.md)).
+  [platform.md](platform.md#joining-a-game)). Their traffic is encrypted,
+  but players know who they talk to only with `--server-key`. Run your own
+  servers only among people you trust ([security.md](security.md)).
 - Score and objective are shared; per-player values are kept with saved
   data (`Data.get` / `Data.set`), which only platform servers store between
   visits.
@@ -295,7 +329,7 @@ server's (`--udp` uses real sockets instead of the simulation).
   management.
 - Players do not collide with each other.
 - Browser players use WebSockets (TCP): over a lossy network they stutter
-  more than UDP players. Encrypted only with `wss://`.
+  more than UDP players.
 - `--frames N` online counts ticks played on the server; scripted routes
   (`--input-script`) are reliable for the top-down example, not for the
   platformer's tight jumps.

@@ -5,18 +5,18 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-8 are done. Milestone 8 gave players a launcher and each
-other: px-player (computers and phones) and the browser page log in to a
-platform, show its games with pictures, each game's leaderboards, friends
-with what they play, and join or invite them; profiles, friend requests,
-blocking (blocked players never share a game server) and reports; games
-declare leaderboards and their server scripts submit scores, kept by the
-platform for everyone. CI tests the launcher against a real platform, the
-browser page with the real WebAssembly player, and the launcher on an
-emulated Android phone and a simulated iPhone. Recommended next: people
-play it on real devices and across a real network; then the platform's
-internet readiness (containers, encrypted UDP) before anything faces the
-internet (see "Recommended adjustments" below).
+Milestones 0-9 are done. Milestone 9 made the platform ready for the
+internet: every game connection is encrypted (and players check the game
+server's key from their ticket), game servers and upload checks lock
+themselves into a sandbox with processor and memory limits, accounts get
+email confirmation, password resets, deletion and a data download, and
+operators get online backups with restore, `/healthz` and Prometheus
+metrics, certificates renewed without a restart, a container image, a
+Compose file, a systemd unit and a deployment guide. CI builds the image
+and plays through it. Recommended next: run it on a real server with a
+real domain and invite people (devices, networks and mail delivery are
+where the remaining unknowns are), then Milestone 10 (see "Recommended
+adjustments" below).
 
 ## Blockers and open items
 
@@ -27,7 +27,7 @@ internet (see "Recommended adjustments" below).
 | Browser play not yet tried by a person | Input feel, audio policies, page integration unconfirmed | Founder: start px-platform with `--web-player` (the CI artifact `px-player-web`) and open `/play` |
 | The launcher and friends not yet used by people other than in automated runs (and by its developer on Linux) | Whether players find games and friends easily, how it feels on a phone | Two or three people make accounts, add each other, join and invite from a PC, a phone's browser and the Android app |
 | Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
-| Game servers run as plain processes; UDP game traffic is not encrypted | Not ready for the internet | HTTPS is in place; containers and encrypted UDP are the next platform items |
+| The platform not yet deployed on a public server (CI runs the container image, certificates are development ones, mail goes to a local SMTP server) | Let's Encrypt issuance, real mail delivery (SPF/DKIM), NAT and firewalls on the way to game servers unconfirmed | Founder: a small VPS with a DNS name, `docker compose -f deploy/compose.yaml up -d` ([deployment.md](docs/deployment.md)), a mail service, then people joining from home networks and phones |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
@@ -386,7 +386,60 @@ Next for social (not part of the milestone):
 - [ ] Leaderboard periods (daily, weekly), a leaderboard editor in Studio
 - [ ] A font with more scripts in the launcher; theming
 
-## Milestone 9: Creator ecosystem and scaling (**Planned**)
+## Milestone 9: Internet readiness (**Done**)
+
+Scope agreed with the founder: encrypted game traffic, game servers
+isolated with CPU and memory limits, email verification and password
+reset, account deletion, backups, a deployment guide with container images,
+server health metrics. Verified in CI on Linux (GCC, Clang, AddressSanitizer
++ UBSan, headless), Windows (MSVC), macOS, WebAssembly, Android and iOS, in
+a container built from the Dockerfile, and with the MinGW-w64 build under
+Wine 9.
+
+- [x] Encrypted game traffic ([ADR 0030](docs/adr/0030-encrypted-game-traffic.md),
+      [multiplayer.md](docs/multiplayer.md#encryption)): X25519 handshake and
+      XChaCha20-Poly1305 for every message on UDP, WebSockets and loopback;
+      the game server's identity key in the join ticket, refused when it
+      does not match; protocol 3 with a readable answer to older players.
+      CI: unit tests (replays, tampering, a substituted handshake) and a
+      packet capture of a real game with no plaintext
+- [x] Isolated game servers ([ADR 0031](docs/adr/0031-game-server-isolation.md),
+      [security.md](docs/security.md#game-servers)): seccomp (no programs,
+      processes, debugging, mounts, foreign signals) and Landlock (files
+      read-only as listed, TCP to own ports and the platform, no signals
+      out) entered before game code runs; clean environment, file and
+      process limits; a processor watch stops servers that stay over their
+      share; the same for upload checks. Tested in a forked child, with
+      platform-started servers, and inside Docker (Landlock 7)
+- [x] Accounts ([ADR 0032](docs/adr/0032-accounts-and-email.md),
+      [accounts.md](docs/accounts.md)): email confirmed by a link, password
+      resets by email (never saying who exists), password changes ending
+      other sessions, deleting an account (in the apps too) and downloading
+      its data; an SMTP client with TLS/STARTTLS on Mbed TLS or `.eml`
+      files; on the `/play` page (which now works without a browser player)
+      and in the launcher. CI: a fake SMTP server in unit tests, the page
+      with mail through aiosmtpd with STARTTLS
+- [x] Operations ([ADR 0033](docs/adr/0033-deployment-and-operations.md),
+      [deployment.md](docs/deployment.md)): online backups (SQLite backup API
+      plus the files the copy refers to and the key), daily and on demand,
+      restore with checks; `/healthz`; `/metrics` (requests, accounts, games,
+      game servers, mail, backups, certificate expiry, process); trusted
+      proxies for rate limits; renewed certificates taken into use without
+      a restart
+- [x] Deployment: a Dockerfile (with and without the browser player),
+      `deploy/compose.yaml` with certbot, a hardened systemd unit, the
+      guide. CI: the image built and played through
+      (`tools/deploy/container_check.sh`)
+
+Next for operations (not part of the milestone):
+
+- [ ] A real public deployment (see the blockers table)
+- [ ] Separate hosts for game servers; PostgreSQL when one SQLite file is
+      not enough
+- [ ] Two-factor authentication; text filtering; HSTS
+- [ ] Off-site backups built in (S3-compatible storage)
+
+## Milestone 10: Creator ecosystem and scaling (**Planned**)
 
 Persistent worlds, social hubs, collaboration, marketplace, analytics,
 monetization, advanced moderation, scalable hosting.
@@ -395,13 +448,13 @@ monetization, advanced moderation, scalable hosting.
 
 ## Recommended adjustments
 
-1. **Next: people on real devices.** Run px-platform on one computer of a
-   home network (`--bind 0.0.0.0 --public-host <address> --web-player
-   ...`), let a few people make accounts, add each other as friends and
-   play from PCs, phones' browsers and the Android app (the launcher), with
-   gamepads, and fix what they hit. Before anything faces the internet:
-   game servers in containers and encrypted UDP traffic; before chat:
-   text filtering and moderation tools.
+1. **Next: a real server and real people.** Put the platform on a small
+   VPS with a DNS name using `deploy/compose.yaml`, connect a mail service,
+   point Prometheus (or any uptime checker) at it, copy backups off the
+   machine, then let a few people make accounts, add each other as friends
+   and play from PCs, phones' browsers and the Android app, from their home
+   networks, and fix what they hit. Before chat: text filtering and
+   moderation tools.
 2. **Client-side behaviours before more visual effects**: decorative motion
    (the drifting clouds) currently runs on the server and is replicated
    (about 60 bytes per snapshot for 8 clouds). Client-realm behaviours

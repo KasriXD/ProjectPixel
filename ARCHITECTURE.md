@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.8.0). Planned parts are
+This describes the system **as it exists now** (v0.9.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -63,7 +63,7 @@ not link SDL.
 
 | Module | Responsibility | Depends on |
 |---|---|---|
-| `core` | Logging with sinks, `Result`/`Error`, math (`Vec2`, `Rect`), `Color`, `Guid`, sandboxed file access (`IFileSystem`), `FixedStepClock`, platform-independent `Key` names | std only |
+| `core` | Logging with sinks, `Result`/`Error`, math (`Vec2`, `Rect`), `Color`, `Guid`, sandboxed file access (`IFileSystem`), `FixedStepClock`, platform-independent `Key` names, the process sandbox (`Sandbox`: seccomp and Landlock on Linux, ADR 0031) | std only |
 | `assets` | `AssetId` (GUID), `AssetRegistry`, image decoding with size limits | core, stb_image |
 | `scene` | Generational entity handles, sparse-set component storage (`Registry`), built-in components, `Scene` (identity, lookup, parent/child hierarchy, world transforms), component descriptors (`ComponentInfo`: fields, ranges, requirements, validation) | core, assets |
 | `physics` | `CollisionWorld`: solid grids and boxes with shapes (solid, one-way, slopes), swept per-axis AABB movement with contact flags and ground snapping | core |
@@ -72,8 +72,8 @@ not link SDL.
 | `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, saved player data (`PlayerData`), leaderboards (`ILeaderboardStore`, memory store), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
 | `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
 | `platform_sdl` | SDL3 window, keyboard, gamepads and touch (fingers in virtual pixels), vsync and scaling changes, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
-| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
-| `crypto` | Secure random numbers from the OS, BLAKE2b, Argon2id passwords, EdDSA signatures, hex/base64url | core, Monocypher (private) |
+| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the encrypting layer every connection goes through (`Secure`: X25519 handshake, XChaCha20-Poly1305, the server's identity key; ADR 0030), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
+| `crypto` | Secure random numbers from the OS, BLAKE2b (plain and keyed), Argon2id passwords, EdDSA signatures, X25519 key exchange, XChaCha20-Poly1305, hex/base64url | core, Monocypher (private) |
 | `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS: accounts, games, friends, leaderboards, pictures), `PlatformPlayerStore`, `PlatformLeaderboardStore`, game pictures (`Thumbnail`), package cache, saved login. Desktop and phones | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
 | `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
 
@@ -96,7 +96,10 @@ Applications compose modules:
   network (`--net-test`).
 - **px-server** = project + runtime + net (+ online): the dedicated
   multiplayer server; with `--platform` it is started by the platform,
-  checks tickets and saves players' data. No graphics, no window.
+  checks tickets and saves players' data. Its traffic is encrypted
+  (`net/Secure.cpp`, ADR 0030) and, started by the platform, it locks
+  itself into a sandbox before running the game (ADR 0031). No graphics,
+  no window.
 - **px-platform** = `services/platform` (+ online, net, crypto, SQLite,
   cpp-httplib, Mbed TLS): the platform service ([docs/platform.md](docs/platform.md),
   [ADR 0021](docs/adr/0021-platform-service.md)), over HTTP and HTTPS. It
@@ -105,9 +108,15 @@ Applications compose modules:
   player. Friends, presence and invitations (`Social.cpp`,
   [ADR 0027](docs/adr/0027-friends-presence-and-blocking.md)) and
   leaderboards (`Leaderboards.cpp`, [ADR 0028](docs/adr/0028-leaderboards.md))
-  share the service's context (`ServiceContext.hpp`). It runs untrusted content
-  only in child processes (px-headless for upload checks, px-server for
-  games).
+  share the service's context (`ServiceContext.hpp`), as do accounts and
+  email (`Accounts.cpp`, `Mail.cpp`: an SMTP client on Mbed TLS,
+  [ADR 0032](docs/adr/0032-accounts-and-email.md)) and operations
+  (`Operations.cpp`: `/healthz`, `/metrics`, online backups and restoring,
+  trusted proxies, certificate renewal; [ADR 0033](docs/adr/0033-deployment-and-operations.md)).
+  It runs untrusted content only in child processes (px-headless for upload
+  checks, px-server for games), which it starts with a clean environment
+  and limits, and which sandbox themselves. The `Dockerfile` builds an image
+  with the three programs ([docs/deployment.md](docs/deployment.md)).
 - **px-studio** = editor + render + platform_sdl + Dear ImGui. Panels draw
   and call `px_editor`; they hold only UI state, so the UI toolkit can be
   replaced without touching editing logic ([ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md),
@@ -203,8 +212,7 @@ restart (R) starts a new session, reload (F5) loads a new `LoadedGame`.
 
 | Simplification | Why acceptable now | When it changes |
 |---|---|---|
-| The platform is one process with SQLite; game servers run as child processes on the same computer | A small community; the whole loop runs and is tested anywhere | PostgreSQL, several service instances and server hosts with containers (ADR 0021) |
-| Plain HTTP between programs and the platform; game traffic not encrypted | One computer or a trusted network | TLS in the clients, keys in connect tokens (docs/platform.md#security) |
+| The platform is one process with SQLite; game servers run as sandboxed child processes on the same computer (in its container) | A community on one server; backups are online and restorable; the whole loop runs and is tested anywhere | PostgreSQL, several service instances and separate game server hosts (ADR 0021, 0033) |
 | `SDL_Renderer` backend, no custom shaders | Runs everywhere SDL runs, including WebGL and mobile | Lighting/shader milestone: GPU backend behind `IRenderer2D` (ADR 0003) |
 | Kinematic AABB physics only; moving solids carry riders but do not push | Exactly what platformers need; deterministic and testable | Rigid bodies via Box2D v3 behind `physics` (ADR 0004) |
 | Trigger detection is all triggers x all bodies each tick | Small scenes | Spatial broadphase before large worlds |

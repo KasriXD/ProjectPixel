@@ -1,7 +1,9 @@
 # Security
 
-All user-generated content (projects, scenes, assets and, later, scripts) is
-untrusted. This page lists what is protected today and what is planned.
+All user-generated content (projects, scenes, assets and scripts) is
+untrusted. This page lists what is protected today and what is planned;
+[deployment.md](deployment.md) covers running a platform safely on the
+internet.
 
 ## Implemented
 
@@ -46,27 +48,62 @@ untrusted. This page lists what is protected today and what is planned.
 | Forged scores | Only authority scripts submit; servers send scores with their server key, only for players the platform seated on them and boards of the version they run; values finite and within ±10^15; owners and administrators can clear boards (audited) | `runtime/Leaderboards.cpp`, `services/platform/Leaderboards.cpp` (ADR 0028), tested |
 | Hostile pictures | Game pictures (4 MiB at most) are decoded and scaled in the separate check process (512 MiB, 20 s), re-encoded as 320x180 PNG; only the result is stored and served | `online/Thumbnail.cpp`, `PlatformService.cpp`, tested |
 | The saved login on a device | `login.json` readable only by its user (desktop), in the app's own folder on phones; tests never save one | `online/PlatformClient.cpp`, `apps/player/Launcher.cpp` |
+| Eavesdropping on or tampering with game traffic | Every connection is encrypted and authenticated (X25519 key exchange, XChaCha20-Poly1305 per message, replay window for unreliable messages) on UDP and WebSockets alike; on the platform the ticket carries the game server's key and players refuse a server that cannot prove it holds it; a capture of a whole game shows no plaintext (CI) | `net/Secure.cpp`, `Fleet.cpp` (ADR 0030), `tests/test_secure.cpp`, `tools/net/capture_check.py` |
+| A game exploiting the engine to take over the machine | Game servers and upload checks lock themselves down before running game code: no programs started, no new processes, no debugging, files read-only as listed (Landlock), TCP only to their own ports and the platform, no signals out; clean environment, no core dumps, limits on files and processes; a server that keeps a processor busy for 30 s is stopped ([below](#game-servers)) | `core/Sandbox.cpp`, `services/platform/Process.cpp`, `Fleet.cpp` (ADR 0031), `tests/test_sandbox.cpp` |
+| Locked-out or abandoned accounts | Email addresses confirmed by a one-time link; password resets only to confirmed addresses, by one-time links (hashed, 1 hour), answering the same whether or not an account exists, rate-limited per address and name; a reset ends every session; deleting an account (with the password) removes its personal data and games | `services/platform/Accounts.cpp` (ADR 0032), `tests/test_accounts.cpp` |
+| The mail server connection | SMTP only over TLS (or STARTTLS, then required), certificate and name checked; the password from the environment, never sent unencrypted; header injection refused | `services/platform/Mail.cpp`, tested against a fake server |
+| A reset or confirmation link leaking | The `/play` page removes the token from the address before doing anything (history, screenshots); `Referrer-Policy: no-referrer`; tokens are stored only as hashes | `web/play.js`, `Accounts.cpp` |
+| Clients hiding behind a proxy, or pretending to be one | `X-Forwarded-For` is only believed from `--trusted-proxy` addresses, read from the right; `/metrics` answers only locally and not through a proxy, unless a token is set | `services/platform/Operations.cpp`, tested |
+| Losing the data | Online backups of the database with the files it refers to and the key, checked; restore checks integrity and every referenced file | `Operations.cpp` (ADR 0033), tested |
+
+## Game servers
+
+Each game server (`px-server`) and each upload check (`px-headless
+--check-package`, `--check-thumbnail`) is started by the platform with:
+
+- a **clean environment** (only `PATH`, `TZ`, certificate variables and its
+  own key), no core dumps, at most 1024 open files and 256 MiB per written
+  file (checks: 64 files, 512 MiB or 16 MiB), one process, the memory limit
+  (`--server-memory`; checks 2 GiB, pictures 512 MiB);
+- a **processor watch**: more than `--server-cpu` percent of a processor
+  (default 100) in every sample for 30 s and the server is stopped;
+- on Linux, after it has read the game and before it runs it, a
+  **sandbox** it enters itself (`core/Sandbox.cpp`):
+  - a **seccomp** filter: no `execve`, no `fork`/`vfork`/process `clone`,
+    no `ptrace` or reading other processes' memory, no mounts, namespaces,
+    kernel modules or keys, sockets only for UNIX, IPv4, IPv6 and netlink,
+    signals only to itself;
+  - **Landlock** (kernel 5.13+): reading only the system files it needs
+    (libraries, certificates, time zones, name resolution) and its own
+    inputs, writing nothing; with Landlock 4 (6.7+) TCP only on its own
+    port and to the platform; with Landlock 6 (6.12+) no signals or
+    abstract sockets out of the process.
+
+The server's log says what it got, for example "Sandbox: system calls
+filtered; Landlock 7: files read-only as listed, TCP ports limited, no
+signals out". On Windows, a job object gives the one-process limit, UI
+restrictions and no error dialogs; Windows and macOS have no system call
+or file walls (production is expected on Linux). `--no-sandbox` turns the
+lock-down off for debugging.
 
 ## Planned
 
 - **Scripts**: per-tick total CPU budget for servers, fuzzing the script
   loader and bindings, keeping Luau current. Known gaps are listed in
   [scripting.md](scripting.md#what-the-sandbox-does-not-yet-protect-against).
-- **HTTPS**: implemented (above). Still to do: automatic certificate
-  renewal (Let's Encrypt), HSTS once deployments always use HTTPS.
-- **Game servers**: today separate processes with a memory limit, running
-  as the platform's account. Planned: isolated containers with CPU, memory
-  and network limits and no access to the platform's files.
-- **Multiplayer connections**: game traffic is authenticated at joining
-  (platform servers) but not encrypted over UDP or `ws://` (it is over
-  `wss://`); servers without `--platform` (LAN, Studio tests) still accept
-  anyone. Planned: keys in the connect token and
-  encrypted transport, per-client message and bandwidth limits, kicking
+- **HTTPS**: implemented with renewals taken into use without a restart
+  ([deployment.md](deployment.md#certificates)). Still to do: HSTS once
+  deployments always use HTTPS.
+- **Game servers**: the sandbox above is Linux-only; one user account for
+  all servers of a platform. Planned: separate user namespaces where
+  available, per-server network bandwidth limits.
+- **Multiplayer connections**: servers without `--platform` (LAN, Studio
+  tests) encrypt but accept anyone and cannot be verified without
+  `--server-key`. Planned: per-client message and bandwidth limits, kicking
   from the server.
-- **Platform**: email verification and password reset, two-factor
-  authentication, account deletion, text filtering of titles, profiles and
-  reports, parental settings (for example, friends only with a parent's
-  approval).
+- **Platform**: two-factor authentication, text filtering of titles,
+  profiles and reports, parental settings (for example, friends only with a
+  parent's approval).
 - **Leaderboards**: they trust the game's own rules; detecting impossible
   scores (outliers, replays) is not done.
 - **Assets**: fuzzing the image decoders with libFuzzer (uploads are

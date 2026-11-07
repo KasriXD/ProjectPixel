@@ -3,9 +3,11 @@
 The platform is where games are published and played: accounts, a catalog
 of games with pictures, game servers it starts on demand, saved player
 data, leaderboards, friends and moderation. It is one program, **px-platform**, with an HTTP API that
-Studio, the player, game servers and tools use. This is the first version
-([ADR 0021](adr/0021-platform-service.md)): it runs well on one computer or
-a small server, and its limits are listed at the end.
+Studio, the player, game servers and tools use
+([ADR 0021](adr/0021-platform-service.md)). It runs on one computer or one
+server; [deployment.md](deployment.md) puts it on the internet (container
+image, certificates, backups, monitoring), and its limits are listed at the
+end.
 
 ```
  Studio ──publish──▶ ┌──────────────┐ ◀──log in, browse, join── px-player
@@ -43,6 +45,14 @@ px-platform --data platform-data --make-admin YourName
 | `--https-port N`, `--tls-cert FILE`, `--tls-key FILE` | off | HTTPS on a second port ([below](#https)) |
 | `--https-bind ADDRESS` | `--bind` | listen address for HTTPS |
 | `--web-player DIR` | `web-player/` next to px-platform | the WebAssembly player: play in browsers at `/play` ([below](#browsers)) |
+| `--server-memory MIB`, `--server-cpu PERCENT` | 1024, 100 | each game server's memory, and the share of a processor it may keep busy for 30 s before it is stopped (0: no limit) |
+| `--no-sandbox` | | game servers and checks do not lock themselves down ([security](#security)); for debugging |
+| `--public-url URL` | the HTTPS address, else HTTP | what people open: links in email point there |
+| `--smtp URL`, `--smtp-user NAME`, `--smtp-ca FILE`, `--mail-from ADDRESS` | | email through a mail server ([accounts.md](accounts.md#email)); the password in `PX_SMTP_PASSWORD` |
+| `--mail-dir DIR` | | email written as files instead (development) |
+| `--require-verified-email` | | publishing needs a confirmed address |
+| `--trusted-proxy LIST` | | reverse proxies whose `X-Forwarded-For` is believed ([deployment.md](deployment.md#behind-a-reverse-proxy)) |
+| `--backup-dir DIR`, `--backup-hours H`, `--backup-keep N` | `<data>/backups`, 24, 7 | backups ([deployment.md](deployment.md#backups)) |
 | `--no-rate-limits` | | for testing |
 
 To let other computers on your network play, start it with
@@ -73,13 +83,19 @@ without it.
 
 ## Accounts
 
-Create an account in Studio (*Platform > Publish, Play and Log In...*) or
-with `px-player`/`px-headless --register`. Names are 3 to 20 letters, digits
+Create an account in Studio (*Platform > Publish, Play and Log In...*), in
+the player's launcher, on the `/play` page or with
+`px-player`/`px-headless --register`. Names are 3 to 20 letters, digits
 or `_`, unique regardless of case; passwords need at least 8 characters.
 Logging in gives a session token that lasts 30 days. Studio and the player
 remember it in your user folder (`login.json`, readable only by you where
 the system has file permissions), so logging in once in Studio is enough for
 the player too.
+
+An account can have an email address (confirmed by a link), which makes
+forgotten passwords recoverable; it can change its password, download
+everything the platform keeps about it, and delete itself:
+[accounts.md](accounts.md).
 
 ## Publishing
 
@@ -271,7 +287,7 @@ game server when it starts it.
 
 | Method and path | Auth | |
 |---|---|---|
-| `GET /platform` | | name, engine version, API version, public key, `webPlayer` (browser play available) |
+| `GET /platform` | | name, engine version, API version, public key, `webPlayer` (browser play available), `mail` (the platform sends email) |
 | `POST /accounts` | | register `{username, password}` → `{user, token}` |
 | `POST /sessions` | | log in → `{user, token}` |
 | `DELETE /sessions/current` | Bearer | log out |
@@ -296,18 +312,24 @@ game server when it starts it.
 | `POST /server/ready`, `POST /server/heartbeat` | Server | `{port}`; `{players}` → `{stop}` |
 | `GET /server/data/{userId}`, `PUT /server/data/{userId}` | Server | load; save `{data, release}` |
 | `POST /server/release/{userId}`, `POST /server/ended` | Server | a player left before loading; the server stops |
+| email address, password changes and resets, deleting the account, its data | (Bearer) | see [accounts.md](accounts.md#http-api) |
+| `GET /admin/backups`, `POST /admin/backups` | admin | the backups; make one now ([deployment.md](deployment.md#backups)) |
 | profiles, friends, invitations, blocks, reports about accounts | Bearer | see [social.md](social.md#http-api) |
 | `GET /games/{id}/leaderboards`, `POST /server/leaderboards`, ... | | see [leaderboards.md](leaderboards.md#http-api) |
 
 Outside `/api/v1`: `GET /` (a list of games), `GET /play` and
 `/play/play.js`, `/play/play.css`, `/play/avatars.png` (the browser page), `GET
-/play/player/px-player.{js,wasm,data}` (the WebAssembly player, with `ETag`).
+/play/player/px-player.{js,wasm,data}` (the WebAssembly player, with `ETag`),
+`GET /healthz` and `GET /metrics` ([deployment.md](deployment.md#monitoring)).
 
 Rate limits (per address and account): 600 requests a minute, 20 log-ins a
 minute (10 per name), 10 new accounts an hour, 20 new games and 30
 publishes an hour, 30 joins a minute (games and friends together), 10
 reports an hour, 30 friend requests an hour, 30 invitations in ten minutes,
-30 profile changes and 30 pictures an hour. Over the limit: status 429.
+30 profile changes and 30 pictures an hour, 5 email address changes, 10
+password changes and 10 reset requests an hour (3 per name). Over the
+limit: status 429. Behind a reverse proxy, "address" is the client's
+address only with `--trusted-proxy`.
 
 ## Security
 
@@ -320,9 +342,17 @@ What protects what (see also [security.md](security.md)):
   process with a memory and time limit, images are re-encoded, and only the
   checked package is stored and served. Child processes get no open files
   or sockets of the service, only their own output file.
-- **Game servers** run as separate processes with a memory limit; their key
-  is passed in the environment, not on the command line. A server can only
-  read and write the saved data of players the platform sent to it.
+- **Game servers** run as separate processes with memory and processor
+  limits, a clean environment and, on Linux, a system call filter and
+  Landlock rules: they cannot start programs, read the platform's files or
+  reach anything but the platform and their own ports
+  ([ADR 0031](adr/0031-game-server-isolation.md)). Their keys are passed in
+  the environment, not on the command line. A server can only read and
+  write the saved data of players the platform sent to it.
+- **Game traffic** is encrypted (X25519, XChaCha20-Poly1305) on UDP and
+  WebSockets alike; the ticket carries the game server's public key, so
+  players know they reach the server the platform sent them to
+  ([multiplayer.md](multiplayer.md#encryption)).
 - **Tickets** are signed (EdDSA), short-lived, single-use and bound to one
   server session; a server needs no connection to the platform to check them.
 - **The signing key** (`<data>/platform.key`) is readable only by the
@@ -346,21 +376,20 @@ What protects what (see also [security.md](security.md)):
 - **Friends and blocks**: presence only for friends, blocked players never
   on one server ([social.md](social.md)).
 
-Not yet (planned):
+- **Accounts**: email addresses confirmed by a link, password resets by
+  email that never say whether an account exists, deleting an account and
+  downloading its data ([accounts.md](accounts.md)).
 
-- **UDP game traffic is not encrypted**, only authenticated at joining
-  (browser players on `wss://` are encrypted).
-- **Servers are processes, not containers:** they run as the platform's
-  account with a memory limit, not in an isolated container with CPU and
-  network limits.
-- No email, password reset, two-factor authentication or account deletion;
-  no profanity filter on titles; one platform process (no clustering).
+Not yet (planned): two-factor authentication, a profanity filter on titles
+and profiles, more than one platform process (no clustering).
 
 ## Command-line tools
 
 | Command | |
 |---|---|
 | `px-platform ...` | run the platform (above) |
+| `px-platform --data DIR --backup`, `--restore BACKUP`, `--check-health [URL]` | backups and health ([deployment.md](deployment.md)) |
+| `px-platform --data DIR --reset-link NAME` | a password reset link for an account (an hour) |
 | `px-headless <project> --pack FILE.pxpkg` | write a game package |
 | `px-headless --check-package FILE [--output FILE] [--ticks N]` | the platform's upload check (prints a JSON report) |
 | `px-headless <project> --platform URL --user NAME --password TEXT [--register] --publish [--game ID] [--title T] [--notes N]` | publish |
@@ -377,7 +406,7 @@ cache (tests use it).
 
 - One process with one SQLite database: fine for a small community, not for
   millions of players. Game servers run on the same computer as the
-  platform.
+  platform (in its container, when it runs in one).
 - Players cannot pick a server; they reach friends by joining them or
   being invited ([social.md](social.md)), otherwise seats are filled in
   order.

@@ -31,5 +31,9 @@
 | [0027](0027-friends-presence-and-blocking.md) | Friends, presence and blocking in the platform | Accepted |
 | [0028](0028-leaderboards.md) | Leaderboards declared by games, kept by the platform | Accepted |
 | [0029](0029-launcher-in-the-player.md) | The launcher lives in px-player, drawn with Dear ImGui | Accepted |
+| [0030](0030-encrypted-game-traffic.md) | Game traffic is encrypted end to end, with the server's key in the ticket | Accepted |
+| [0031](0031-game-server-isolation.md) | Game servers and upload checks lock themselves down | Accepted |
+| [0032](0032-accounts-and-email.md) | Accounts get email through the platform's own SMTP client | Accepted |
+| [0033](0033-deployment-and-operations.md) | One container image; the platform does its own TLS, backups and metrics | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

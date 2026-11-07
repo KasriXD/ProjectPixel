@@ -26,7 +26,8 @@ px-player --platform https://example.com   # the launcher, with this platform's 
 - **Log in** with the platform's address, your name and password, or
   *Create an account*. *Stay logged in on this device* keeps the login (the
   same login Studio uses; logging in from either logs in both). The next
-  start logs in by itself.
+  start logs in by itself. *Forgot your password?* sends a reset link to
+  the account's confirmed email address ([accounts.md](accounts.md)).
 - **Games**: the platform's games with their pictures, how often they were
   played and how many play right now; search and order (popular, new,
   playing now). A card opens the game's page.
@@ -40,7 +41,8 @@ px-player --platform https://example.com   # the launcher, with this platform's 
   removes a friend, blocks or reports someone.
 - **You**: your portrait (one of 16), a short text about you, who may join
   you in games (friends, or only friends you invite), the people you
-  blocked, and *Log out*.
+  blocked; your email address (confirmed by a link), changing your
+  password, *Log out* and *Delete your account...* ([accounts.md](accounts.md)).
 - **On this device**: games that play without a platform: the bundled
   examples on computers, the game that comes with the app on phones.
 
@@ -63,7 +65,7 @@ games, then leaves the app.
 | `--launcher` | open the launcher even with other options |
 | `--platform URL` | the platform's address (without `--play`: for the launcher) |
 | `--user NAME --password TEXT [--register]` | log in (or make the account) at once; with `--frames` the login is not saved |
-| `--open PAGE` | the first page: `game:ID`, `friends`, `you`; or start `play:ID`, `join:NAME` or `local:N` (the Nth game on this device) |
+| `--open PAGE` | the first page: `game:ID`, `friends`, `you`, `account` (your page, at its account settings); or start `play:ID`, `join:NAME` or `local:N` (the Nth game on this device) |
 | `--frames N --screenshot FILE` | tests: draw N frames once nothing is loading, save the last one, quit; a game started with `--open` also plays N frames first, then returns to the launcher |
 | `--invite NAME` | with `--play ID`: invite this friend once in the game |
 
@@ -91,12 +93,16 @@ are taken from it.
 
 ## The browser
 
-The platform's `/play` page does the same in a browser when the platform
-serves the WebAssembly player (`--web-player`, see
-[platform.md](platform.md#browsers)): the games with pictures (*Play* on
-each card plays at once), a page per game with its leaderboards, friends,
-your profile, and while playing, a panel to invite friends to the game
-server you are on. Addresses: `/play#games`, `#game=ID`, `#friends`, `#you`;
+The platform's `/play` page does the same in a browser: the games with
+pictures (*Play* on each card plays at once), a page per game with its
+leaderboards, friends, your profile and account settings (email address,
+password, downloading your data, deleting the account), and while playing,
+a panel to invite friends to the game server you are on. Playing needs the
+WebAssembly player on the platform (`--web-player`, see
+[platform.md](platform.md#browsers)); without it the page has everything
+but the *Play* buttons and says to use the app. Links in the platform's
+email open `#verify=TOKEN` (confirms the address) and `#reset=TOKEN`
+(choose a new password) on this page. Addresses: `/play#games`, `#game=ID`, `#friends`, `#you`;
 `#play=ID` and `#join=NAME` start the player only when the page itself went
 there after a click, so a link from elsewhere cannot make you join a game
 or a person: it opens the game's page or the friends page.
@@ -120,6 +126,7 @@ open scene* when publishing (what the game's camera shows), with
 | `launcher_smoke_headless_display` (ctest, every platform) | the launcher opens without a platform, starts a game on this device, gets the window back and draws again |
 | `tools/launcher/launcher_check.sh BUILD_DIR OUT_DIR` (Linux CI) | a platform with a published game, three accounts and a bot playing: every launcher page with screenshots, playing from the launcher, joining a friend, inviting a friend from a game, the saved login |
 | `tools/browser/social_test.sh NATIVE WEB OUT [desktop\|phone]` (CI, with the real WebAssembly player) | the browser page: pictures, a game's page and leaderboards, accepting and sending friend requests, the profile, links not starting the player, joining a friend and inviting one; nothing wider than the screen |
+| `tools/browser/accounts_test.sh NATIVE OUT [files\|smtp] [desktop\|phone]` (CI) | the page without a browser player: account settings, links from the mail, password reset and change, the data download, deleting the account |
 | `tools/android/emulator_check.sh`, the iOS job | the apps open the launcher, start the game on the device and go back to the launcher |
 
 ## Limitations

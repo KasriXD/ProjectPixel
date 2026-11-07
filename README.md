@@ -10,7 +10,7 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.8.0)
+## Current status (version 0.9.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
 scripting), 3 (Studio foundation), 4 (multiplayer prototype), 5 (visual
@@ -18,10 +18,14 @@ scripting and expanded engine: prefabs, animation clips, tilesets), 6
 (the platform's core loop: accounts, publishing, catalog, game servers,
 saved player data, moderation) and 7 (cross-platform clients: browsers
 playing with desktop players, HTTPS, gamepads, touch controls, player
-settings, Android and iOS apps built in CI) and 8 (launcher and social: a
+settings, Android and iOS apps built in CI), 8 (launcher and social: a
 launcher in the desktop, phone and browser apps, game pictures, profiles,
 friends with presence, joining and inviting friends, blocking, shared
-leaderboards) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
+leaderboards) and 9 (internet readiness: encrypted game traffic, sandboxed
+game servers with CPU and memory limits, email confirmation and password
+resets, account deletion, backups, health and metrics, a container image
+and a deployment guide) are complete. See [ROADMAP.md](ROADMAP.md) for
+detail.
 
 | Area | Status |
 |---|---|
@@ -43,7 +47,8 @@ leaderboards) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | Headless simulation (no graphics) | Implemented; used by the dedicated server and automated tests |
 | Multiplayer: dedicated server (`px-server`), joining with `px-player --connect` or hosting with `--host`, UDP transport (ENet), delta snapshots, interpolation, prediction of the own character | Prototype; server and player windows played on one Linux computer over real UDP; three-player level completed through a simulated lossy network in CI on Linux, Windows and macOS. **Not yet played across a real network** ([guide](docs/multiplayer.md)) |
 | Studio *Test Multiplayer*: a local server and 1-4 player windows | Implemented, used on Linux |
-| Platform (`px-platform`): accounts, publishing from Studio with versions and upload checks, catalog, game servers started on demand with signed join tickets, saved player data (`Data.get/set`), reports and moderation | First version; the whole loop (publish, browse, join, play, save) runs in tests with real game server processes in CI on Linux, Windows and macOS, and was used from Studio and the player on Linux. HTTPS (Mbed TLS) with certificate checks in every client. Game servers are plain processes on one machine: **not for the internet yet** ([guide](docs/platform.md)) |
+| Platform (`px-platform`): accounts, publishing from Studio with versions and upload checks, catalog, game servers started on demand with signed join tickets, saved player data (`Data.get/set`), reports and moderation | The whole loop (publish, browse, join, play, save) runs in tests with real game server processes in CI on Linux, Windows and macOS, and was used from Studio and the player on Linux. HTTPS (Mbed TLS) with certificate checks in every client ([guide](docs/platform.md)) |
+| Ready for the internet: encrypted game traffic (UDP and WebSockets), game servers and upload checks sandboxed (seccomp, Landlock) with CPU and memory limits, email confirmation, password resets, deleting accounts and downloading their data, online backups and restore, `/healthz` and Prometheus `/metrics`, certificates renewed without a restart, a container image, Compose file and systemd unit | Implemented; CI builds the image and plays a level through it (HTTPS, a bot over the published UDP port, backup restored into a new volume, a renewed certificate), checks a packet capture for plaintext, and drives the account pages with mail through a real SMTP server with STARTTLS. **Not yet run on a public server with a real domain** ([deployment](docs/deployment.md), [accounts](docs/accounts.md)) |
 | Playing in a browser: the platform's `/play` page, the WebAssembly player joining the same game servers as desktop players over WebSockets (`wss://` with HTTPS) | Verified in CI: headless Chromium plays the top-down route on a platform game server while a desktop bot is there over UDP, over HTTP and HTTPS. **Not yet played by a person in a browser** ([details](docs/platform.md#browsers)) |
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
 | Example games, loaded from project files | A platformer and a top-down game, both playable; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
@@ -56,7 +61,7 @@ leaderboards) are complete. See [ROADMAP.md](ROADMAP.md) for detail.
 | Launcher: log in, browse games with pictures, a game's page with leaderboards, friends, profile, play and join friends; in px-player (Dear ImGui) and on the browser page | Implemented; tested against a real platform in CI (every page, playing, joining a friend, inviting from a game, saved login; the browser page at computer and phone sizes with the real WebAssembly player); used with mouse and keyboard on Linux ([guide](docs/launcher.md)) |
 | Friends and profiles: portraits, about text, requests, presence (online, playing what), joining friends, invitations, blocking (never on one server), reports about accounts | Implemented in the platform; tested with real game servers ([guide](docs/social.md)) |
 | Leaderboards: declared in `project.json`, submitted by server scripts (`Leaderboard.submit`), each player's best kept by the platform for everyone | Implemented; scores travel from game servers to the platform and back in tests; the examples' best times appear in the launcher ([guide](docs/leaderboards.md)) |
-| Audio, text/fonts in games; chat; encrypted UDP game traffic; marketplace | Planned (Milestone 9 and later) |
+| Audio, text/fonts in games; chat; marketplace | Planned (Milestone 10 and later) |
 
 ## Building
 
@@ -266,6 +271,8 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [docs/studio.md](docs/studio.md): Studio guide and tutorial
 - [docs/multiplayer.md](docs/multiplayer.md): playing together, multiplayer scripting, how the networking works
 - [docs/platform.md](docs/platform.md): the platform: running it, publishing, playing, game servers, saved data, moderation, API
+- [docs/deployment.md](docs/deployment.md): running a platform on the internet: the container image, Compose, systemd, certificates, backups, monitoring
+- [docs/accounts.md](docs/accounts.md): email addresses, password resets and changes, deleting an account, downloading its data; email for operators
 - [docs/launcher.md](docs/launcher.md): the launcher in px-player and on the browser page; game pictures
 - [docs/social.md](docs/social.md): profiles, friends, presence, joining and inviting, blocking, reports
 - [docs/leaderboards.md](docs/leaderboards.md): declaring leaderboards, the script API, where scores are kept

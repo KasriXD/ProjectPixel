@@ -135,7 +135,9 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 ### Mbed TLS
 - **Why:** TLS for HTTPS and secure WebSockets that builds the same way on
   Windows, macOS and Linux, with no system library to install; cpp-httplib
-  supports it directly. Built with its programs and tests off.
+  supports it directly. The platform's SMTP client uses it too
+  (`Mail.cpp`, [ADR 0032](adr/0032-accounts-and-email.md)), and the
+  certificate checks for renewals. Built with its programs and tests off.
 - **Alternatives:** OpenSSL (not on Windows by default, large build), the
   systems' own TLS (Schannel, Secure Transport, OpenSSL on Linux: three
   implementations). See [ADR 0025](adr/0025-tls-with-mbed-tls.md).
@@ -156,10 +158,19 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 ### Monocypher
 - **Why:** audited, small (one C file), no dependencies, portable to every
   target including WebAssembly; covers exactly what the platform needs:
-  Argon2id for passwords, EdDSA for connect tokens, BLAKE2b for hashes.
-  Random numbers come from the operating system (`crypto/Crypto.cpp`).
+  Argon2id for passwords, EdDSA for connect tokens, BLAKE2b for hashes,
+  X25519 and XChaCha20-Poly1305 for game traffic
+  ([ADR 0030](adr/0030-encrypted-game-traffic.md)). Random numbers come
+  from the operating system (`crypto/Crypto.cpp`).
 - **Alternatives:** libsodium (larger, separate build), OpenSSL (large, hard
   to ship on every platform).
+
+### Tools used only by tests and deployment
+
+Not part of any program: Playwright with headless Chromium (browser tests,
+`tools/browser`), aiosmtpd (a real SMTP server for the accounts test),
+certbot (the Compose file's certificates; its own image), Ubuntu 24.04 (the
+container image's base).
 
 ## Evaluated, planned
 
