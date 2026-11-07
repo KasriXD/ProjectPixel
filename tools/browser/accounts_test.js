@@ -123,9 +123,17 @@ async function main() {
     // An email address, confirmed by the link in the mail.
     await page.click('#nav a[data-page=you]');
     await visible('#email-form');
-    // (The account settings arrive after the page opens.)
-    const stateIs = (re, what) => page.waitForFunction((src) => new RegExp(src).test(document.getElementById('email-state').textContent),
-      re.source, { timeout: 10000 }).catch(async () => { throw new Error(`${what}: ${await text('#email-state')}`); });
+    // (The account settings arrive after the page opens.) Polled from here:
+    // waitForFunction would poll inside the page with eval, which the page's
+    // content security policy blocks.
+    const stateIs = async (re, what) => {
+      const until = Date.now() + 10000;
+      while (Date.now() < until) {
+        if (re.test(await text('#email-state'))) return;
+        await page.waitForTimeout(100);
+      }
+      throw new Error(`${what}: ${await text('#email-state')}`);
+    };
     await stateIs(/No email address/, 'email state before');
     await page.fill('#email', 'Ana@Example.com');
     await page.fill('#email-password', 'wrong-password');

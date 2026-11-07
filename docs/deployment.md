@@ -242,7 +242,7 @@ Logs: the platform logs to standard output (`docker compose logs platform`,
 Make a backup, then rebuild and restart (`git pull`, then
 `docker compose -f deploy/compose.yaml up -d --build`). The platform
 upgrades its database when it starts; players with an older player are
-told to update when they join a game (protocol version 3 since 0.9.0).
+told to update when they join a game (protocol version 4 since 0.10.0).
 
 ## Checking an image
 

@@ -18,7 +18,11 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
 | Mbed TLS | 3.6.7 | Apache-2.0 | Downloaded release tarball, SHA-256 pinned, static libraries; only with the platform (`PX_ENABLE_TLS`) | HTTPS and `wss://` in cpp-httplib ([ADR 0025](adr/0025-tls-with-mbed-tls.md)) |
 | SQLite | 3.54.1 (`57520227`) | Public domain | Amalgamation (`sqlite3.c`/`sqlite3.h`) built from the official source tag with its own `make sqlite3.c`, vendored in `third_party/sqlite` | `services/platform` |
 | Monocypher | 4.0.3 (`ab2b16dd`) | BSD-2-Clause or CC0 (`third_party/monocypher/LICENCE.md`) | Vendored `monocypher.c`/`.h` | `crypto` (private): Argon2id, EdDSA, BLAKE2b |
-| stb_image_write | 1.16, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file, PNG to memory only | `online` (private): re-encoding uploaded images |
+| stb_image_write | 1.16, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file, PNG to memory only | `assets` and `online` (private): re-encoding uploaded images, baked fonts |
+| stb_vorbis | 1.22, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file without stdio or the push API | `audio` (private): Ogg Vorbis sounds |
+| stb_truetype | 1.26, commit `a7d4c217` | MIT / public domain | Vendored in `third_party/stb`, compiled in one C file | `fontbake` (private): Studio and `--bake-font` only |
+| qoa.h | commit `bc058971` | MIT (`third_party/qoa/LICENSE`) | Vendored in `third_party/qoa`; only its encoder is used (decoding is our own) | `audio` (private): QOA sounds as the platform stores them |
+| Press Start 2P | google/fonts commit `86aced91` | SIL Open Font License 1.1 (`third_party/fonts/press-start-2p/OFL.txt`) | The TrueType file vendored; baked at 8 px into the built-in font (renamed "Pixel Default", as the licence requires) in `engine/render/fonts` | `render`: the built-in font |
 | doctest | 2.5.3 | MIT | Vendored in `third_party/doctest` | tests only |
 
 ### SDL3
@@ -44,6 +48,18 @@ mechanism: [ADR 0002](adr/0002-dependency-management.md)).
   assets will be validated and re-encoded server-side in a sandbox before
   distribution (Milestone 6); clients will only receive platform-processed
   assets. See [security.md](security.md).
+
+### stb_vorbis, stb_truetype and qoa.h
+
+- **Why:** small, single-file, no dependencies, and they build everywhere
+  the engine does (browsers and phones included). Vorbis is the format
+  creators have; QOA is simple enough to decode with code we wrote and
+  checked ourselves ([ADR 0034](adr/0034-audio.md)).
+- **Risk:** stb_vorbis and stb_truetype are not hardened against hostile
+  files. Players never meet either with content from the internet: the
+  platform stores every sound as QOA it wrote and games carry bitmap fonts
+  only ([ADR 0035](adr/0035-bitmap-fonts.md)). stb_vorbis runs on uploads
+  only inside the sandboxed check, with limits read from the header first.
 
 ### Luau
 - **Why:** the creator scripting language ([ADR 0008](adr/0008-scripting-luau.md)).

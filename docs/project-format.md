@@ -104,7 +104,7 @@ type, each on the arrow keys and WASD (plus Space and Z for jumping).
 | Field | Required | Meaning |
 |---|---|---|
 | `id` | yes | asset GUID, unique |
-| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"graph"`, `"prefab"`, `"animation"` or `"tileset"` |
+| `type` | yes | `"texture"`, `"scene"`, `"script"`, `"graph"`, `"prefab"`, `"animation"`, `"tileset"`, `"sound"` or `"font"` |
 | `path` | yes | file path inside the project |
 | `name` | no | label for tools (defaults to the path) |
 | `filter` | no (`"nearest"`) | textures only: `"nearest"` for pixel art, `"linear"` for smooth art |
@@ -113,7 +113,10 @@ Textures may be PNG, JPEG, BMP or TGA, at most 8192x8192 pixels.
 Scripts are Luau source files (UTF-8, at most 1 MiB). All scripts are
 compiled when the project loads; a syntax error stops loading and names the
 file and line. Graphs (visual scripts) are compiled to Luau first; a graph
-with problems stops loading and names the node.
+with problems stops loading and names the node. Sounds are WAV, Ogg Vorbis
+or QOA files ([audio.md](audio.md#sounds-in-a-project)); fonts are bitmap
+font files (`*.font.json`, [text.md](text.md#the-font-file)) naming a
+texture asset with their letters.
 
 ## Scene files
 
@@ -265,6 +268,10 @@ nothing else stored in the scene.
 | Graph format | Engine | Change | Migration |
 |---|---|---|---|
 | 1 | 0.5 | Initial format; `graph` assets were added compatibly | |
+
+| Font format | Engine | Change | Migration |
+|---|---|---|---|
+| 1 | 0.10 | Initial format; `sound` and `font` assets and the `Text` and `AudioSource` components were added compatibly (older engines refuse projects that use them) | |
 
 | Project format | Engine | Change | Migration |
 |---|---|---|---|

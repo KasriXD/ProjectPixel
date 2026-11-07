@@ -35,5 +35,7 @@
 | [0031](0031-game-server-isolation.md) | Game servers and upload checks lock themselves down | Accepted |
 | [0032](0032-accounts-and-email.md) | Accounts get email through the platform's own SMTP client | Accepted |
 | [0033](0033-deployment-and-operations.md) | One container image; the platform does its own TLS, backups and metrics | Accepted |
+| [0034](0034-audio.md) | Our own mixer on SDL's audio device; the platform stores sounds as QOA | Accepted |
+| [0035](0035-bitmap-fonts.md) | Text uses bitmap fonts baked in Studio; players never read TrueType | Accepted |
 
 New ADRs: copy [0000-template.md](0000-template.md).

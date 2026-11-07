@@ -79,6 +79,9 @@ Windows and `~/.local/share/ProjectPixel/player` on Linux):
 
 | Setting | Values | |
 |---|---|---|
+| Volume | 0-100% (80%) | all sound; "no sound" when the device has none ([audio.md](audio.md)) |
+| Music | 0-100% | the games' music |
+| Effects | 0-100% | everything else |
 | VSync | on, off | off can tear but has less delay |
 | Frame limit | none, 30, 60, 120 | saves battery; not in browsers, which pace frames themselves |
 | Scaling | game default, pixel perfect, fit screen | pixel perfect keeps every pixel the same size, with borders; fit screen fills more of it |

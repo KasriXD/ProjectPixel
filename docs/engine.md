@@ -121,9 +121,12 @@ collectibles).
 - `render::IRenderer2D` is the backend interface: textures, sprites
   (with source rect, rotation, flips, tint), filled and outlined rectangles,
   debug text, frame begin/end. Coordinates are virtual-resolution pixels.
-- `render::renderScene` draws tilemaps and sprites sorted by layer (stable
-  within a layer: tilemaps, then sprites in creation order), skipping
-  off-screen sprites and tiles.
+- `render::renderScene` draws tilemaps, sprites and world texts sorted by
+  layer (stable within a layer: tilemaps, then sprites and texts in
+  hierarchy order), skipping off-screen sprites, tiles and texts, then the
+  screen texts (the HUD) by layer ([text.md](text.md)).
+- `render::FontCache` loads font assets; the built-in font is compiled in.
+  `render::layoutText` turns UTF-8 into placed letters.
 - `render::TextureCache` loads texture assets on first use. Failures are
   logged once and drawn as a magenta/black checkerboard.
 - The SDL backend (`platform_sdl::SdlRenderer2D`) uses `SDL_Renderer`, which

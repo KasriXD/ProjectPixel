@@ -1725,19 +1725,33 @@ void StudioApp::runSmokeTest() {
                 }
             }
             showProjectSettings = true;
+            // Listen to a sound (the same path as double-clicking it in Assets).
+            for (const auto& entry : m_project->assets().entries()) {
+                if (entry.type == assets::AssetType::Sound) {
+                    previewSound(entry.id);
+                    break;
+                }
+            }
             break;
         case 6: {
             assets::AssetId texture;
+            assets::AssetId sound;
             for (const auto& e : m_project->assets().entries()) {
                 if (e.type == assets::AssetType::Texture) texture = e.id;
+                if (e.type == assets::AssetType::Sound) sound = e.id;
             }
             std::vector<scene::Entity> created;
             for (const auto preset : {editor::EntityPreset::Empty, editor::EntityPreset::Group,
                                       editor::EntityPreset::Sprite, editor::EntityPreset::Tilemap,
                                       editor::EntityPreset::SolidBlock, editor::EntityPreset::Trigger,
                                       editor::EntityPreset::Player, editor::EntityPreset::TopDownPlayer,
-                                      editor::EntityPreset::Camera}) {
-                created.push_back(m_document->createEntity(preset, {}, scene::kNullEntity, {100, 100}, texture));
+                                      editor::EntityPreset::Camera, editor::EntityPreset::Text,
+                                      editor::EntityPreset::SoundSource}) {
+                // The preset's asset: an image, a sound for a sound source, the built-in font for a text.
+                const assets::AssetId asset = preset == editor::EntityPreset::SoundSource ? sound
+                                              : preset == editor::EntityPreset::Text      ? assets::AssetId{}
+                                                                                          : texture;
+                created.push_back(m_document->createEntity(preset, {}, scene::kNullEntity, {100, 100}, asset));
             }
             // Toolbox objects whose files the project already has (so nothing is written to it).
             if (!m_library) return fail("the starter library did not load: " + m_libraryError);
@@ -1790,6 +1804,7 @@ void StudioApp::runSmokeTest() {
         const auto& state = m_play->session().state();
         if (state.score < 1) return fail("the player did not collect a coin while walking right");
         if (state.scriptErrors > 0) return fail("script errors while playing");
+        if (!m_gameAudio) return fail("play mode has no sound");
         log::info("Smoke test: played {} ticks, score {}", m_play->session().tickCount(), state.score);
         requestStopPlay(); // the same path as the Stop button and F5
     }

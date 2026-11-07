@@ -10,6 +10,9 @@
 namespace px::platform {
 
 std::unique_ptr<SdlAudio> SdlAudio::open(audio::Mixer& mixer) {
+    // iOS: a game's sound follows the silent switch and mixes with other
+    // apps' sound (SDL's default would play through the switch).
+    SDL_SetHintWithPriority(SDL_HINT_AUDIO_CATEGORY, "ambient", SDL_HINT_DEFAULT);
     if (!SDL_InitSubSystem(SDL_INIT_AUDIO)) {
         log::info("No sound: {}", SDL_GetError());
         return nullptr;

@@ -1,6 +1,6 @@
 # Architecture
 
-This describes the system **as it exists now** (v0.9.0). Planned parts are
+This describes the system **as it exists now** (v0.10.0). Planned parts are
 marked as such. Decisions and their alternatives are recorded in
 [docs/adr/](docs/adr/).
 
@@ -35,7 +35,7 @@ marked as such. Decisions and their alternatives are recorded in
                           │   ┌─────▼───────────────────▼─────┐
                           │   │ runtime: GameSession          │  no graphics,
                           │   │ fixed ticks, input actions,   │  no window,
-                          │   │ built-in systems, IScriptHost │  no audio
+                          │   │ built-in systems, IScriptHost │  no device
                           │   └──┬─────────┬──────────┬───────┘
                           │      │         │          │
                           │      │  ┌──────▼───────┐  │
@@ -64,22 +64,24 @@ not link SDL.
 | Module | Responsibility | Depends on |
 |---|---|---|
 | `core` | Logging with sinks, `Result`/`Error`, math (`Vec2`, `Rect`), `Color`, `Guid`, sandboxed file access (`IFileSystem`), `FixedStepClock`, platform-independent `Key` names, the process sandbox (`Sandbox`: seccomp and Landlock on Linux, ADR 0031) | std only |
-| `assets` | `AssetId` (GUID), `AssetRegistry`, image decoding with size limits | core, stb_image |
+| `assets` | `AssetId` (GUID), `AssetRegistry`, image decoding with size limits, PNG writing | core, stb_image, stb_image_write |
 | `scene` | Generational entity handles, sparse-set component storage (`Registry`), built-in components, `Scene` (identity, lookup, parent/child hierarchy, world transforms), component descriptors (`ComponentInfo`: fields, ranges, requirements, validation) | core, assets |
 | `physics` | `CollisionWorld`: solid grids and boxes with shapes (solid, one-way, slopes), swept per-axis AABB movement with contact flags and ground snapping | core |
-| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; prefabs (instantiating, copying, three-way update of copies), animation clips and tilesets; game packages (`*.pxpkg`); the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
+| `project` | Project manifest and scene file formats: parsing, validation, migration, canonical serialization (generic over component descriptors); `px.entities` clipboard documents; prefabs (instantiating, copying, three-way update of copies), animation clips, tilesets and bitmap fonts (`px.font`); game packages (`*.pxpkg`); the starter library manifest (`px.library`) | core, assets, scene, nlohmann/json (private) |
 | `scripting` | `ScriptLibrary` (compiles Luau and visual scripts at load), `ScriptVm` (sandbox, memory and CPU limits), `ScriptSystem` (Script instances, lifecycle, events), gameplay API bindings and their machine-readable reference, visual scripts (`Graph`: node catalog generated from the API reference, compiler to Luau) | core, assets, scene, Luau (private), nlohmann/json (private) |
 | `runtime` | `GameSession` (one running game; implements `IScriptHost`), `loadGame`/`startSession`, input actions and frames, key bindings, input scripts, built-in systems (platformer and top-down control, movement, moving solids, triggers, respawning, animation), spawning prefabs, saved player data (`PlayerData`), leaderboards (`ILeaderboardStore`, memory store), players joining and leaving (multiplayer sessions), shared movement and camera functions (`Movement.hpp`) | core, scene, physics, project, scripting |
-| `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, scene-to-draw-call extraction, collision debug overlay | core, assets, scene |
-| `platform_sdl` | SDL3 window, keyboard, gamepads and touch (fingers in virtual pixels), vsync and scaling changes, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots | core, render, SDL3 |
-| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the encrypting layer every connection goes through (`Secure`: X25519 handshake, XChaCha20-Poly1305, the server's identity key; ADR 0030), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
+| `audio` | Sound files (WAV, Ogg Vorbis, QOA: probing with limits, decoding, streaming, QOA and WAV writing), the `Mixer` (32 voices, buses, pan, pitch, fades, limiter; no device), `GameAudio` (a running game's sounds, AudioSource components and music) and `SoundLibrary` ([docs/audio.md](docs/audio.md), [ADR 0034](docs/adr/0034-audio.md)) | core, assets, scene, runtime, stb_vorbis (private), qoa.h (private) |
+| `fontbake` | TrueType/OpenType fonts to bitmap fonts (Studio and `px-headless --bake-font` only, [ADR 0035](docs/adr/0035-bitmap-fonts.md)) | core, assets, project, stb_truetype (private) |
+| `render` | `IRenderer2D` interface, `Camera2D`, `TextureCache`, `FontCache` and text layout (with the built-in font compiled in), scene-to-draw-call extraction, collision debug overlay | core, assets, scene, project |
+| `platform_sdl` | SDL3 window, keyboard, gamepads and touch (fingers in virtual pixels), vsync and scaling changes, `SdlRenderer2D` (implements `IRenderer2D`, render targets), screenshots, `SdlAudio` (plays a `Mixer` on the audio device) | core, render, audio, SDL3 |
+| `net` | Multiplayer: connect tokens (`ConnectToken`), `INetEndpoint` transports (UDP via ENet, WebSockets via cpp-httplib or the browser, combined UDP + WebSocket listening, in-process loopback with simulated latency and loss), the encrypting layer every connection goes through (`Secure`: X25519 handshake, XChaCha20-Poly1305, the server's identity key; ADR 0030), the wire protocol, snapshot replication (`WorldState`, per-field deltas, `SceneReplica`), `GameServer` (authoritative session, players, input buffers, snapshots) and `GameClient` (interpolation, prediction, sounds held back until the view reaches them) | core, scene, project, runtime, ENet (private, optional), cpp-httplib (private, optional) |
 | `crypto` | Secure random numbers from the OS, BLAKE2b (plain and keyed), Argon2id passwords, EdDSA signatures, X25519 key exchange, XChaCha20-Poly1305, hex/base64url | core, Monocypher (private) |
-| `online` | The platform from the engine's side: package checks (load everything, re-encode images, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS: accounts, games, friends, leaderboards, pictures), `PlatformPlayerStore`, `PlatformLeaderboardStore`, game pictures (`Thumbnail`), package cache, saved login. Desktop and phones | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
-| `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime |
+| `online` | The platform from the engine's side: package checks (load everything, re-encode images as PNG and sounds as QOA, check fonts, simulate), the platform's wire types and JSON, `PlatformClient` (HTTP and HTTPS: accounts, games, friends, leaderboards, pictures), `PlatformPlayerStore`, `PlatformLeaderboardStore`, game pictures (`Thumbnail`), package cache, saved login. Desktop and phones | core, crypto, project, runtime, net, nlohmann/json, cpp-httplib (private), stb_image_write (private) |
+| `editor` | The editor model without UI: `EditorProject` (create/open by game type, assets, scenes, scripts, graphs, prefabs, animations, tilesets, sounds, fonts made from TrueType), `SceneDocument` (operations, selection, tile painting and fills, snapshot undo), prefab workflow (create, place, apply, revert), picking, `PlayMode`, `LogBuffer`, `Library` (loads and validates the starter library; inserts its objects and files into a project) | core, assets, scene, project, scripting, runtime, audio, fontbake |
 
 Applications compose modules:
 
-- **px-player** = project + runtime + render + platform_sdl. Uses SDL3's main
+- **px-player** = project + runtime + audio + render + platform_sdl. Uses SDL3's main
   callbacks (`SDL_AppInit/Iterate/Event/Quit`) instead of owning a blocking
   loop, which is what browser and iOS builds require. The same target is the
   browser player (WebAssembly, `apps/player/web`), the Android app
@@ -90,10 +92,11 @@ Applications compose modules:
   the game share one window, handed between `Launcher` and `PlayerApp` in
   `main.cpp` ([ADR 0029](docs/adr/0029-launcher-in-the-player.md),
   [docs/launcher.md](docs/launcher.md)).
-- **px-headless** = project + runtime + net. Runs games with no graphics
-  (automated playthroughs), joins servers as a scripted bot (`--connect`),
-  and runs a server with several clients in one process over a simulated
-  network (`--net-test`).
+- **px-headless** = project + runtime + net + audio (+ fontbake). Runs
+  games with no graphics (automated playthroughs, mixing their sound with
+  `--audio-out`), joins servers as a scripted bot (`--connect`), runs a
+  server with several clients in one process over a simulated network
+  (`--net-test`) and bakes fonts (`--bake-font`).
 - **px-server** = project + runtime + net (+ online): the dedicated
   multiplayer server; with `--platform` it is started by the platform,
   checks tickets and saves players' data. Its traffic is encrypted
@@ -117,7 +120,7 @@ Applications compose modules:
   checks, px-server for games), which it starts with a clean environment
   and limits, and which sandbox themselves. The `Dockerfile` builds an image
   with the three programs ([docs/deployment.md](docs/deployment.md)).
-- **px-studio** = editor + render + platform_sdl + Dear ImGui. Panels draw
+- **px-studio** = editor + audio + render + platform_sdl + Dear ImGui. Panels draw
   and call `px_editor`; they hold only UI state, so the UI toolkit can be
   replaced without touching editing logic ([ADR 0013](docs/adr/0013-studio-ui-dear-imgui.md),
   [ADR 0015](docs/adr/0015-studio-architecture.md)). Desktop only; games never
@@ -180,8 +183,12 @@ loading talks to `IFileSystem`.
    moving solids, platformer control, kinematic movement, trigger events to
    scripts, kill plane, animation, cameras. Destroys and script events are
    flushed after each script phase (docs/scripting.md#execution-order).
-4. Render: `cameraForScene` → `renderScene` (layer-sorted, culled, pixel-
-   snapped draw calls) → HUD (objective and messages set by scripts, script
+   The tick's sounds (`GameSession::sounds`) go to `GameAudio::play`.
+4. Sound: `GameAudio::update` follows the scene (entity sounds, AudioSource
+   components, music, the camera as listener); SDL's audio thread asks the
+   `Mixer` for samples on its own.
+5. Render: `cameraForScene` → `renderScene` (layer-sorted, culled, pixel-
+   snapped draw calls, texts with `FontCache`) → HUD (objective and messages set by scripts, script
    errors) → `SdlRenderer2D` → SDL scales the virtual resolution to the window.
 
 Online (`--connect`/`--host`), step 3 becomes: `GameClient::receive` (new

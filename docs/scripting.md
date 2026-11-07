@@ -314,6 +314,24 @@ declares; on the platform the best of each account is shared by everyone
 who plays the game. Authority-only. Details:
 [leaderboards.md](leaderboards.md).
 
+## Sound and text
+
+`Sound.play`, `Sound.playAt`, `entity:playSound`, `Sound.playFor` and the
+music functions start sounds by asset name; `entity.soundPlaying` starts and
+stops an AudioSource. Authority-only; in multiplayer the server sends each
+player the sounds meant for them. `entity.text` and `entity.textColor`
+change what a Text component shows, and `entity.visible` hides it. Details:
+[audio.md](audio.md) and [text.md](text.md).
+
+```lua
+function Coin:TriggerEnter(other)
+    if other:hasComponent("Player") then
+        Sound.playAt("Coin", self.entity.position)
+        World.find("Score").text = "SCORE " .. Game.getScore()
+    end
+end
+```
+
 ## Visual scripting
 
 Visual scripts (`*.graph.json`) are behaviours made of nodes. They compile to

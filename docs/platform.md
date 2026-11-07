@@ -113,9 +113,11 @@ px-headless path/to/project --platform ... --publish --game 1 --notes "faster co
 
 The platform **checks every upload before accepting it**, in a separate
 `px-headless --check-package` process with a time and memory limit: the
-manifest, every scene, prefab, animation, tileset, script and visual script
-must load, every image is decoded and **re-encoded as PNG**, and the start
-scene is simulated for two seconds. A game that fails is refused with the
+manifest, every scene, prefab, animation, tileset, script, visual script and
+font must load, every image is decoded and **re-encoded as PNG**, every
+sound is decoded and **re-encoded as QOA** ([audio.md](audio.md#on-the-platform);
+at most 60 minutes of sound per game), and the start scene is simulated for
+two seconds. A game that fails is refused with the
 reason (for example `scripts/coin.luau:3: ...`). Runtime script errors seen
 in those two seconds are reported to the creator but do not block
 publishing.

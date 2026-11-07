@@ -108,7 +108,10 @@ work for any player:
 - `entity:respawn()`, `entity.spawnPoint` work per character, so
   checkpoints are personal;
 - `Game.addScore`, `Game.setObjective`, `Game.completeLevel` are shared by
-  all players (co-operative play).
+  all players (co-operative play);
+- sounds and music reach every player, or one with `Sound.playFor` and
+  `Sound.playMusicFor`; a screen Text inside a character is only its
+  player's HUD ([audio.md](audio.md#multiplayer), [text.md](text.md)).
 
 New for multiplayer ([API reference](scripting-api.md)):
 
@@ -208,6 +211,12 @@ level restarted), the difference is from the initial scene, which the
 client loads from its own copy of the project. Entities created later
 (the players' characters) are sent in full once.
 
+**Sounds.** The sounds of a tick go to each player in one reliable message,
+without those meant for someone else; the client plays each when its view
+reaches that tick, and its own character's at once. Music (everyone's and
+each player's own) is part of the game state in every snapshot
+([audio.md](audio.md#multiplayer)).
+
 **Interpolation.** A client draws other entities two snapshot intervals
 plus two ticks in the past (about 100 ms), blending positions between the
 snapshots around that moment, so movement is smooth even when snapshots
@@ -228,8 +237,9 @@ and under 2 kB/s back.
 ### Protocol
 
 Messages start with a type byte; numbers are little-endian, most are
-variable-length (`net/Bytes.hpp`). Protocol version 3 (`net/Protocol.hpp`;
-version 3 is the [encrypted](#encryption) one):
+variable-length (`net/Bytes.hpp`). Protocol version 4 (`net/Protocol.hpp`;
+version 3 is the [encrypted](#encryption) one, version 4 adds sounds and
+music):
 
 | Message | Direction | Delivery | Content |
 |---|---|---|---|
@@ -239,6 +249,7 @@ version 3 is the [encrypted](#encryption) one):
 | Welcome | server -> client | reliable | player id, tick rate, snapshot interval, server name |
 | Reject | server -> client | reliable | reason code and text (version 2 adds "not authorized" and "saved data unavailable", version 3 "server unverified"), then the connection is closed |
 | Snapshot | server -> client | unreliable | level epoch, tick, baseline tick, newest input used, world change |
+| Sounds | server -> client | reliable | tick, up to 64 sounds: asset id, volume, pitch, entity, place (version 4) |
 
 The game hash covers the engine and protocol versions, the replication
 format, the project id, tick rate, input actions and the initial scene
@@ -281,8 +292,9 @@ makes a key and prints it ("Game traffic is encrypted; the server's key is
 `--identity-file FILE`). Without `--server-key`, traffic is still
 encrypted, but a player cannot tell who is at the other end.
 
-Players and servers from before 0.9.0 cannot talk to newer ones: an old
-player gets a readable "update your player" rejection.
+Players and servers of other versions cannot play together (0.9.0 brought
+encryption, protocol 3; 0.10.0 sounds, protocol 4): an old player gets a
+readable "update your player" rejection.
 
 ## Testing
 

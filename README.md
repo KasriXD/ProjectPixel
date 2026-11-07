@@ -10,7 +10,7 @@ vision is in [PROJECT_VISION.md](PROJECT_VISION.md).
 
 ![Studio editing the top-down example, with the Toolbox on the left](docs/images/studio.png)
 
-## Current status (version 0.9.0)
+## Current status (version 0.10.0)
 
 Milestones 0 (engineering foundation), 1 (engine prototype), 2 (Luau
 scripting), 3 (Studio foundation), 4 (multiplayer prototype), 5 (visual
@@ -24,8 +24,11 @@ friends with presence, joining and inviting friends, blocking, shared
 leaderboards) and 9 (internet readiness: encrypted game traffic, sandboxed
 game servers with CPU and memory limits, email confirmation and password
 resets, account deletion, backups, health and metrics, a container image
-and a deployment guide) are complete. See [ROADMAP.md](ROADMAP.md) for
-detail.
+and a deployment guide) and 10 (game audio and text: sound effects and
+music from scripts and sound sources, heard from where they happen and
+sent to each player in multiplayer; text in the world and on the screen
+with bitmap fonts made in Studio) are complete. See
+[ROADMAP.md](ROADMAP.md) for detail.
 
 | Area | Status |
 |---|---|
@@ -33,6 +36,8 @@ detail.
 | Window, main loop, keyboard input (SDL3) | Implemented, verified on Linux (X11 + OpenGL) and Windows (Direct3D, under Wine); windowless smoke test passes in CI on Linux, Windows and macOS |
 | Gamepads and touch screens: every game playable with a pad (buttons stand for the usual keys) and with on-screen controls made from its actions; a menu with VSync, frame limit, scaling, FPS and touch settings | Implemented; touch controls and the menu used on Linux (mouse as a finger), layouts unit tested. **No real gamepad or touch screen tried yet** ([guide](docs/input-devices.md)) |
 | 2D rendering: sprites, tilemaps, layers, camera, pixel-perfect scaling, debug text | Implemented, verified by screenshots |
+| Sound: effects and music from scripts (`Sound.play`, `entity:playSound`, `Sound.playMusic`, ...) and sound sources, heard from where they happen, mixed by the engine (32 voices, music and effects volumes), sent to each player in multiplayer; WAV, Ogg Vorbis and QOA, stored as QOA by the platform; volume settings in the player; listening in Studio | Implemented; the examples' playthroughs are mixed and checked in CI, the real player plays through SDL's disk driver, unit tests cover decoders (fuzzed), mixer, scripts and network. **Not yet heard by a person on a speaker** ([guide](docs/audio.md)) |
+| Text: a Text component in the world or on the screen (the HUD, only to its player in multiplayer), UTF-8 with wrapping, alignment, shadows and boxes; a built-in pixel font (Latin, Greek, Cyrillic) and fonts made in Studio from TrueType/OpenType files | Implemented; verified by screenshots of both examples, layout and fonts unit tested ([guide](docs/text.md)) |
 | Entity/component scene model with stable ids, parent/child hierarchy | Implemented, unit tested |
 | Studio (desktop editor): projects, Explorer, Scene view, Properties, Assets, Output, script editor, undo, play/stop | Implemented; a game was built in it from an empty project and runs in `px-player`. Used on Linux (X11) and on a Windows 11 PC (Direct3D 11); builds and passes its smoke test in CI on Windows and macOS. **Not yet used on a real Mac** ([guide](docs/studio.md)) |
 | Game types: platformer and top-down, chosen when a project is created | Implemented; each has a controller, default input, an example and Toolbox items |
@@ -51,7 +56,7 @@ detail.
 | Ready for the internet: encrypted game traffic (UDP and WebSockets), game servers and upload checks sandboxed (seccomp, Landlock) with CPU and memory limits, email confirmation, password resets, deleting accounts and downloading their data, online backups and restore, `/healthz` and Prometheus `/metrics`, certificates renewed without a restart, a container image, Compose file and systemd unit | Implemented; CI builds the image and plays a level through it (HTTPS, a bot over the published UDP port, backup restored into a new volume, a renewed certificate), checks a packet capture for plaintext, and drives the account pages with mail through a real SMTP server with STARTTLS. **Not yet run on a public server with a real domain** ([deployment](docs/deployment.md), [accounts](docs/accounts.md)) |
 | Playing in a browser: the platform's `/play` page, the WebAssembly player joining the same game servers as desktop players over WebSockets (`wss://` with HTTPS) | Verified in CI: headless Chromium plays the top-down route on a platform game server while a desktop bot is there over UDP, over HTTP and HTTPS. **Not yet played by a person in a browser** ([details](docs/platform.md#browsers)) |
 | Luau scripting: sandbox, CPU/memory limits, lifecycle, gameplay API, several behaviours per entity | Implemented; verified on Linux, Windows (MSVC CI, MinGW + Wine), macOS (CI), WebAssembly (CI) |
-| Example games, loaded from project files | A platformer and a top-down game, both playable; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
+| Example games, loaded from project files | A platformer and a top-down game, both playable, with sound effects, music and the score on screen; coins, keys, hazards, win conditions and moving platforms are Luau scripts; automated runs complete both levels |
 | Hot reload of scripts and scenes (F5 in px-player) | Implemented, verified manually with simulated key presses |
 | Windows | Builds and passes all tests in CI (Visual Studio 2022) and on a Windows 11 PC (Build Tools 2026), where the example level was played to the end in Studio; MinGW-w64 build runs under Wine 9 |
 | macOS | Builds and passes all tests in CI (Apple Clang, arm64). **Not yet played in a real window** |
@@ -61,7 +66,7 @@ detail.
 | Launcher: log in, browse games with pictures, a game's page with leaderboards, friends, profile, play and join friends; in px-player (Dear ImGui) and on the browser page | Implemented; tested against a real platform in CI (every page, playing, joining a friend, inviting from a game, saved login; the browser page at computer and phone sizes with the real WebAssembly player); used with mouse and keyboard on Linux ([guide](docs/launcher.md)) |
 | Friends and profiles: portraits, about text, requests, presence (online, playing what), joining friends, invitations, blocking (never on one server), reports about accounts | Implemented in the platform; tested with real game servers ([guide](docs/social.md)) |
 | Leaderboards: declared in `project.json`, submitted by server scripts (`Leaderboard.submit`), each player's best kept by the platform for everyone | Implemented; scores travel from game servers to the platform and back in tests; the examples' best times appear in the launcher ([guide](docs/leaderboards.md)) |
-| Audio, text/fonts in games; chat; marketplace | Planned (Milestone 10 and later) |
+| Chat; marketplace; persistent worlds | Planned (Milestone 11 and later) |
 
 ## Building
 
@@ -229,7 +234,8 @@ The example's coins, moving platform and win condition are Luau scripts in
    error, with file and line, appears on screen while the game keeps running.
 
 Headless checks: `px-headless examples/platformer --input-script
-examples/platformer/tests/full_run.input --log-events --expect-level-complete`.
+examples/platformer/tests/full_run.input --log-events --expect-level-complete`
+(add `--audio-out run.wav` to hear what a player would hear).
 Guide: [docs/scripting.md](docs/scripting.md); every API function:
 [docs/scripting-api.md](docs/scripting-api.md).
 
@@ -239,14 +245,16 @@ Guide: [docs/scripting.md](docs/scripting.md); every API function:
 engine/            engine modules (static libraries), one folder per module
   core/            logging, errors, math, ids, sandboxed file access, timing, key names
   crypto/          secure random numbers, hashing, password hashing, signatures
-  assets/          asset ids, asset registry, image decoding
+  assets/          asset ids, asset registry, image decoding and PNG writing
   scene/           entities, components, scenes
   physics/         kinematic AABB collision, one-way platforms, slopes
-  project/         project, scene, prefab, animation and tileset file formats
+  project/         project, scene, prefab, animation, tileset and font file formats
   scripting/       Luau sandbox, resource limits, gameplay API, Script lifecycle, visual scripts
   runtime/         headless fixed-tick game simulation and gameplay systems
-  render/          renderer interface, camera, scene-to-draw-call extraction
-  platform_sdl/    SDL3 window, input and renderer backend
+  audio/           sound files, the mixer, a running game's sounds and music
+  fontbake/        TrueType/OpenType to bitmap fonts (Studio and tools only)
+  render/          renderer interface, camera, text and fonts, scene-to-draw-call extraction
+  platform_sdl/    SDL3 window, input, sound and renderer backend
   net/             multiplayer: transports (UDP, loopback), protocol, snapshots, game server and client
   online/          the platform from the engine's side: package checks, HTTP client
   editor/          editor model without UI: projects, scene documents, undo, play mode
@@ -258,9 +266,9 @@ services/platform/ px-platform, the platform service (accounts, publishing, game
 examples/          example game projects (content only, no code): platformer, topdown
 library/           starter library behind Studio's Toolbox (generated by tools/)
 tests/             automated tests
-tools/             developer tools (example and library generators, dependency updates)
+tools/             developer tools (example, sound and library generators, dependency updates)
 docs/              detailed documentation and architecture decision records
-third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImGui, ENet)
+third_party/       vendored libraries (stb, qoa, doctest, Luau subset, Dear ImGui, ENet, ...) and the font
 ```
 
 ## Documentation
@@ -286,5 +294,7 @@ third_party/       vendored libraries (stb_image, doctest, Luau subset, Dear ImG
 - [docs/scripting-api.md](docs/scripting-api.md): generated API reference
 - [docs/visual-scripting.md](docs/visual-scripting.md): visual scripts (node graphs) and the graph editor
 - [docs/prefabs.md](docs/prefabs.md), [docs/animation.md](docs/animation.md), [docs/tilesets.md](docs/tilesets.md): prefabs, animation clips, tilesets
+- [docs/audio.md](docs/audio.md): sounds and music: importing, scripts, sound sources, how they are heard, multiplayer, testing without a speaker
+- [docs/text.md](docs/text.md): the Text component, the HUD, the built-in font and making fonts
 - [docs/security.md](docs/security.md): threat model and current protections
 - [docs/adr/](docs/adr/): architecture decision records

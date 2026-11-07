@@ -67,7 +67,7 @@ the right, with the Toolbox, Assets and Output below the scene.
 | **Scene** | The viewport. Select, move, paint tiles; shows colliders, camera bounds and the grid. While playing it shows the running game. |
 | **Properties** | The selected entity's name, components and scripts. Every field of every component can be edited; hover a field's name for its description. Numbers are kept within their allowed range. |
 | **Toolbox** | Ready-made things for every project, even an empty one: heroes, ground and walls, coins, gems, keys and locked blocks, spikes, enemies, springs and moving platforms, checkpoints, exits, signs, scenery, plus images, tilesets and behaviours. Click an item to put it in the middle of the view, or drag it to a spot in the Scene view; drop a behaviour on an entity. The files it needs are copied into the project the first time. Only items for the project's kind of game are shown unless *All game types* is ticked; the search box filters by name. |
-| **Assets** | Images, scripts and scenes of the project. Import files, create scripts and scenes (*+ New*), rename, find uses, delete. Drag an asset onto a field, an entity or the Scene view. |
+| **Assets** | Images, sounds, fonts, scripts and scenes of the project. Import files, create scripts and scenes (*+ New*), rename, find uses, delete; double-click a sound to listen. Drag an asset onto a field, an entity or the Scene view. |
 | **Output** | Log messages, script output and errors. Double-click an error with a file and line to open the script there. Repeated messages are folded. |
 | **Script** | A plain text editor for `.luau` files, with save and compile errors. |
 | **Project Settings** | Name, start scene, virtual resolution, background colour, input actions and keys (File > Project Settings). |
@@ -191,6 +191,16 @@ in `px-player` and `px-headless`.)
    copies (shown in purple in Explorer). Change a copy and press *Apply To
    Prefab* in Properties to update every copy in every scene; each keeps its
    own changes. See [prefabs.md](prefabs.md).
+9. **Sound**: import `.wav`, `.ogg` or `.qoa` files; drop a sound in the
+   Scene view for a sound source (an entity with *AudioSource*: a loop that
+   plays where it is), or play sounds from scripts (`Sound.play("Coin")`).
+   Sounds play while you test the game. See [audio.md](audio.md).
+10. **Text**: *Create > Text* makes an entity with a *Text* component, in
+    the built-in pixel font; tick *screen* to make it part of the HUD (the
+    Scene view shows it inside the game camera's frame). Import a `.ttf` or
+    `.otf` file to make a font at a size of your choice, then drop it on a
+    Text. Scripts change what it says with `entity.text`. See
+    [text.md](text.md).
 
 ### Viewport controls
 

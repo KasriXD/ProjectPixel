@@ -117,7 +117,8 @@ attached as `ios-simulator-app`). To log in to HTTPS platforms from iOS, add
 
 - Testing on real phones and tablets: performance, touch feel, safe areas
   (the on-screen controls ignore notches today), losing the GPU context,
-  audio rules.
+  sound (stopped in the background; on iOS it follows the silent switch,
+  [audio.md](audio.md#browsers-and-phones)).
 - Using the launcher on real phones (it runs on the emulator and simulator
   in CI); iOS needs a certificate file for HTTPS platforms.
 - Store builds: signing keys, app icons for every size, store rules for
@@ -192,4 +193,7 @@ and the level completed; then the same over HTTPS with `wss://`.
   networks.
 - Threads only with cross-origin isolation (`SharedArrayBuffer`); the
   engine is single-threaded today.
-- Settings last only until the tab closes; audio unlock on first input.
+- Settings last only until the tab closes. Sound starts at the player's
+  first click, tap or key press (browsers' rule; SDL resumes the audio
+  context then), so the first moments of a game are silent. Not yet
+  heard by a person in a browser.

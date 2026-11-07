@@ -5,7 +5,15 @@ Status key: **Done** (implemented and verified), **Partial**, **Planned**.
 
 ## Current focus
 
-Milestones 0-9 are done. Milestone 9 made the platform ready for the
+Milestones 0-10 are done. Milestone 10 gave games sound and text: effects
+and music started by scripts or sound sources, heard from where they
+happen, sent to each player in multiplayer and stored as QOA by the
+platform; text in the world and on the screen with a built-in pixel font
+and fonts made in Studio; both examples have sound and a score on screen.
+Recommended next: hear it on real speakers and phones, then a real server
+with real people (below).
+
+Milestone 9 made the platform ready for the
 internet: every game connection is encrypted (and players check the game
 server's key from their ticket), game servers and upload checks lock
 themselves into a sandbox with processor and memory limits, accounts get
@@ -13,10 +21,10 @@ email confirmation, password resets, deletion and a data download, and
 operators get online backups with restore, `/healthz` and Prometheus
 metrics, certificates renewed without a restart, a container image, a
 Compose file, a systemd unit and a deployment guide. CI builds the image
-and plays through it. Recommended next: run it on a real server with a
-real domain and invite people (devices, networks and mail delivery are
-where the remaining unknowns are), then Milestone 10 (see "Recommended
-adjustments" below).
+and plays through it. Running it on a real server with a real domain and
+inviting people is still the most valuable next step (devices, networks
+and mail delivery are where the remaining unknowns are), then Milestone 11
+(see "Recommended adjustments" below).
 
 ## Blockers and open items
 
@@ -28,6 +36,7 @@ adjustments" below).
 | The launcher and friends not yet used by people other than in automated runs (and by its developer on Linux) | Whether players find games and friends easily, how it feels on a phone | Two or three people make accounts, add each other, join and invite from a PC, a phone's browser and the Android app |
 | Multiplayer played only on one computer (separate processes over real UDP) and in simulated networks so far | Behaviour over Wi-Fi and the internet (latency spikes, NAT, firewalls) unconfirmed | Founder runs Studio's *Test Multiplayer*, then `px-server` on one PC and `px-player --connect` from another on the same network |
 | The platform not yet deployed on a public server (CI runs the container image, certificates are development ones, mail goes to a local SMTP server) | Let's Encrypt issuance, real mail delivery (SPF/DKIM), NAT and firewalls on the way to game servers unconfirmed | Founder: a small VPS with a DNS name, `docker compose -f deploy/compose.yaml up -d` ([deployment.md](docs/deployment.md)), a mail service, then people joining from home networks and phones |
+| Sound not yet heard by a person (CI mixes it and checks it is not silent; the player's device path runs on SDL's disk and dummy drivers) | Loudness, balance between effects and music, the feel of positional sound, browser and phone audio rules unconfirmed | Founder: play both examples with sound on a PC, in a browser and on a phone; change the volumes in the menu |
 | Studio used only by its developers and the founder (Windows 11) so far | Usability problems for new creators unknown | Two or three creators build a small level and report friction; the Toolbox tutorial in docs/studio.md is the script |
 
 ---
@@ -439,7 +448,54 @@ Next for operations (not part of the milestone):
 - [ ] Two-factor authentication; text filtering; HSTS
 - [ ] Off-site backups built in (S3-compatible storage)
 
-## Milestone 10: Creator ecosystem and scaling (**Planned**)
+## Milestone 10: Game audio and text (**Done**)
+
+Scope agreed with the founder: sound effects and music (mixing, the Luau
+API, importing and listening in Studio, browser and phone audio rules) and
+text (fonts, labels, simple UI, scores on screen). Verified on Linux (GCC,
+Clang, AddressSanitizer + UBSan), with the MinGW-w64 build under Wine, and
+in CI (see the commit's run).
+
+- [x] Sound files ([audio.md](docs/audio.md), [ADR 0034](docs/adr/0034-audio.md)):
+      WAV (PCM 8-32 bit, float, extensible), Ogg Vorbis (stb_vorbis) and QOA
+      (our own decoder, fuzzed), limits checked before decoding, long sounds
+      streamed; QOA and WAV writing
+- [x] Mixer: 32 voices (the oldest effect makes room), effects and music
+      buses, pan, pitch, ramped volume, fades, a soft limiter; placement
+      by the camera (on screen, or a range)
+- [x] Scripts: `Sound.play`, `playAt`, `playFor`, `playMusic`,
+      `playMusicFor`, `stopMusic`, `music`, `entity:playSound`,
+      `entity.soundPlaying`; 32 sounds a tick; nodes in visual scripts
+- [x] AudioSource component (loops and one-shots, positional or not)
+- [x] Multiplayer: a reliable Sounds message per player (protocol 4),
+      played when the view reaches their tick (the own character's at
+      once); music and sources in the game state
+- [x] Player: SDL audio device (none is fine), volume, music and effects
+      settings, silent in the background, iOS's silent switch
+- [x] Text component ([text.md](docs/text.md), [ADR 0035](docs/adr/0035-bitmap-fonts.md)):
+      UTF-8 layout, wrapping, alignment, nine anchors, scale, colour,
+      shadow, background; world texts by layer, the HUD on top and only to
+      its player; `entity.text`, `entity.textColor`, `entity.visible`
+- [x] Fonts: the built-in Pixel Default (Press Start 2P baked at 8 px,
+      OFL); bitmap fonts made in Studio or with `px-headless --bake-font`
+      from TrueType/OpenType (stb_truetype, Studio and tools only)
+- [x] Studio: importing sounds, making fonts, listening, sounds in play
+      mode, Text and Sound Source presets, choice lists and multi-line text
+      in Properties, the HUD inside the game camera's frame
+- [x] Platform: every sound re-encoded as QOA in the upload check (60
+      minutes per game), fonts checked
+- [x] Examples: generated effects and music (`tools/examples/make_sounds.py`),
+      the score on the HUD, a hint in the world; the playthrough tests mix
+      the sound and fail on silence (`px-headless --audio-out --expect-sound`)
+
+Next for sound and text (not part of the milestone):
+
+- [ ] Hear it on real speakers, in browsers and on phones (blockers table)
+- [ ] The engine's own HUD and menus in the pixel font
+- [ ] Effects on sounds (reverb, filters), sliding pitch
+- [ ] Kerning, right-to-left text, picking texts by their letters in Studio
+
+## Milestone 11: Creator ecosystem and scaling (**Planned**)
 
 Persistent worlds, social hubs, collaboration, marketplace, analytics,
 monetization, advanced moderation, scalable hosting.
