@@ -22,6 +22,7 @@
 
 #include <fstream>
 #include <random>
+#include <sstream>
 #include <regex>
 #include <thread>
 
@@ -68,7 +69,9 @@ std::vector<ReadMail> outbox(const std::filesystem::path& dir) {
     std::vector<ReadMail> mails;
     for (const auto& f : files) {
         std::ifstream in(f, std::ios::binary);
-        mails.push_back(parseMail(std::string(std::istreambuf_iterator<char>(in), {})));
+        std::ostringstream text; // (not istreambuf_iterator: MinGW's GCC warns about it)
+        text << in.rdbuf();
+        mails.push_back(parseMail(text.str()));
     }
     return mails;
 }

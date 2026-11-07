@@ -88,9 +88,12 @@ std::vector<std::uint8_t> sealMessage(const Keys& keys, Counters& counters, Deli
     const bool reliable = delivery == Delivery::Reliable;
     const std::uint8_t kind = reliable ? kReliableData : kUnreliableData;
     const std::uint64_t counter = reliable ? counters.nextReliable++ : counters.nextUnreliable++;
-    std::vector<std::uint8_t> out(kSecureOverheadBytes + plain.size());
-    out[0] = kind;
-    for (int i = 0; i < 8; ++i) out[1 + static_cast<std::size_t>(i)] = static_cast<std::uint8_t>(counter >> (8 * i));
+    // (Appended rather than indexed: MinGW's GCC suspects an empty vector otherwise.)
+    std::vector<std::uint8_t> out;
+    out.reserve(kSecureOverheadBytes + plain.size());
+    out.push_back(kind);
+    for (int i = 0; i < 8; ++i) out.push_back(static_cast<std::uint8_t>(counter >> (8 * i)));
+    out.resize(kSecureOverheadBytes + plain.size());
     crypto::Mac mac{};
     const std::array<std::uint8_t, 1> extra{kind};
     crypto::seal(std::span(out).subspan(kSecureOverheadBytes), mac, keys.send, nonceFor(kind, counter), extra, plain);

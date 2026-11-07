@@ -13,6 +13,7 @@
 #endif
 
 #include <fstream>
+#include <sstream>
 
 using namespace px;
 using namespace px::online;
@@ -217,7 +218,9 @@ TEST_CASE("Operations: a renewed TLS certificate is taken into use") {
     CHECK(expires > std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     const auto pem = [](const std::filesystem::path& f) {
         std::ifstream in(f, std::ios::binary);
-        return std::string(std::istreambuf_iterator<char>(in), {});
+        std::ostringstream text; // (not istreambuf_iterator: MinGW's GCC warns about it)
+        text << in.rdbuf();
+        return text.str();
     };
     CHECK(platform::certificateExpiry(pem(cert), pem(key)).value() == expires);
 
@@ -228,7 +231,9 @@ TEST_CASE("Operations: a renewed TLS certificate is taken into use") {
 
     // Half-way through a renewal (new certificate, old key): kept as it was.
     std::filesystem::copy_file(cert, certDir / "original.pem");
-    std::filesystem::copy_file(renewedDir / "cert.pem", cert, std::filesystem::copy_options::overwrite_existing);
+    // (Removed, then copied: MinGW's copy_file does not overwrite.)
+    std::filesystem::remove(cert);
+    std::filesystem::copy_file(renewedDir / "cert.pem", cert);
     std::filesystem::last_write_time(cert, std::filesystem::last_write_time(cert) + std::chrono::seconds(2));
     CHECK_FALSE(p.service->reloadCertificates().ok());
     CHECK(p.service->metrics().certificateReloadFailures.load() == 1);
@@ -236,7 +241,8 @@ TEST_CASE("Operations: a renewed TLS certificate is taken into use") {
     old.setCaFile((certDir / "original.pem").string());
     CHECK(old.info().ok());
     // The key arrives: now it is used.
-    std::filesystem::copy_file(renewedDir / "key.pem", key, std::filesystem::copy_options::overwrite_existing);
+    std::filesystem::remove(key);
+    std::filesystem::copy_file(renewedDir / "key.pem", key);
     std::filesystem::last_write_time(key, std::filesystem::last_write_time(key) + std::chrono::seconds(2));
     REQUIRE(p.service->reloadCertificates().ok());
     CHECK(p.service->metrics().certificateReloads.load() == 1);
