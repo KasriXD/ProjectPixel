@@ -452,9 +452,12 @@ Next for operations (not part of the milestone):
 
 Scope agreed with the founder: sound effects and music (mixing, the Luau
 API, importing and listening in Studio, browser and phone audio rules) and
-text (fonts, labels, simple UI, scores on screen). Verified on Linux (GCC,
-Clang, AddressSanitizer + UBSan), with the MinGW-w64 build under Wine, and
-in CI (see the commit's run).
+text (fonts, labels, simple UI, scores on screen). Verified in CI on Linux
+(GCC, Clang, AddressSanitizer + UBSan, headless), Windows (MSVC), macOS,
+WebAssembly, Android (emulator) and iOS (simulator), and with the MinGW-w64
+build under Wine 9 (its mix of the top-down run is bit-identical to
+Linux's). Sound itself was checked by mixing without a device and through
+SDL's disk driver, not yet by ear.
 
 - [x] Sound files ([audio.md](docs/audio.md), [ADR 0034](docs/adr/0034-audio.md)):
       WAV (PCM 8-32 bit, float, extensible), Ogg Vorbis (stb_vorbis) and QOA
