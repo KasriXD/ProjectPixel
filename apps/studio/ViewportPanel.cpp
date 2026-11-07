@@ -236,7 +236,29 @@ void ViewportPanel::drawSceneView(StudioApp& app, ImVec2 size) {
     if (m_sceneTarget != render::kNoTexture && app.textures() != nullptr) {
         renderer.setRenderTarget(m_sceneTarget);
         renderer.beginFrame(scene.settings().backgroundColor);
-        render::renderScene(scene, m_camera, renderer, *app.textures());
+        // The HUD (screen texts) is shown inside the frame of the game camera.
+        render::SceneRenderOptions drawing;
+        drawing.fonts = app.fonts();
+        if (const auto* project = app.project()) {
+            const Vec2i res = project->manifest().settings.display.virtualResolution;
+            render::Camera2D game = render::cameraForScene(scene, {static_cast<float>(res.x), static_cast<float>(res.y)});
+            if (!app.playing()) {
+                // Not running: the camera is where its entity is placed.
+                for (const Entity e : scene.entities()) {
+                    if (scene.tryGet<Camera>(e) != nullptr && scene.tryGet<Transform>(e) != nullptr) {
+                        game.center = scene.worldPosition(e);
+                        break;
+                    }
+                }
+            }
+            game.zoom = game.zoom > 0.0f ? game.zoom : 1.0f;
+            const Vec2 half{static_cast<float>(res.x) * 0.5f / game.zoom, static_cast<float>(res.y) * 0.5f / game.zoom};
+            const Vec2 topLeft = m_camera.worldToScreen(game.center - half);
+            drawing.screenScale = m_camera.zoom / game.zoom;
+            drawing.screenArea = {topLeft.x, topLeft.y, static_cast<float>(res.x) * drawing.screenScale,
+                                  static_cast<float>(res.y) * drawing.screenScale};
+        }
+        render::renderScene(scene, m_camera, renderer, *app.textures(), drawing);
         renderer.setRenderTarget(render::kNoTexture);
     }
     const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -267,7 +289,9 @@ void ViewportPanel::drawGameView(StudioApp& app, ImVec2 size) {
     auto& r = app.renderer();
     r.setRenderTarget(m_gameTarget);
     r.beginFrame(scene.settings().backgroundColor);
-    render::renderScene(scene, camera, r, *app.textures());
+    render::SceneRenderOptions drawing;
+    drawing.fonts = app.fonts();
+    render::renderScene(scene, camera, r, *app.textures(), drawing);
     if (app.settings().showColliders && !app.gameCameraInPlay) render::renderCollisionOverlay(scene, camera, r);
 
     // A minimal HUD, like px-player's: objective, win banner, script errors.

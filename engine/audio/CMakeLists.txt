@@ -1,9 +1,13 @@
 px_add_module(audio
     SOURCES
+        src/GameAudio.cpp
         src/Mixer.cpp
         src/Sound.cpp
     DEPS
         px::core
+        px::assets
+        px::scene
+        px::runtime
     PRIVATE_DEPS
         px_stb_vorbis
         px_qoa)

@@ -5,4 +5,5 @@ px_add_module(assets
     DEPS
         px::core
     PRIVATE_DEPS
-        px_stb_image)
+        px_stb_image
+        px_stb_image_write)

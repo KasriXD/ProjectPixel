@@ -395,8 +395,9 @@ Result<std::unique_ptr<PlayerApp>> PlayerApp::create(PlayerOptions options, std:
         if (!platform) return platform.error();
         app->m_platform = std::move(platform.value());
     }
-    app->m_textures = std::make_unique<render::TextureCache>(app->m_platform->renderer(), *app->m_files,
-                                                             app->m_game.manifest.assets);
+    app->m_mixer = std::make_unique<audio::Mixer>();
+    app->m_audioDevice = platform::SdlAudio::open(*app->m_mixer);
+    app->makeGameMedia();
 
     app->m_clock = FixedStepClock(1.0 / app->m_game.manifest.settings.tickRate);
     app->m_showDebug = app->m_options.debugOverlay;
@@ -430,6 +431,11 @@ std::unique_ptr<platform::SdlPlatform> PlayerApp::releaseWindow() {
     m_net.reset();
     m_hostServer.reset();
     m_session.reset();
+    m_gameAudio.reset();
+    m_sounds.reset();
+    m_audioDevice.reset();
+    m_mixer.reset();
+    m_fonts.reset();
     m_textures.reset(); // frees the game's textures in the window's renderer
     if (m_platform) m_platform->clearInput();
     return std::move(m_platform);
@@ -488,9 +494,42 @@ px::Status PlayerApp::preparePlatformGame() {
 #endif
 }
 
+void PlayerApp::makeGameMedia() {
+    m_gameAudio.reset();
+    m_fonts.reset();
+    m_textures = std::make_unique<render::TextureCache>(m_platform->renderer(), *m_files, m_game.manifest.assets);
+    m_fonts = std::make_unique<render::FontCache>(m_platform->renderer(), *m_textures, *m_files, m_game.manifest.assets);
+    m_sounds = std::make_unique<audio::SoundLibrary>(*m_files, m_game.manifest.assets);
+    m_sounds->preload();
+    m_gameAudio = std::make_unique<audio::GameAudio>(*m_mixer, *m_sounds);
+    applyVolumes();
+}
+
+void PlayerApp::applyVolumes() {
+    m_mixer->setMasterVolume(static_cast<float>(m_settings.volume) / 100.0f);
+    m_mixer->setBusVolume(audio::Bus::Music, static_cast<float>(m_settings.musicVolume) / 100.0f);
+    m_mixer->setBusVolume(audio::Bus::Effects, static_cast<float>(m_settings.effectsVolume) / 100.0f);
+}
+
+// Sounds of the ticks just played, then everything that follows the scene.
+void PlayerApp::playSounds() {
+    const auto& res = m_game.manifest.settings.display.virtualResolution;
+    scene::Scene& scene = currentScene();
+    if (networked()) {
+        const auto sounds = m_net->takeSounds();
+        m_gameAudio->play(sounds, scene, m_net->player());
+        m_gameAudio->update(scene, m_net->music(),
+                            audio::listenerForScene(scene, {static_cast<float>(res.x), static_cast<float>(res.y)}));
+    } else {
+        m_gameAudio->update(scene, m_session->musicFor(runtime::kNoPlayer),
+                            audio::listenerForScene(scene, {static_cast<float>(res.x), static_cast<float>(res.y)}));
+    }
+}
+
 px::Status PlayerApp::restart() {
     auto session = runtime::startSession(m_game);
     if (!session) return session.error();
+    if (m_gameAudio) m_gameAudio->stopAll();
     m_session = std::move(session.value());
     m_bindings = runtime::KeyBindings(m_game.manifest.input, m_session->actions());
     m_previousHeld = 0;
@@ -596,7 +635,7 @@ void PlayerApp::reload() {
     for (const auto& w : game->warnings) log::warn("{}", w);
     m_session.reset(); // the old session references the old game's scripts
     m_game = std::move(game.value());
-    m_textures = std::make_unique<render::TextureCache>(m_platform->renderer(), *m_files, m_game.manifest.assets);
+    makeGameMedia();
     m_session = std::move(session.value());
     m_bindings = runtime::KeyBindings(m_game.manifest.input, m_session->actions());
     m_previousHeld = 0;
@@ -644,6 +683,7 @@ void PlayerApp::runTick() {
         return;
     }
     m_session->tick(nextInput());
+    m_gameAudio->play(m_session->sounds(), m_session->scene());
     for (const auto& event : m_session->events()) {
         switch (event.type) {
             case runtime::GameEvent::Type::ObjectiveChanged:
@@ -690,6 +730,7 @@ PlayerApp::Status PlayerApp::iterate() {
     }
     for (int i = 0; i < steps; ++i) runTick();
     if (networked()) m_net->updateView(now);
+    playSounds();
 
     ++m_fpsFrames;
     m_fpsTimer += elapsed;
@@ -737,7 +778,10 @@ void PlayerApp::drawFrame() {
     const render::Camera2D camera = render::cameraForScene(scene, viewport);
 
     renderer.beginFrame(scene.settings().backgroundColor);
-    render::renderScene(scene, camera, renderer, *m_textures);
+    render::SceneRenderOptions drawing;
+    drawing.fonts = m_fonts.get();
+    drawing.viewer = networked() ? static_cast<int>(m_net->player()) : 0;
+    render::renderScene(scene, camera, renderer, *m_textures, drawing);
     if (m_showDebug) render::renderCollisionOverlay(scene, camera, renderer);
     if (networked()) drawNameTags(camera);
     drawHud();
@@ -935,6 +979,9 @@ PlayerApp::Status PlayerApp::handleEvent(const SDL_Event& event) {
         m_menuOpen = true;
         m_menuItem = 0;
     }
+    // No sound from an app in the background.
+    if (event.type == SDL_EVENT_DID_ENTER_BACKGROUND && m_audioDevice) m_audioDevice->pause(true);
+    if (event.type == SDL_EVENT_WILL_ENTER_FOREGROUND && m_audioDevice) m_audioDevice->pause(false);
     if (event.type == SDL_EVENT_KEY_DOWN && !event.key.repeat) {
         switch (event.key.scancode) {
             case SDL_SCANCODE_ESCAPE:
@@ -1012,7 +1059,8 @@ bool PlayerApp::touchVisible() const {
 }
 
 std::vector<PlayerApp::MenuItem> PlayerApp::menuItems() const {
-    std::vector<MenuItem> items{MenuItem::Resume, MenuItem::Vsync,   MenuItem::FrameLimit,
+    std::vector<MenuItem> items{MenuItem::Resume,  MenuItem::Volume,  MenuItem::Music,
+                                MenuItem::Effects, MenuItem::Vsync,   MenuItem::FrameLimit,
                                 MenuItem::Scaling, MenuItem::ShowFps, MenuItem::Touch};
     if (canInvite()) items.push_back(MenuItem::Invite);
     items.push_back(MenuItem::Quit);
@@ -1056,6 +1104,17 @@ void PlayerApp::menuChange(int delta) {
         case MenuItem::Resume:
             if (delta == 0) m_menuOpen = false;
             return;
+        case MenuItem::Volume:
+        case MenuItem::Music:
+        case MenuItem::Effects: {
+            const MenuItem item = items[static_cast<std::size_t>(m_menuItem)];
+            int& percent = item == MenuItem::Volume ? m_settings.volume
+                           : item == MenuItem::Music ? m_settings.musicVolume
+                                                     : m_settings.effectsVolume;
+            // Left and right step by 10; activating goes round (100 -> 0).
+            percent = delta == 0 ? (percent >= 100 ? 0 : percent + 10) : std::clamp(percent + delta * 10, 0, 100);
+            break;
+        }
         case MenuItem::Vsync: m_settings.vsync = !m_settings.vsync; break;
         case MenuItem::FrameLimit: {
             const int limits[] = {0, 30, 60, 120};
@@ -1164,6 +1223,7 @@ void PlayerApp::applySettings() {
     if (m_settings.scaling == Scaling::PixelPerfect) p = platform::Presentation::IntegerScale;
     if (m_settings.scaling == Scaling::Fit) p = platform::Presentation::Letterbox;
     m_platform->setPresentation(p);
+    if (m_mixer) applyVolumes();
     PlayerSettings saved = m_settings;
     saved.touch = m_savedTouch;
     if (!m_settingsFile.empty() && !saved.save(m_settingsFile)) log::warn("Could not save the settings");
@@ -1259,6 +1319,11 @@ void PlayerApp::drawMenu() {
     for (const MenuItem item : menuItems()) {
         switch (item) {
             case MenuItem::Resume: items.emplace_back(networked() ? "BACK TO THE GAME" : "RESUME"); break;
+            case MenuItem::Volume:
+                items.push_back(m_audioDevice ? std::format("VOLUME: {}%", m_settings.volume) : "VOLUME: NO SOUND");
+                break;
+            case MenuItem::Music: items.push_back(std::format("MUSIC: {}%", m_settings.musicVolume)); break;
+            case MenuItem::Effects: items.push_back(std::format("EFFECTS: {}%", m_settings.effectsVolume)); break;
             case MenuItem::Vsync: items.push_back(std::format("VSYNC: {}", m_settings.vsync ? "ON" : "OFF")); break;
             case MenuItem::FrameLimit:
                 items.push_back(m_settings.frameLimit == 0 ? std::string("FRAME LIMIT: NONE")

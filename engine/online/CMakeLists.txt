@@ -16,6 +16,7 @@ px_add_module(online
         px::project
         px::runtime
         px::net
+        px::audio
         nlohmann_json::nlohmann_json # WireJson.hpp: shared with the platform service
     PRIVATE_DEPS
         px_stb_image_write

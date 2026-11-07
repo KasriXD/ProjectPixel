@@ -228,6 +228,36 @@
       "path": "prefabs/sparkle.prefab.json"
     },
     {
+      "id": "7c0b666e-5bcb-55a2-82c0-346acd968728",
+      "type": "sound",
+      "name": "Gem",
+      "path": "sounds/coin.wav"
+    },
+    {
+      "id": "b20ca6f7-fb35-5ea8-87d7-4f1d921b7f5a",
+      "type": "sound",
+      "name": "Key",
+      "path": "sounds/key.wav"
+    },
+    {
+      "id": "600d73ee-9cca-5310-b30f-3d2314618073",
+      "type": "sound",
+      "name": "Gate",
+      "path": "sounds/door.wav"
+    },
+    {
+      "id": "3754c173-a3e8-5a6e-9fc1-37dfbb0e5763",
+      "type": "sound",
+      "name": "Complete",
+      "path": "sounds/complete.wav"
+    },
+    {
+      "id": "cfb7c6b8-69d7-5956-94e4-745deb62eb6c",
+      "type": "sound",
+      "name": "Theme",
+      "path": "sounds/theme.ogg"
+    },
+    {
       "id": "b9f8e06c-3d0c-5b71-ba7e-438fe1ef1ccc",
       "type": "scene",
       "name": "Garden",

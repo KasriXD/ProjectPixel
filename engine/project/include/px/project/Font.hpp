@@ -36,6 +36,7 @@ struct FontData {
     int lineHeight = 10;     // from one line's top to the next
     int ascent = 8;          // from the top of a line to the baseline
     std::vector<Glyph> glyphs; // sorted by codepoint, no duplicates
+    std::string source;      // what it was made from (shown in Studio, e.g. a font's name and licence)
 
     // The glyph of a character, or nullptr.
     [[nodiscard]] const Glyph* find(char32_t codepoint) const;

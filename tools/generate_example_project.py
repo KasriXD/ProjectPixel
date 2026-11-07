@@ -10,7 +10,8 @@ Produces:
   scenes/level1.scene.json
   prefabs/coin.prefab.json, prefabs/sparkle.prefab.json
   project.json
-The Luau scripts in scripts/ are hand-written and not generated.
+The Luau scripts in scripts/ are hand-written and not generated; the sounds
+in sounds/ are made by tools/examples/make_sounds.py.
 
 All art is original and drawn procedurally here. Ids are deterministic
 (UUIDv5 from fixed names) so regenerating produces identical files.
@@ -531,7 +532,7 @@ def coin_components(tex, script, position):
         "SpriteAnimation": {"frames": [[i * 16, 0, 16, 16] for i in range(4)], "framesPerSecond": 8},
         "BoxCollider": {"size": [10, 12], "isTrigger": True},
         "Tags": ["coin"],
-        "Scripts": [{"script": script["coin"], "properties": {"value": 1, "effect": "Sparkle"}}]}
+        "Scripts": [{"script": script["coin"], "properties": {"value": 1, "effect": "Sparkle", "sound": "Coin"}}]}
 
 
 def main():
@@ -555,7 +556,9 @@ def main():
     for name, (frames, fps, loop) in PLAYER_CLIPS.items():
         doc = clip_document(tex["player_sheet"], frames, fps, loop)
         (ROOT / "animations" / f"player_{name}.anim.json").write_text(dump_pretty(doc) + "\n")
-    script = {name: gid("script/" + name) for name in ("coin", "level_rules", "moving_platform", "sparkle", "best_time")}
+    script = {name: gid("script/" + name)
+              for name in ("coin", "level_rules", "moving_platform", "sparkle", "best_time", "player_sounds")}
+    sound = {name: gid("asset/sound/" + name) for name in ("coin", "jump", "complete", "theme")}
     drift_id = gid("asset/graph/drift")
     (ROOT / "graphs").mkdir(parents=True, exist_ok=True)
     (ROOT / "graphs" / "drift.graph.json").write_text(json.dumps(drift_graph(LEVEL_WIDTH * 16), indent=2) + "\n")
@@ -622,8 +625,19 @@ def main():
                      "properties": {"offset": [PLATFORM_TRAVEL, 0], "period": 4}}]}})
     entities.append({"id": gid("entity/level-rules"), "name": "Level Rules", "components": {
         "Scripts": [{"script": script["level_rules"],
-                     "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!"}},
+                     "properties": {"tag": "coin", "message": "ALL COINS COLLECTED!", "music": "Theme",
+                                    "completeSound": "Complete", "scoreText": "Score"}},
                     {"script": script["best_time"], "properties": {"board": "fastest"}}]}})
+    # Text: the score in the top-right corner of the screen (the HUD), and a
+    # hint in the world above where the player starts.
+    entities.append({"id": gid("entity/hud/score"), "name": "Score", "components": {
+        "Transform": {"position": [-6, 6]},
+        "Text": {"text": "SCORE 0", "anchor": "top-right", "align": "right", "color": "#fff3b0",
+                 "shadow": "#1d2b53", "screen": True}}})
+    entities.append({"id": gid("entity/hint"), "name": "Hint", "components": {
+        "Transform": {"position": [spawn[0] + 40, spawn[1] - 40]},
+        "Text": {"text": "COLLECT\nEVERY COIN!", "anchor": "bottom", "align": "center", "color": "#ffffff",
+                 "shadow": "#1d2b53", "layer": 2}}})
 
     entities.append({"id": player_id, "name": "Player", "components": {
         "Transform": {"position": spawn},
@@ -632,7 +646,8 @@ def main():
         "BoxCollider": {"size": [10, 14], "offset": [0, 1]},
         "KinematicBody": {},
         "PlatformerController": {"maxSpeed": 110, "jumpSpeed": 300, "gravity": 900},
-        "Player": {}}})
+        "Player": {},
+        "Scripts": [{"script": script["player_sounds"], "properties": {"jump": "Jump"}}]}})
 
     # Prefabs: the coin placed above, and the sparkle a collected coin spawns (World.spawn).
     (ROOT / "prefabs").mkdir(parents=True, exist_ok=True)
@@ -691,6 +706,12 @@ def main():
              "path": "scripts/moving_platform.luau"},
             {"id": script["sparkle"], "type": "script", "name": "Sparkle", "path": "scripts/sparkle.luau"},
             {"id": script["best_time"], "type": "script", "name": "Best Time", "path": "scripts/best_time.luau"},
+            {"id": script["player_sounds"], "type": "script", "name": "Player Sounds",
+             "path": "scripts/player_sounds.luau"},
+            {"id": sound["coin"], "type": "sound", "name": "Coin", "path": "sounds/coin.wav"},
+            {"id": sound["jump"], "type": "sound", "name": "Jump", "path": "sounds/jump.wav"},
+            {"id": sound["complete"], "type": "sound", "name": "Complete", "path": "sounds/complete.wav"},
+            {"id": sound["theme"], "type": "sound", "name": "Theme", "path": "sounds/theme.ogg"},
             {"id": drift_id, "type": "graph", "name": "Drift", "path": "graphs/drift.graph.json"},
             {"id": prefab["coin"], "type": "prefab", "name": "Coin", "path": "prefabs/coin.prefab.json"},
             {"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"},

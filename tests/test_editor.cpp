@@ -1,5 +1,7 @@
 #include <doctest.h>
 
+#include "px/project/Font.hpp"
+
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
 #include "px/editor/EditorProject.hpp"
@@ -338,9 +340,10 @@ TEST_CASE("Editor: importing, renaming and deleting assets") {
     const ScriptInfo* info = project->scriptInfo(script);
     REQUIRE(info != nullptr);
     CHECK(info->compiled);
-    REQUIRE(info->behaviour.properties.size() == 2); // in name order
+    REQUIRE(info->behaviour.properties.size() == 3); // in name order
     CHECK(info->behaviour.properties[0].first == "effect");
-    CHECK(info->behaviour.properties[1].first == "value");
+    CHECK(info->behaviour.properties[1].first == "sound");
+    CHECK(info->behaviour.properties[2].first == "value");
     CHECK(info->behaviour.events == std::vector<std::string>{"TriggerEnter"});
 
     must(project->renameAsset(texture, "Gold Coin"));
@@ -360,6 +363,48 @@ TEST_CASE("Editor: importing, renaming and deleting assets") {
     CHECK(project->asset(second) == nullptr);
     CHECK_FALSE(std::filesystem::exists(temp.path() / "p" / "assets" / "coin-2.png"));
     CHECK_FALSE(project->deleteAsset(project->manifest().startScene).ok());
+}
+
+TEST_CASE("Editor: importing sounds and making fonts") {
+    TempFolder temp;
+    auto project = must(EditorProject::create(temp.path() / "p", "P"));
+    const auto sound = must(project->importFile(kExample / "sounds" / "coin.wav"));
+    CHECK(project->asset(sound)->type == assets::AssetType::Sound);
+    CHECK(project->asset(sound)->path == "sounds/coin.wav");
+    const auto music = must(project->importFile(kExample / "sounds" / "theme.ogg"));
+    CHECK(project->asset(music)->path == "sounds/theme.ogg");
+    writeFile(temp.path() / "broken.wav", "RIFF....WAVEnot a sound");
+    auto broken = project->importFile(temp.path() / "broken.wav");
+    REQUIRE_FALSE(broken.ok());
+    CHECK(contains(broken.error().message, "broken.wav"));
+
+    // TrueType fonts are made into bitmap fonts at a size.
+    const auto ttf = std::filesystem::path(PX_SOURCE_DIR) / "third_party" / "fonts" / "press-start-2p" /
+                     "PressStart2P-Regular.ttf";
+    auto direct = project->importFile(ttf);
+    REQUIRE_FALSE(direct.ok());
+    CHECK(contains(direct.error().message, "Import Font"));
+    fontbake::BakeOptions options;
+    options.pixelSize = 8;
+    const auto font = must(project->importFont(ttf, options));
+    const auto* entry = project->asset(font);
+    REQUIRE(entry != nullptr);
+    CHECK(entry->type == assets::AssetType::Font);
+    CHECK(entry->name == "Press Start 2P 8");
+    CHECK(entry->path == "fonts/pressstart2p_regular_8.font.json");
+    auto data = must(project::loadFont(project->files(), project->assets(), font));
+    const auto* letters = project->asset(data.texture);
+    REQUIRE(letters != nullptr);
+    CHECK(letters->type == assets::AssetType::Texture);
+    CHECK(letters->path == "fonts/pressstart2p_regular_8.png");
+    CHECK(data.find(U'A') != nullptr);
+    // The letters are in use by the font, so they stay; the font file itself
+    // imports again (a bitmap font made elsewhere).
+    CHECK_FALSE(project->deleteAsset(data.texture).ok());
+    const auto again = must(project->importFile(project->root() / "fonts" / "pressstart2p_regular_8.font.json"));
+    CHECK(again == font); // already part of the project
+    auto reopened = must(EditorProject::open(temp.path() / "p"));
+    CHECK(reopened->asset(font) != nullptr);
 }
 
 TEST_CASE("Editor: script buffers, describe and errors") {

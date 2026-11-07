@@ -66,6 +66,14 @@ void AssetsPanel::drawAssetMenu(StudioApp& app, const assets::AssetEntry& entry)
     if (entry.type == assets::AssetType::Tileset) {
         if (ImGui::MenuItem("Edit Tiles")) app.openTileset(entry.id);
     }
+    if (entry.type == assets::AssetType::Sound) {
+        if (app.previewing(entry.id)) {
+            if (ImGui::MenuItem("Stop")) app.stopPreview();
+        } else if (ImGui::MenuItem("Play", nullptr, false, app.hasSound() && !app.playing())) {
+            app.previewSound(entry.id);
+        }
+        if (!app.hasSound()) ui::tooltip("No sound device: Studio plays silently.");
+    }
     if (entry.type == assets::AssetType::Prefab) {
         if (ImGui::MenuItem("Place In Scene", nullptr, false, !app.playing() && app.document() != nullptr)) {
             app.placePrefab(entry.id, std::nullopt);
@@ -177,6 +185,13 @@ void AssetsPanel::draw(StudioApp& app) {
             } else if (entry.type == assets::AssetType::Graph) {
                 bg = IM_COL32(40, 95, 130, 255);
                 glyph = "NODES";
+            } else if (entry.type == assets::AssetType::Sound) {
+                const bool on = app.previewing(entry.id);
+                bg = on ? IM_COL32(170, 110, 40, 255) : IM_COL32(120, 80, 40, 255);
+                glyph = on ? "PLAYING" : "SOUND";
+            } else if (entry.type == assets::AssetType::Font) {
+                bg = IM_COL32(110, 60, 90, 255);
+                glyph = "Aa FONT";
             }
             dl->AddRectFilled({cursor.x + 6, cursor.y + 4}, {cursor.x + tile - 6, cursor.y + tile * 0.75f - 4}, bg, 6.0f);
             const ImVec2 ts = ImGui::CalcTextSize(glyph);
@@ -190,6 +205,13 @@ void AssetsPanel::draw(StudioApp& app) {
             if (entry.type == assets::AssetType::Animation) app.openAnimation(entry.id);
             if (entry.type == assets::AssetType::Tileset) app.openTileset(entry.id);
             if (assets::isBehaviour(entry.type)) app.openScript(entry.id);
+            if (entry.type == assets::AssetType::Sound && !app.playing()) {
+                if (app.previewing(entry.id)) {
+                    app.stopPreview();
+                } else {
+                    app.previewSound(entry.id);
+                }
+            }
         }
         if (ImGui::BeginDragDropSource()) {
             ImGui::SetDragDropPayload(ui::kAssetPayload, &entry.id, sizeof(entry.id));
@@ -198,6 +220,10 @@ void AssetsPanel::draw(StudioApp& app) {
             if (assets::isBehaviour(entry.type)) ImGui::TextDisabled("Drop on an entity to attach it");
             if (entry.type == assets::AssetType::Prefab) ImGui::TextDisabled("Drop in the Scene view to place a copy");
             if (entry.type == assets::AssetType::Animation) ImGui::TextDisabled("Drop on an entity to play it there");
+            if (entry.type == assets::AssetType::Sound) {
+                ImGui::TextDisabled("Drop in the Scene view to make a sound source; double-click to listen");
+            }
+            if (entry.type == assets::AssetType::Font) ImGui::TextDisabled("Drop on a Text entity, or in the Scene view");
             ImGui::EndDragDropSource();
         }
         if (ImGui::BeginPopupContextItem("menu")) {
@@ -219,6 +245,23 @@ void AssetsPanel::draw(StudioApp& app) {
         if (entry.id == project->manifest().startScene) tip += "\nStart scene";
         if (project->scriptBufferDirty(entry.id)) tip += "\nUnsaved changes";
         if (script != nullptr && !script->error.empty()) tip += "\n" + script->error;
+        if (hovered && entry.type == assets::AssetType::Sound && app.sounds() != nullptr) {
+            if (auto sound = app.sounds()->get(entry.id)) {
+                const auto& info = sound->info();
+                tip += std::format("\n{}, {} Hz, {}, {:.2f} s{}", audio::soundFormatName(info.format), info.sampleRate,
+                                   info.channels == 1 ? "mono" : "stereo", info.seconds(),
+                                   sound->decoded() ? "" : " (streamed while it plays)");
+            } else {
+                tip += "\nCannot be played (see the Console)";
+            }
+            tip += "\nDouble-click to listen";
+        }
+        if (hovered && entry.type == assets::AssetType::Font && app.fonts() != nullptr) {
+            const render::LoadedFont font = app.fonts()->get(entry.id);
+            tip += std::format("\n{} px, line height {}, {} letters", font.data->size, font.data->lineHeight,
+                               font.data->glyphs.size());
+            if (!font.data->source.empty()) tip += "\n" + font.data->source;
+        }
         if (hovered) ui::tooltip(tip);
         ImGui::EndGroup();
         ImGui::PopID();

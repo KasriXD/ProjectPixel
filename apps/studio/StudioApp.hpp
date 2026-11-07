@@ -11,7 +11,11 @@
 #include "px/editor/EditorProject.hpp"
 #include "px/editor/Library.hpp"
 #include "px/editor/LogBuffer.hpp"
+#include "px/audio/GameAudio.hpp"
+#include "px/audio/Mixer.hpp"
 #include "px/editor/PlayMode.hpp"
+#include "px/platform_sdl/SdlAudio.hpp"
+#include "px/render/Text.hpp"
 #include "px/editor/SceneDocument.hpp"
 #include "px/platform_sdl/SdlRenderer2D.hpp"
 #include "px/render/TextureCache.hpp"
@@ -90,6 +94,14 @@ public:
     [[nodiscard]] editor::LogBuffer& log() { return m_log; }
     [[nodiscard]] platform::SdlRenderer2D& renderer() { return *m_renderer2d; }
     [[nodiscard]] render::TextureCache* textures() { return m_textures.get(); }
+    [[nodiscard]] render::FontCache* fonts() { return m_fonts.get(); }
+    // Sound: the project's sounds, the mixer and whether a device plays it.
+    [[nodiscard]] audio::SoundLibrary* sounds() { return m_sounds.get(); }
+    [[nodiscard]] bool hasSound() const { return m_audioDevice != nullptr; }
+    // Plays a sound asset on its own (the Assets panel), stopping the one before.
+    void previewSound(assets::AssetId sound);
+    void stopPreview();
+    [[nodiscard]] bool previewing(assets::AssetId sound) const;
     [[nodiscard]] SDL_Window* window() const { return m_window; }
     [[nodiscard]] StudioSettings& settings() { return m_settings; }
     [[nodiscard]] FileDialogs& dialogs() { return m_dialogs; }
@@ -241,6 +253,18 @@ private:
     std::unique_ptr<editor::EditorProject> m_project;
     std::unique_ptr<editor::SceneDocument> m_document;
     std::unique_ptr<render::TextureCache> m_textures;
+    std::unique_ptr<render::FontCache> m_fonts;     // uses m_textures
+    std::unique_ptr<audio::Mixer> m_mixer;
+    std::unique_ptr<platform::SdlAudio> m_audioDevice; // plays m_mixer (nullptr: no sound)
+    std::unique_ptr<audio::SoundLibrary> m_sounds;  // the open project's
+    std::unique_ptr<audio::GameAudio> m_gameAudio;  // while playing
+    audio::VoiceId m_previewVoice = audio::kNoVoice;
+    assets::AssetId m_previewSound;
+    // "Import Font": a TrueType or OpenType file waiting for its size.
+    std::filesystem::path m_fontToImport;
+    int m_fontSize = 16;
+    bool m_fontSmooth = false;
+    bool m_openFontModal = false;
     std::unique_ptr<editor::PlayMode> m_play;
     MultiplayerTest m_multiplayer;
     FixedStepClock m_playClock{1.0 / 60.0};

@@ -38,8 +38,12 @@ Result<FontData> parseFont(std::string_view json, std::string_view sourceName, c
         ObjectReader r(root, "");
         (void)r.find("format");
         (void)r.find("formatVersion");
-        (void)r.find("source"); // where it was made from (informational)
         FontData font;
+        if (const Json* source = r.find("source")) {
+            if (!source->is_string()) fail("source", "expected text");
+            font.source = source->get<std::string>();
+            if (font.source.size() > 500) fail("source", "at most 500 characters");
+        }
         r.required("texture", font.texture);
         if (font.texture.isNil()) fail("texture", "a texture asset id is required");
         if (assets != nullptr) {
@@ -100,6 +104,7 @@ std::string serializeFont(const FontData& font) {
     root["size"] = font.size;
     root["lineHeight"] = font.lineHeight;
     root["ascent"] = font.ascent;
+    if (!font.source.empty()) root["source"] = font.source;
     Json glyphs = Json::array();
     for (const Glyph& g : font.glyphs) {
         glyphs.push_back(Json::array({static_cast<std::uint32_t>(g.codepoint), static_cast<int>(g.source.x),

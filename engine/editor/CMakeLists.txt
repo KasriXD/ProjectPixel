@@ -16,4 +16,6 @@ px_add_module(editor
         px::scene
         px::project
         px::scripting
-        px::runtime)
+        px::runtime
+        px::audio
+        px::fontbake)

@@ -16,7 +16,11 @@ namespace px::online {
 struct PackageCheckOptions {
     int ticks = 120;            // simulate this many ticks of the start scene (0: none)
     bool reencodeImages = true; // replace every image with a PNG the engine wrote
+    bool reencodeSounds = true; // replace every sound with QOA the engine wrote
 };
+
+// All the sounds of a game together, decoded (keeps the check's time and memory bounded).
+inline constexpr double kMaxGameSoundSeconds = 3600.0;
 
 struct PackageReport {
     std::string name;       // the project's name
@@ -24,6 +28,9 @@ struct PackageReport {
     std::size_t files = 0;
     std::size_t bytes = 0;  // after re-encoding
     std::size_t images = 0; // re-encoded images
+    std::size_t sounds = 0; // re-encoded sounds
+    double soundSeconds = 0.0;
+    std::size_t fonts = 0;
     std::size_t scenes = 0;
     std::size_t scripts = 0; // scripts and visual scripts
     std::size_t entities = 0; // in the start scene
@@ -35,8 +42,9 @@ struct PackageReport {
 };
 
 // Validates `package` completely (manifest, every scene, prefab, animation,
-// tileset, script and visual script, every image), re-encodes its images in
-// place and simulates the start scene. Fails if anything does not load.
+// tileset, script and visual script, every image, sound and font), re-encodes
+// its images (PNG) and sounds (QOA) in place and simulates the start scene.
+// Fails if anything does not load.
 [[nodiscard]] Result<PackageReport> checkPackage(project::Package& package, const PackageCheckOptions& options = {});
 
 [[nodiscard]] std::string reportToJson(const PackageReport& report);

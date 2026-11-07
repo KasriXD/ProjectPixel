@@ -27,4 +27,7 @@ struct ImageLimits {
 [[nodiscard]] Result<Image> decodeImage(std::span<const std::uint8_t> bytes, std::string_view sourceName,
                                         ImageLimits limits = {});
 
+// Writes an image as PNG.
+[[nodiscard]] Result<std::vector<std::uint8_t>> encodePng(const Image& image);
+
 } // namespace px::assets

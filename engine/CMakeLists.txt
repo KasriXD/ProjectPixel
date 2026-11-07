@@ -12,6 +12,7 @@
 #   net       - multiplayer: transports, protocol, snapshot replication, game server and client
 #   audio     - sound files (WAV, Ogg Vorbis, QOA), mixing, a game's sounds and music (no device)
 #   online    - the platform from the engine's side: package checks, wire types, HTTP client
+#   fontbake  - TrueType/OpenType to bitmap fonts (Studio and tools only)
 #   render    - renderer interface, camera, scene-to-draw-call extraction (no backend)
 #   editor    - Studio's editor model: projects, scene documents, undo, play mode (no UI)
 #   platform_sdl - SDL3 window/input/renderer backend (client only)
@@ -29,6 +30,7 @@ add_subdirectory(audio)
 if(PX_ENABLE_PLATFORM)
     add_subdirectory(online)
 endif()
+add_subdirectory(fontbake)
 add_subdirectory(render)
 add_subdirectory(editor)
 

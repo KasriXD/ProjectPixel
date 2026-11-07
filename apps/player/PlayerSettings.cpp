@@ -22,6 +22,15 @@ PlayerSettings PlayerSettings::load(const std::filesystem::path& file) {
             s.scaling = value == "pixel" ? Scaling::PixelPerfect : value == "fit" ? Scaling::Fit : Scaling::GameDefault;
         } else if (key == "showFps") {
             s.showFps = value == "on";
+        } else if (key == "volume" || key == "musicVolume" || key == "effectsVolume") {
+            int percent = -1;
+            try {
+                percent = std::stoi(value);
+            } catch (...) {
+            }
+            if (percent >= 0 && percent <= 100) {
+                (key == "volume" ? s.volume : key == "musicVolume" ? s.musicVolume : s.effectsVolume) = percent / 10 * 10;
+            }
         } else if (key == "touch") {
             s.touch = value == "on" ? TouchMode::On : value == "off" ? TouchMode::Off : TouchMode::Auto;
         }
@@ -37,7 +46,10 @@ bool PlayerSettings::save(const std::filesystem::path& file) const {
         << "frameLimit=" << frameLimit << "\n"
         << "scaling=" << (scaling == Scaling::PixelPerfect ? "pixel" : scaling == Scaling::Fit ? "fit" : "game") << "\n"
         << "showFps=" << (showFps ? "on" : "off") << "\n"
-        << "touch=" << (touch == TouchMode::On ? "on" : touch == TouchMode::Off ? "off" : "auto") << "\n";
+        << "touch=" << (touch == TouchMode::On ? "on" : touch == TouchMode::Off ? "off" : "auto") << "\n"
+        << "volume=" << volume << "\n"
+        << "musicVolume=" << musicVolume << "\n"
+        << "effectsVolume=" << effectsVolume << "\n";
     return static_cast<bool>(out);
 }
 

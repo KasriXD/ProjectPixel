@@ -1,14 +1,18 @@
 #pragma once
 
 #include "PlayerSettings.hpp"
+#include "px/audio/GameAudio.hpp"
+#include "px/audio/Mixer.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
 #include "px/core/Time.hpp"
 #include "px/net/GameClient.hpp"
 #include "px/net/GameServer.hpp"
+#include "px/platform_sdl/SdlAudio.hpp"
 #include "px/platform_sdl/SdlPlatform.hpp"
 #include "px/project/Project.hpp"
 #include "px/render/Camera2D.hpp"
+#include "px/render/Text.hpp"
 #include "px/render/TextureCache.hpp"
 #include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
@@ -129,7 +133,7 @@ private:
     void handleMenuInput();
     void menuMove(int delta);
     void menuChange(int delta); // left/right or activate (0)
-    enum class MenuItem { Resume, Vsync, FrameLimit, Scaling, ShowFps, Touch, Invite, Quit };
+    enum class MenuItem { Resume, Volume, Music, Effects, Vsync, FrameLimit, Scaling, ShowFps, Touch, Invite, Quit };
     [[nodiscard]] std::vector<MenuItem> menuItems() const;
     [[nodiscard]] int menuRows() const;   // rows shown now (the menu or the friends to invite)
     [[nodiscard]] int firstInvite() const; // the first friend shown (the list scrolls)
@@ -139,6 +143,10 @@ private:
     void invite(const std::string& name);
     void updateInvites();
     void applySettings();
+    // Sound and fonts follow the loaded game (made again on reload).
+    void makeGameMedia();
+    void applyVolumes();
+    void playSounds();
     [[nodiscard]] bool touchVisible() const;
     [[nodiscard]] bool networked() const { return m_net != nullptr; }
     [[nodiscard]] scene::Scene& currentScene();
@@ -160,6 +168,11 @@ private:
     runtime::ActionSet m_actions;
     std::unique_ptr<platform::SdlPlatform> m_platform;
     std::unique_ptr<render::TextureCache> m_textures;
+    std::unique_ptr<render::FontCache> m_fonts;      // uses m_textures
+    std::unique_ptr<audio::Mixer> m_mixer;
+    std::unique_ptr<platform::SdlAudio> m_audioDevice; // plays m_mixer (nullptr: no sound)
+    std::unique_ptr<audio::SoundLibrary> m_sounds;
+    std::unique_ptr<audio::GameAudio> m_gameAudio;   // uses m_mixer and m_sounds
     runtime::KeyBindings m_bindings;
     std::optional<runtime::InputScript> m_script;
     std::optional<runtime::InputScriptPlayer> m_scriptPlayer;

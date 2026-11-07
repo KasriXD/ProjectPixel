@@ -329,7 +329,9 @@ std::vector<std::uint8_t> PlatformPanel::capturePicture(StudioApp& app) {
     runtime::updateCameras(view, runtime::tilemapBounds(view), viewSize);
     r.setRenderTarget(target);
     r.beginFrame(view.settings().backgroundColor);
-    render::renderScene(view, render::cameraForScene(view, viewSize), r, *app.textures());
+    render::SceneRenderOptions drawing;
+    drawing.fonts = app.fonts();
+    render::renderScene(view, render::cameraForScene(view, viewSize), r, *app.textures(), drawing);
     std::vector<std::uint8_t> png = r.readPixelsPng();
     r.setRenderTarget(render::kNoTexture);
     r.destroyTexture(target);

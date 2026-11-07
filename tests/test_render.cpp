@@ -1,6 +1,9 @@
 #include <doctest.h>
 
 #include "px/core/FileSystem.hpp"
+#include "px/core/Utf8.hpp"
+#include "px/fontbake/FontBaker.hpp"
+#include "px/render/Text.hpp"
 #include "px/project/Project.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/render/Camera2D.hpp"
@@ -9,6 +12,8 @@
 #include "px/runtime/GameLoader.hpp"
 #include "px/runtime/GameSession.hpp"
 
+#include <fstream>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -28,6 +33,7 @@ public:
     };
     std::vector<Texture> textures;
     std::vector<SpriteDraw> sprites;
+    std::vector<std::pair<Rect, Color>> fills;
     int destroyed = 0;
 
     TextureHandle createTexture(const assets::Image& image, assets::TextureFilter filter) override {
@@ -40,7 +46,7 @@ public:
     }
     void beginFrame(Color) override {}
     void drawSprite(const SpriteDraw& draw) override { sprites.push_back(draw); }
-    void fillRect(const Rect&, Color) override {}
+    void fillRect(const Rect& rect, Color color) override { fills.push_back({rect, color}); }
     void drawRect(const Rect&, Color) override {}
     void drawDebugText(Vec2, std::string_view, Color) override {}
     void endFrame() override {}
@@ -182,4 +188,215 @@ TEST_CASE("Example level renders the visible part of the level") {
     CHECK(stats.culledSprites > 3);
     CHECK(renderer.textures.size() == 4); // tiles, player, coin, scenery
     for (const auto& t : renderer.textures) CHECK(t.filter == assets::TextureFilter::Nearest);
+}
+
+// --- text -----------------------------------------------------------------------------------
+
+namespace {
+
+// A font where every letter is 4 wide (advance 5) and 6 tall; line height 8.
+project::FontData testFont() {
+    project::FontData f;
+    f.texture = kTex;
+    f.size = 6;
+    f.lineHeight = 8;
+    f.ascent = 6;
+    f.glyphs.push_back({U' ', {}, {}, 5});
+    for (char32_t c : std::u32string(U"?ABCabcéЖ")) f.glyphs.push_back({c, {0, 0, 4, 6}, {0, 0}, 5});
+    std::sort(f.glyphs.begin(), f.glyphs.end(), [](const auto& a, const auto& b) { return a.codepoint < b.codepoint; });
+    return f;
+}
+
+} // namespace
+
+TEST_CASE("UTF-8: decoding never gets stuck; broken bytes become U+FFFD") {
+    const std::string text = "a\xc3\xa9\xe2\x82\xac\xf0\x9f\x98\x80" "b";
+    std::size_t pos = 0;
+    std::u32string out;
+    while (pos < text.size()) out.push_back(utf8::next(text, pos));
+    CHECK(out == U"aé€\U0001F600b");
+    for (const std::string bad : {"\x80", "\xc3", "\xc0\xaf", "\xed\xa0\x80", "\xf4\x90\x80\x80", "\xff"}) {
+        std::size_t p = 0;
+        CHECK(utf8::next(bad, p) == utf8::kReplacement);
+        CHECK(p == 1);
+    }
+    std::string round;
+    for (char32_t c : out) utf8::append(round, c);
+    CHECK(round == text);
+    CHECK(utf8::truncate("a\xc3\xa9", 2) == "a");
+    CHECK(utf8::truncate("abc", 5) == "abc");
+}
+
+TEST_CASE("Text layout: lines, wrapping, alignment, padding and missing letters") {
+    const project::FontData font = testFont();
+    auto one = layoutText(font, "AB C");
+    CHECK(one.lines == 1);
+    CHECK(one.size == Vec2{20, 8}); // 4 advances; the line ends on a letter
+    CHECK(one.glyphs.size() == 3);
+    CHECK(one.glyphs[2].dest.x == 15.0f);
+
+    // New lines, trailing spaces not counted, unknown letters as "?", broken UTF-8 too.
+    auto lines = layoutText(font, "AB  \nC\xe2\x82\xac\xff");
+    CHECK(lines.lines == 2);
+    CHECK(lines.size == Vec2{15, 16});
+    CHECK(lines.glyphs.size() == 5);
+    CHECK(lines.glyphs[2].dest.y == 8.0f);
+
+    // Wrapping at spaces; a long word breaks where it must.
+    TextLayoutOptions wrap;
+    wrap.wrapWidth = 22;
+    auto wrapped = layoutText(font, "AB CA BC AAAAAAAAA", wrap);
+    CHECK(wrapped.lines == 6); // "AB" / "CA" / "BC" / "AAAA" / "AAAA" / "A" (three letters need 24)
+    CHECK(wrapped.size.x <= 22.0f);
+    // Alignment and padding.
+    TextLayoutOptions centred;
+    centred.align = 0.5f;
+    centred.padding = 2;
+    centred.lineSpacing = 1;
+    auto c = layoutText(font, "ABC\nA", centred);
+    CHECK(c.size == Vec2{19, 21}); // 15 + 4 wide; 8 + 1 + 8 + 4 tall
+    CHECK(c.glyphs[3].dest == Rect{2 + 5, 2 + 9, 4, 6});
+    CHECK(layoutText(font, "").glyphs.empty());
+
+    CHECK(anchorFactor("top-left") == Vec2{0, 0});
+    CHECK(anchorFactor("bottom-right") == Vec2{1, 1});
+    CHECK(anchorFactor("top") == Vec2{0.5f, 0});
+    CHECK(anchorFactor("left") == Vec2{0, 0.5f});
+    CHECK(anchorFactor("center") == Vec2{0.5f, 0.5f});
+}
+
+TEST_CASE("Text rendering: world texts by layer, screen texts on top, each HUD only to its player") {
+    RecordingRenderer renderer;
+    MemoryFileSystem files;
+    assets::AssetRegistry registry;
+    TextureCache textures(renderer, files, registry);
+    FontCache fonts(renderer, textures, files, registry);
+    const LoadedFont builtIn = fonts.builtIn();
+    REQUIRE(builtIn.data != nullptr);
+    CHECK(builtIn.data->size == 8);
+    CHECK(builtIn.data->lineHeight == 10);
+    CHECK(builtIn.data->texture.guid == kBuiltInFontTexture);
+    CHECK(builtIn.data->find(U'A') != nullptr);
+    CHECK(builtIn.data->find(U'Ж') != nullptr); // Cyrillic
+    CHECK(builtIn.data->glyphs.size() > 500);
+    CHECK(fonts.get(kMissing).data == builtIn.data); // not a font: the built-in one, reported once
+
+    Scene scene;
+    const Entity sign = scene.createEntity("Sign");
+    scene.set(sign, Transform{{100, 50}});
+    Text world;
+    world.text = "HI";
+    world.anchor = "bottom";
+    world.layer = 5;
+    world.background = Color{0, 0, 0, 128};
+    world.padding = 1;
+    scene.set(sign, world);
+    const Entity behind = scene.createEntity("Behind");
+    scene.set(behind, Transform{{100, 50}});
+    Sprite sprite;
+    sprite.texture = kMissing;
+    sprite.size = {4, 4};
+    sprite.layer = 10;
+    scene.set(behind, sprite);
+
+    const Entity mine = scene.createEntity("Mine");
+    scene.set(mine, Transform{{0, 0}});
+    scene.set(mine, Player{{}, 1, "Ada"});
+    const Entity hud = scene.createEntity("Score", mine);
+    scene.set(hud, Transform{{-4, 4}});
+    Text score;
+    score.text = "9";
+    score.screen = true;
+    score.anchor = "top-right";
+    score.scale = 2;
+    score.shadow = colors::black;
+    scene.set(hud, score);
+    const Entity theirs = scene.createEntity("Theirs");
+    scene.set(theirs, Transform{});
+    scene.set(theirs, Player{{}, 2, "Bo"});
+    const Entity theirHud = scene.createEntity("Their score", theirs);
+    scene.set(theirHud, Transform{});
+    scene.set(theirHud, score);
+
+    Camera2D camera;
+    camera.center = {100, 50};
+    camera.viewport = {320, 180};
+    SceneRenderOptions options;
+    options.fonts = &fonts;
+    options.viewer = 1;
+    const auto stats = renderScene(scene, camera, renderer, textures, options);
+    CHECK(stats.texts == 2);
+    // The sign's letters, then the sprite above it, then the HUD (shadow, letter).
+    REQUIRE(renderer.sprites.size() == 2 + 1 + 2);
+    CHECK(renderer.sprites[0].texture == builtIn.texture);
+    CHECK(renderer.sprites[2].texture != builtIn.texture);
+    // "HI" sits on the sign's point with the bottom of its box (padding 1).
+    const TextLayout signLayout = layoutText(*builtIn.data, world);
+    REQUIRE(renderer.fills.size() == 1);
+    CHECK(renderer.fills[0].first == Rect{160 - signLayout.size.x / 2, 90 - signLayout.size.y, signLayout.size.x,
+                                          signLayout.size.y});
+    // The score: 4 px from the top-right corner, twice as big, with its shadow under it.
+    const SpriteDraw& shadow = renderer.sprites[3];
+    const SpriteDraw& digit = renderer.sprites[4];
+    CHECK(shadow.tint == colors::black);
+    CHECK(shadow.dest.x == digit.dest.x + 2);
+    CHECK(digit.dest.right() <= 316.0f);
+    CHECK(digit.dest.top() >= 4.0f);
+    CHECK(digit.dest.w == builtIn.data->find(U'9')->source.w * 2);
+
+    // Everyone's view (playing alone) shows both HUD texts; hidden texts are not drawn.
+    renderer.sprites.clear();
+    options.viewer = 0;
+    scene.get<Text>(sign).visible = false;
+    CHECK(renderScene(scene, camera, renderer, textures, options).texts == 2);
+    options.screenTexts = false;
+    CHECK(renderScene(scene, camera, renderer, textures, options).texts == 0);
+}
+
+TEST_CASE("Font baking: Press Start 2P as a pixel font, and the result loads") {
+    std::ifstream in(std::string(PX_SOURCE_DIR) + "/third_party/fonts/press-start-2p/PressStart2P-Regular.ttf",
+                     std::ios::binary);
+    REQUIRE(in);
+    std::ostringstream bytes;
+    bytes << in.rdbuf();
+    const std::string ttf = bytes.str();
+    const auto data = std::span(reinterpret_cast<const std::uint8_t*>(ttf.data()), ttf.size());
+    fontbake::BakeOptions options;
+    options.pixelSize = 8;
+    auto baked = fontbake::bakeFont(data, options);
+    REQUIRE(baked);
+    CHECK(baked->familyName == "Press Start 2P");
+    CHECK(baked->font.size == 8);
+    CHECK(baked->font.ascent == 8);
+    const project::Glyph* a = baked->font.find(U'A');
+    REQUIRE(a != nullptr);
+    CHECK(a->advance == 8.0f);
+    CHECK(a->source.w == 7.0f);
+    CHECK(a->source.h == 7.0f);
+    // Pixel mode: every pixel fully on or off.
+    for (std::size_t i = 3; i < baked->image.pixels.size(); i += 4) {
+        const auto alpha = baked->image.pixels[i];
+        REQUIRE((alpha == 0 || alpha == 255));
+    }
+    // The built-in font is this, as the repository has it.
+    CHECK(baked->font.glyphs.size() == builtInFontData().glyphs.size());
+    baked->font.texture = kTex;
+    auto png = assets::encodePng(baked->image);
+    REQUIRE(png);
+    auto image = assets::decodeImage(png.value(), "font.png");
+    REQUIRE(image);
+    CHECK(project::checkFontTexture(baked->font, {image->width, image->height}, "font"));
+    auto again = project::parseFont(project::serializeFont(baked->font), "font.font.json");
+    REQUIRE(again);
+    CHECK(again->glyphs.size() == baked->font.glyphs.size());
+
+    // Smooth: soft edges; not a font: an error; a size out of range: an error.
+    options.smooth = true;
+    options.pixelSize = 24;
+    auto smooth = fontbake::bakeFont(data, options);
+    REQUIRE(smooth);
+    CHECK(smooth->font.size == 24);
+    CHECK_FALSE(fontbake::bakeFont(std::span(data.data(), 100), {}));
+    options.pixelSize = 1000;
+    CHECK_FALSE(fontbake::bakeFont(data, options));
 }

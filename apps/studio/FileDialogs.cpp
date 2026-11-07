@@ -9,8 +9,10 @@ namespace px::studio {
 namespace {
 
 const SDL_DialogFileFilter kImportFilters[] = {
-    {"Images, scripts and scenes", "png;jpg;jpeg;bmp;tga;luau;json"},
+    {"Images, sounds, fonts, scripts and scenes", "png;jpg;jpeg;bmp;tga;wav;ogg;qoa;ttf;otf;luau;json"},
     {"Images", "png;jpg;jpeg;bmp;tga"},
+    {"Sounds", "wav;ogg;qoa"},
+    {"Fonts", "ttf;otf;json"},
     {"Luau scripts", "luau"},
     {"Scenes", "json"},
 };

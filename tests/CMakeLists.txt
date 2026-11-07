@@ -26,11 +26,12 @@ add_executable(px_tests
 target_link_libraries(px_tests PRIVATE
     px_doctest
     px::core px::crypto px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::audio px::render
-    px::editor)
+    px::editor px::fontbake)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
     PX_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
+    PX_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library")
 px_target_defaults(px_tests)
 if(PX_ENABLE_PLATFORM)
@@ -53,17 +54,20 @@ add_test(NAME unit_tests COMMAND px_tests)
 
 # End-to-end: play the example level headlessly with a scripted route.
 # Coins, the moving platform and the win condition are Luau scripts; the
-# level must be completed without any script errors.
+# level must be completed without any script errors, and what a player would
+# hear (mixed without a device) must not be silence.
 add_test(NAME example_platformer_playthrough
     COMMAND px_headless "${PX_EXAMPLES_DIR}/platformer"
             --input-script "${PX_EXAMPLES_DIR}/platformer/tests/full_run.input"
-            --expect-level-complete --expect-no-script-errors)
+            --expect-level-complete --expect-no-script-errors
+            --audio-out "${CMAKE_CURRENT_BINARY_DIR}/platformer_run.wav" --expect-sound)
 
 # The same for the top-down example: key, gate, gems, stairs.
 add_test(NAME example_topdown_playthrough
     COMMAND px_headless "${PX_EXAMPLES_DIR}/topdown"
             --input-script "${PX_EXAMPLES_DIR}/topdown/tests/full_run.input"
-            --expect-level-complete --expect-no-script-errors)
+            --expect-level-complete --expect-no-script-errors
+            --audio-out "${CMAKE_CURRENT_BINARY_DIR}/topdown_run.wav" --expect-sound)
 
 # Multiplayer end-to-end: a server and three clients in one process over a
 # simulated network with latency, jitter and loss; client 1 plays the
@@ -93,7 +97,7 @@ if(PX_BUILD_CLIENT AND NOT EMSCRIPTEN)
         COMMAND px_player "${PX_EXAMPLES_DIR}/platformer"
                 --frames 120 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/player_smoke.png")
     set_tests_properties(player_smoke_headless_display PROPERTIES
-        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0")
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0;SDL_AUDIO_DRIVER=dummy")
 endif()
 
 # The launcher (docs/launcher.md), without a platform: it opens, starts the
@@ -104,7 +108,7 @@ if(PX_LAUNCHER_ENABLED)
         COMMAND px_player --launcher --open local:0 --frames 60
                 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/launcher_smoke.png")
     set_tests_properties(launcher_smoke_headless_display PROPERTIES
-        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0;PX_PLATFORM_DIR=${CMAKE_CURRENT_BINARY_DIR}/launcher_smoke_data"
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0;SDL_AUDIO_DRIVER=dummy;PX_PLATFORM_DIR=${CMAKE_CURRENT_BINARY_DIR}/launcher_smoke_data"
         PASS_REGULAR_EXPRESSION "Launcher finished 60 frames")
 endif()
 
@@ -118,6 +122,6 @@ if(PX_STUDIO_ENABLED)
                 --screenshot "${CMAKE_CURRENT_BINARY_DIR}/studio_smoke.png"
                 --picture "${CMAKE_CURRENT_BINARY_DIR}/studio_picture.png")
     set_tests_properties(studio_smoke_headless_display PROPERTIES
-        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0"
+        ENVIRONMENT "SDL_VIDEO_DRIVER=dummy;SDL_RENDER_DRIVER=software;SDL_FRAMEBUFFER_ACCELERATION=0;SDL_AUDIO_DRIVER=dummy"
         TIMEOUT 300)
 endif()

@@ -6,12 +6,16 @@
 local LockBlock = {
     properties = {
         keyName = "gold", -- the key that opens it
+        sound = "", -- a sound played when it opens (e.g. "Door"); empty for none
     },
 }
 
 function LockBlock:Start()
     Events.on("key_collected", function(name)
         if name == self.keyName and self.entity:isValid() then
+            if self.sound ~= "" then
+                Sound.playAt(self.sound, self.entity.position)
+            end
             self.entity:destroy()
         end
     end)

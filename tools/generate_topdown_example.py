@@ -7,7 +7,8 @@ two of them. Everything comes from the starter library (library/), with the
 library's asset ids, so inserting library objects into a copy of this
 project never duplicates files.
 
-Run tools/generate_library.py first. Requires Pillow (through it).
+Run tools/generate_library.py first. Requires Pillow (through it). The sounds
+in sounds/ are made by tools/examples/make_sounds.py.
 Usage: python3 tools/generate_topdown_example.py
 
 The project is then rewritten with `px-headless examples/topdown --resave`
@@ -110,6 +111,10 @@ def main():
     prefab = {name: gid("asset/prefab/" + name) for name in ("gem", "sparkle")}
     assets.append({"id": prefab["gem"], "type": "prefab", "name": "Gem", "path": "prefabs/gem.prefab.json"})
     assets.append({"id": prefab["sparkle"], "type": "prefab", "name": "Sparkle", "path": "prefabs/sparkle.prefab.json"})
+    sounds = {"coin": ("Gem", "coin.wav"), "key": ("Key", "key.wav"), "door": ("Gate", "door.wav"),
+              "complete": ("Complete", "complete.wav"), "theme": ("Theme", "theme.ogg")}
+    for key, (name, file) in sounds.items():
+        assets.append({"id": gid("asset/sound/" + key), "type": "sound", "name": name, "path": "sounds/" + file})
     scene_id = gid("asset/garden")
     assets.append({"id": scene_id, "type": "scene", "name": "Garden", "path": "scenes/garden.scene.json"})
 
@@ -142,8 +147,13 @@ def main():
                              "Tilemap": {"tileset": T["topdown_tiles"], "tileSize": [16, 16], "tilesetColumns": 8,
                                          "solid": True, "layer": 0, "rows": lib.tile_rows(wall_rows())}}),
         e("rules", "Level Rules", {"Scripts": [{"script": S["level_rules"], "properties": {
-            "tag": "coin", "label": "GEMS", "message": "ALL GEMS FOUND!", "complete": False}},
+            "tag": "coin", "label": "GEMS", "message": "ALL GEMS FOUND!", "complete": False, "music": "Theme",
+            "completeSound": "Complete", "scoreText": "Score"}},
             {"script": S["best_time"], "properties": {"board": "fastest"}}]}),
+        # The score in the top-right corner of the screen (the HUD).
+        e("hud/score", "Score", {"Transform": {"position": [-6, 6]},
+                                 "Text": {"text": "SCORE 0", "anchor": "top-right", "align": "right",
+                                          "color": "#fff3b0", "shadow": "#1d2b53", "screen": True}}),
         e("sign", "Sign", {"Transform": {"position": centre(4, 12)},
                            "Sprite": sprite("scenery", [16, 16], [16, 16, 16, 16], -1),
                            "BoxCollider": trigger((16, 16)),
@@ -151,10 +161,10 @@ def main():
                                "message": "Find the key, open the gate, take the stairs!"}}]}),
         e("key", "Gold Key", {"Transform": {"position": centre(2, 1)},
                               "Sprite": sprite("key", [16, 16]), "BoxCollider": trigger((12, 8)),
-                              "Scripts": [{"script": S["key"], "properties": {"keyName": "gold"}}]}),
+                              "Scripts": [{"script": S["key"], "properties": {"keyName": "gold", "sound": "Key"}}]}),
         e("gate", "Gate", {"Transform": {"position": centre(*GATE)}, "Sprite": sprite("lock_block", [16, 16], layer=2),
                            "BoxCollider": {"size": [16, 16]},
-                           "Scripts": [{"script": S["lock_block"], "properties": {"keyName": "gold"}}]}),
+                           "Scripts": [{"script": S["lock_block"], "properties": {"keyName": "gold", "sound": "Gate"}}]}),
         e("stairs", "Exit Stairs", {"Transform": {"position": centre(22, 12)},
                                     "Sprite": sprite("stairs", [16, 16], layer=1), "BoxCollider": trigger((10, 10)),
                                     "Scripts": [{"script": S["goal"],
@@ -166,7 +176,7 @@ def main():
                 "Sprite": sprite("gem", [16, 16], [0, 0, 16, 16]),
                 "SpriteAnimation": {"frames": [[k * 16, 0, 16, 16] for k in range(4)], "framesPerSecond": 6},
                 "BoxCollider": trigger((10, 10)), "Tags": ["coin"],
-                "Scripts": [{"script": S["coin"], "properties": {"value": 5, "effect": "Sparkle"}}]}
+                "Scripts": [{"script": S["coin"], "properties": {"value": 5, "effect": "Sparkle", "sound": "Gem"}}]}
 
     # Every gem is a copy of the Gem prefab; collected gems spawn the Sparkle prefab.
     for i, (cx, cy) in enumerate([(2, 7), (7, 7), (17, 7), (22, 2), (9, 13)], start=1):

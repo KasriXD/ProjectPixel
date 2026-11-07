@@ -1,6 +1,8 @@
 #include "px/online/PackageCheck.hpp"
 
 #include "px/assets/Image.hpp"
+#include "px/audio/Sound.hpp"
+#include "px/project/Font.hpp"
 #include "px/project/Project.hpp"
 #include "px/project/SceneFormat.hpp"
 #include "px/runtime/GameLoader.hpp"
@@ -60,7 +62,49 @@ Result<PackageReport> checkPackage(project::Package& package, const PackageCheck
         }
         ++report.images;
     }
+
+    // Sounds: decoded with the engine's limits and written again as QOA, so
+    // players only ever decode sound files the platform produced (and only
+    // the simplest format: no Vorbis or WAV variants from the internet).
+    for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type != assets::AssetType::Sound) continue;
+        auto path = normalizeRelativePath(entry.path);
+        if (!path) return path.error();
+        auto* file = const_cast<project::PackageFile*>(package.find(path.value()));
+        if (file == nullptr) return makeError(ErrorCode::NotFound, "The package has no file '{}'", path.value());
+        auto info = audio::probeSound(file->data);
+        if (!info) return makeError(info.error().code, "{}: {}", file->path, info.error().message);
+        report.soundSeconds += info->seconds();
+        if (report.soundSeconds > kMaxGameSoundSeconds) {
+            return makeError(ErrorCode::LimitExceeded, "The game's sounds are longer than {} minutes together",
+                             static_cast<int>(kMaxGameSoundSeconds / 60));
+        }
+        auto pcm = audio::decodeSound(file->data);
+        if (!pcm) return makeError(pcm.error().code, "{}: {}", file->path, pcm.error().message);
+        if (options.reencodeSounds) {
+            auto qoa = audio::encodeQoa(pcm.value());
+            if (!qoa) return makeError(qoa.error().code, "{}: {}", file->path, qoa.error().message);
+            file->data = std::move(qoa.value());
+        }
+        ++report.sounds;
+    }
     files = package.toFileSystem();
+
+    // Fonts: their letters must be inside their (re-encoded) images.
+    for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type != assets::AssetType::Font) continue;
+        auto font = project::loadFont(*files, manifest->assets, entry.id);
+        if (!font) return font.error();
+        const auto* texture = manifest->assets.find(font->texture);
+        auto bytes = files->readBinary(texture->path);
+        if (!bytes) return bytes.error();
+        auto image = assets::decodeImage(bytes.value(), texture->path);
+        if (!image) return image.error();
+        if (auto inside = project::checkFontTexture(font.value(), {image->width, image->height}, entry.path); !inside) {
+            return inside.error();
+        }
+        ++report.fonts;
+    }
 
     // Every scene, not only the start scene.
     for (const auto& entry : manifest->assets.entries()) {
@@ -128,6 +172,9 @@ std::string reportToJson(const PackageReport& r) {
     j["files"] = r.files;
     j["bytes"] = r.bytes;
     j["images"] = r.images;
+    j["sounds"] = r.sounds;
+    j["soundSeconds"] = r.soundSeconds;
+    j["fonts"] = r.fonts;
     j["scenes"] = r.scenes;
     j["scripts"] = r.scripts;
     j["entities"] = r.entities;
@@ -148,6 +195,9 @@ Result<PackageReport> reportFromJson(std::string_view json) {
         r.files = j.at("files").get<std::size_t>();
         r.bytes = j.at("bytes").get<std::size_t>();
         r.images = j.at("images").get<std::size_t>();
+        r.sounds = j.value("sounds", std::size_t{0}); // reports from before sounds
+        r.soundSeconds = j.value("soundSeconds", 0.0);
+        r.fonts = j.value("fonts", std::size_t{0});
         r.scenes = j.at("scenes").get<std::size_t>();
         r.scripts = j.at("scripts").get<std::size_t>();
         r.entities = j.at("entities").get<std::size_t>();

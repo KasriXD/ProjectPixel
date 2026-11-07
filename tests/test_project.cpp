@@ -65,7 +65,8 @@ TEST_CASE("Example project manifest loads") {
     CHECK(manifest->settings.display.scaling == ScalingMode::Integer);
     CHECK(manifest->input.find("jump") != nullptr);
     CHECK(manifest->input.find("jump")->keys.front() == Key::Space);
-    CHECK(manifest->assets.size() == 20); // 6 images, 5 scripts, 1 graph, 2 prefabs, 4 animations, 1 tileset, 1 scene
+    CHECK(manifest->assets.size() == 25); // 6 images, 4 sounds, 6 scripts, 1 graph, 2 prefabs, 4 animations,
+                                          // 1 tileset, 1 scene
     CHECK(manifest->settings.scripting.apiVersion == 1);
     REQUIRE(manifest->leaderboards.size() == 1);
     CHECK(manifest->leaderboards[0].id == "fastest");
@@ -125,7 +126,9 @@ TEST_CASE("Example scene loads with all expected content") {
     REQUIRE_FALSE(player.isNull());
     CHECK(scene->tryGet<PlatformerController>(player) != nullptr);
     CHECK(scene->registry().count<Tags>() == 14);
-    CHECK(scene->registry().count<Scripts>() == 24); // 14 coins, the moving platform, the level rules, 8 clouds
+    CHECK(scene->registry().count<Scripts>() == 25); // 14 coins, the moving platform, the level rules, 8 clouds,
+                                                     // the player (its sounds)
+    CHECK(scene->registry().count<Text>() == 2);     // the score (HUD) and a hint
     CHECK(scene->registry().count<Tilemap>() == 1);
     const Entity level = scene->findByName("Level");
     const auto* map = scene->tryGet<Tilemap>(level);

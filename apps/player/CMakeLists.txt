@@ -8,7 +8,7 @@ else()
     add_executable(px_player main.cpp PlayerApp.cpp PlayerSettings.cpp)
     set_target_properties(px_player PROPERTIES OUTPUT_NAME px-player)
 endif()
-target_link_libraries(px_player PRIVATE px::runtime px::project px::net px::render px::platform_sdl)
+target_link_libraries(px_player PRIVATE px::runtime px::project px::net px::audio px::render px::platform_sdl)
 px_target_defaults(px_player)
 
 if(EMSCRIPTEN)

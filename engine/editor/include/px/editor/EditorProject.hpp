@@ -1,6 +1,7 @@
 #pragma once
 
 #include "px/assets/AssetRegistry.hpp"
+#include "px/fontbake/FontBaker.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Result.hpp"
 #include "px/project/Animation.hpp"
@@ -90,11 +91,16 @@ public:
 
     // Copies a file from outside the project into it and registers it.
     // The type comes from the extension: .png .jpg .jpeg .bmp .tga (texture),
-    // .luau (script), .scene.json (scene), .prefab.json (prefab), .anim.json
-    // (animation), .tileset.json (tileset). Files are
-    // checked first (images decoded, scenes and prefabs parsed), so a broken
-    // file is refused.
+    // .wav .ogg .qoa (sound), .luau (script), .scene.json (scene), .prefab.json
+    // (prefab), .anim.json (animation), .tileset.json (tileset), .font.json
+    // (bitmap font; its texture must be in the project). Files are checked
+    // first (images and sounds decoded, scenes and prefabs parsed), so a broken
+    // file is refused. TrueType and OpenType fonts go through importFont.
     [[nodiscard]] Result<assets::AssetId> importFile(const std::filesystem::path& source);
+    // Bakes a TrueType or OpenType font into fonts/<name>.png (a texture) and
+    // fonts/<name>.font.json (the font) and registers both. Returns the font.
+    [[nodiscard]] Result<assets::AssetId> importFont(const std::filesystem::path& source,
+                                                     const fontbake::BakeOptions& options);
     // Copies an asset from the starter library (see Library.hpp) into the
     // project, keeping its id, unless the project already has that id.
     [[nodiscard]] Result<assets::AssetId> addLibraryAsset(const project::LibraryAsset& asset,

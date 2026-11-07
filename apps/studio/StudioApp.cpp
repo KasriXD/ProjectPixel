@@ -235,6 +235,8 @@ StudioApp::Status StudioApp::initWindowAndUi() {
     if (m_sdlRenderer == nullptr) return Status::Failure;
     SDL_SetRenderVSync(m_sdlRenderer, m_options.smokeTest ? 0 : 1);
     m_renderer2d = std::make_unique<platform::SdlRenderer2D>(m_sdlRenderer);
+    m_mixer = std::make_unique<audio::Mixer>();
+    m_audioDevice = platform::SdlAudio::open(*m_mixer);
     if (m_libraryFiles) {
         m_libraryTextures = std::make_unique<render::TextureCache>(*m_renderer2d, *m_libraryFiles, m_libraryRegistry);
     }
@@ -271,9 +273,13 @@ StudioApp::Status StudioApp::initWindowAndUi() {
 }
 
 StudioApp::~StudioApp() {
+    m_gameAudio.reset();
     m_play.reset();
     m_libraryTextures.reset();
     if (!m_options.smokeTest && !m_settingsFile.empty()) (void)m_settings.save(m_settingsFile);
+    m_audioDevice.reset();
+    m_sounds.reset();
+    m_fonts.reset();
     m_textures.reset(); // GPU textures before the renderer
     m_renderer2d.reset();
     if (m_imguiReady) {
@@ -344,6 +350,8 @@ void StudioApp::openProjectNow(const std::filesystem::path& folder) {
     closeProjectNow();
     m_project = std::move(project.value());
     m_textures = std::make_unique<render::TextureCache>(*m_renderer2d, m_project->files(), m_project->assets());
+    m_fonts = std::make_unique<render::FontCache>(*m_renderer2d, *m_textures, m_project->files(), m_project->assets());
+    m_sounds = std::make_unique<audio::SoundLibrary>(m_project->files(), m_project->assets());
     m_settings.addRecent(m_project->root());
     if (!m_settingsFile.empty() && !m_options.smokeTest) (void)m_settings.save(m_settingsFile);
     log::info("Opened project '{}' ({})", m_project->displayName(), toUtf8(m_project->root()));
@@ -388,8 +396,13 @@ void StudioApp::requestCloseProject() {
 
 void StudioApp::closeProjectNow() {
     m_multiplayer.stop();
+    m_gameAudio.reset();
     m_play.reset();
+    stopPreview();
+    m_mixer->stopAll();
     m_document.reset();
+    m_sounds.reset();
+    m_fonts.reset();
     m_textures.reset();
     m_project.reset();
     m_viewport->resetCamera();
@@ -511,6 +524,11 @@ void StudioApp::startPlay() {
         return;
     }
     m_play = std::move(play.value());
+    stopPreview();
+    if (m_sounds) {
+        m_sounds->preload();
+        m_gameAudio = std::make_unique<audio::GameAudio>(*m_mixer, *m_sounds);
+    }
     m_playClock = FixedStepClock(1.0 / m_project->manifest().settings.tickRate);
     m_bindings = runtime::KeyBindings(m_project->manifest().input, m_play->session().actions());
     m_keysDown = {};
@@ -527,6 +545,7 @@ void StudioApp::stopPlay() {
     const auto& state = m_play->session().state();
     log::info("Stopped after {:.1f} s: score {}, level complete: {}, {} script errors",
               m_play->session().elapsedSeconds(), state.score, state.levelComplete, state.scriptErrors);
+    m_gameAudio.reset(); // fades out what the game played
     m_play.reset();
     updateTitle();
 }
@@ -563,6 +582,7 @@ void StudioApp::advancePlay(double elapsed) {
         const runtime::InputFrame frame{held, (held & ~m_previousHeld) | tapped};
         if (!m_play->advance(frame)) break; // paused
         m_previousHeld = held;
+        if (m_gameAudio) m_gameAudio->play(m_play->session().sounds(), m_play->session().scene());
         for (const auto& event : m_play->session().events()) {
             if (event.type == runtime::GameEvent::Type::LevelCompleted) {
                 log::info("Level complete after {:.2f} s: {}", m_play->session().elapsedSeconds(), event.text);
@@ -571,6 +591,34 @@ void StudioApp::advancePlay(double elapsed) {
             }
         }
     }
+    if (m_gameAudio) {
+        const Vec2i res = m_project->manifest().settings.display.virtualResolution;
+        const scene::Scene& scene = m_play->session().scene();
+        m_gameAudio->update(scene, m_play->session().musicFor(runtime::kNoPlayer),
+                            audio::listenerForScene(scene, {static_cast<float>(res.x), static_cast<float>(res.y)}));
+    }
+}
+
+void StudioApp::previewSound(assets::AssetId sound) {
+    stopPreview();
+    if (!m_sounds) return;
+    auto loaded = m_sounds->get(sound);
+    if (!loaded) {
+        notify("This sound cannot be played (see the Console)", true);
+        return;
+    }
+    m_previewVoice = m_mixer->play(std::move(loaded), {});
+    m_previewSound = sound;
+}
+
+void StudioApp::stopPreview() {
+    if (m_previewVoice != audio::kNoVoice) m_mixer->stop(m_previewVoice, 0.05f);
+    m_previewVoice = audio::kNoVoice;
+    m_previewSound = {};
+}
+
+bool StudioApp::previewing(assets::AssetId sound) const {
+    return m_previewVoice != audio::kNoVoice && m_previewSound == sound && m_mixer->isPlaying(m_previewVoice);
 }
 
 // --- Misc commands -------------------------------------------------------------------------------------
@@ -760,6 +808,14 @@ void StudioApp::importFiles(const std::vector<std::filesystem::path>& files) {
     }
     int imported = 0;
     for (const auto& file : files) {
+        std::string ext = toUtf8(file.extension());
+        std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+        if (ext == ".ttf" || ext == ".otf" || ext == ".ttc") {
+            // Fonts are baked at a size first: ask for it.
+            m_fontToImport = file;
+            m_openFontModal = true;
+            continue;
+        }
         auto id = m_project->importFile(file);
         if (!id) {
             log::error("{}", id.error().message);
@@ -777,8 +833,14 @@ void StudioApp::importFiles(const std::vector<std::filesystem::path>& files) {
 void StudioApp::assetsChanged() {
     // GPU textures may already be in this frame's draw list; free them between frames.
     defer([this] {
+        if (m_fonts) m_fonts->clear();
         if (m_textures) m_textures->clear();
     });
+    // Sounds are read again when next played (one may have been replaced).
+    if (m_project && !m_play) {
+        stopPreview();
+        m_sounds = std::make_unique<audio::SoundLibrary>(m_project->files(), m_project->assets());
+    }
     if (m_project) m_project->refreshScripts();
     m_tilesets.reset();
 }
@@ -1407,6 +1469,44 @@ void StudioApp::drawModals() {
             m_pending.reset();
             ImGui::CloseCurrentPopup();
         }
+        ImGui::EndPopup();
+    }
+
+    if (m_openFontModal) {
+        ImGui::OpenPopup("Import Font");
+        m_openFontModal = false;
+    }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, {0.5f, 0.5f});
+    if (ImGui::BeginPopupModal("Import Font", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Make a bitmap font of %s", toUtf8(m_fontToImport.filename()).c_str());
+        ImGui::TextDisabled("Games carry the letters as a picture, made once here at one size.");
+        ImGui::Spacing();
+        ImGui::SetNextItemWidth(ImGui::GetFontSize() * 6.0f);
+        ImGui::InputInt("Size (pixels)", &m_fontSize);
+        m_fontSize = std::clamp(m_fontSize, 4, 128);
+        ImGui::Checkbox("Smooth edges", &m_fontSmooth);
+        ImGui::TextDisabled(m_fontSmooth ? "For fonts drawn at their own size: soft edges."
+                                         : "Pixel font: every pixel on or off (crisp when scaled).");
+        ImGui::TextDisabled("Latin, Greek and Cyrillic letters are included.");
+        ImGui::Spacing();
+        if (ImGui::Button("Make Font")) {
+            fontbake::BakeOptions options;
+            options.pixelSize = m_fontSize;
+            options.smooth = m_fontSmooth;
+            if (m_project) {
+                auto id = m_project->importFont(m_fontToImport, options);
+                if (!id) {
+                    log::error("{}", id.error().message);
+                    notify(id.error().message, true);
+                } else {
+                    assetsChanged();
+                    notify(std::format("Made the font '{}'", m_project->asset(id.value())->name));
+                }
+            }
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel") || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
         ImGui::EndPopup();
     }
 

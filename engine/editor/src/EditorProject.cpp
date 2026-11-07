@@ -1,6 +1,8 @@
 #include "px/editor/EditorProject.hpp"
 
 #include "px/assets/Image.hpp"
+#include "px/audio/Sound.hpp"
+#include "px/project/Font.hpp"
 #include "px/core/Log.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/scripting/Graph.hpp"
@@ -306,6 +308,11 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
         folder = "animations";
         extension = ".anim.json";
         stem = fileName.substr(0, fileName.size() - extension.size());
+    } else if (endsWith(lowered, ".font.json")) {
+        type = assets::AssetType::Font;
+        folder = "fonts";
+        extension = ".font.json";
+        stem = fileName.substr(0, fileName.size() - extension.size());
     } else if (endsWith(lowered, ".prefab.json")) {
         type = assets::AssetType::Prefab;
         folder = "prefabs";
@@ -318,15 +325,23 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
             type = assets::AssetType::Texture;
             folder = "assets";
             extension = ext;
+        } else if (ext == ".wav" || ext == ".ogg" || ext == ".qoa") {
+            type = assets::AssetType::Sound;
+            folder = "sounds";
+            extension = ext;
+        } else if (ext == ".ttf" || ext == ".otf" || ext == ".ttc") {
+            return makeError(ErrorCode::Unsupported,
+                             "'{}' is a TrueType or OpenType font: use Import Font to make a bitmap font of it", fileName);
         } else if (ext == ".luau" || ext == ".lua") {
             type = assets::AssetType::Script;
             folder = "scripts";
             extension = ".luau";
         } else {
             return makeError(ErrorCode::Unsupported,
-                             "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), Luau scripts "
-                             "(.luau), visual scripts (.graph.json), scenes (.scene.json), prefabs (.prefab.json), "
-                             "animations (.anim.json) and tilesets (.tileset.json)",
+                             "Cannot import '{}': supported files are images (.png .jpg .bmp .tga), sounds (.wav "
+                             ".ogg .qoa), Luau scripts (.luau), visual scripts (.graph.json), scenes (.scene.json), "
+                             "prefabs (.prefab.json), animations (.anim.json), tilesets (.tileset.json) and fonts "
+                             "(.font.json, or .ttf and .otf with Import Font)",
                              fileName);
         }
     }
@@ -336,6 +351,13 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
     if (type == assets::AssetType::Texture) {
         auto image = assets::decodeImage(bytes.value(), fileName);
         if (!image) return makeError(image.error().code, "Cannot import '{}': {}", fileName, image.error().message);
+    } else if (type == assets::AssetType::Sound) {
+        auto sound = audio::decodeSound(bytes.value());
+        if (!sound) return makeError(sound.error().code, "Cannot import '{}': {}", fileName, sound.error().message);
+    } else if (type == assets::AssetType::Font) {
+        const std::string text(bytes->begin(), bytes->end());
+        auto font = project::parseFont(text, fileName, &m_manifest.assets);
+        if (!font) return makeError(font.error().code, "Cannot import '{}': {}", fileName, font.error().message);
     } else if (type == assets::AssetType::Scene) {
         const std::string text(bytes->begin(), bytes->end());
         auto scene = project::parseScene(text, fileName, &m_manifest.assets);
@@ -392,6 +414,72 @@ Result<assets::AssetId> EditorProject::importFile(const std::filesystem::path& s
     m_scriptsStale = true;
     log::info("Imported {} as {} '{}'", fileName, assets::assetTypeName(type), entry.name);
     return entry.id;
+}
+
+Result<assets::AssetId> EditorProject::importFont(const std::filesystem::path& source,
+                                                  const fontbake::BakeOptions& options) {
+    const std::string fileName = source.filename().string();
+    auto bytes = readExternalFile(source);
+    if (!bytes) return bytes.error();
+    auto baked = fontbake::bakeFont(bytes.value(), options);
+    if (!baked) return makeError(baked.error().code, "Cannot import '{}': {}", fileName, baked.error().message);
+    auto png = assets::encodePng(baked->image);
+    if (!png) return png.error();
+
+    std::string stem = toFileStem(source.stem().string());
+    if (stem.empty()) stem = "font";
+    stem += std::format("_{}", options.pixelSize);
+    auto imagePath = uniquePath("fonts", stem, ".png");
+    if (!imagePath) return imagePath.error();
+    auto fontPath = uniquePath("fonts", std::filesystem::path(imagePath.value()).stem().string(), ".font.json");
+    if (!fontPath) return fontPath.error();
+
+    const std::string name = std::format("{} {}", baked->familyName.empty() ? source.stem().string() : baked->familyName,
+                                         options.pixelSize);
+    assets::AssetEntry texture;
+    texture.id = assets::AssetId{Guid::generate()};
+    texture.type = assets::AssetType::Texture;
+    texture.name = uniqueAssetName(name + " letters", assets::AssetType::Texture);
+    texture.path = imagePath.value();
+    texture.filter = options.smooth ? assets::TextureFilter::Linear : assets::TextureFilter::Nearest;
+    assets::AssetEntry font;
+    font.id = assets::AssetId{Guid::generate()};
+    font.type = assets::AssetType::Font;
+    font.name = uniqueAssetName(name, assets::AssetType::Font);
+    font.path = fontPath.value();
+    baked->font.texture = texture.id;
+    if (baked->font.source.empty()) baked->font.source = std::format("{} ({})", name, fileName);
+
+    const auto removeFiles = [&] {
+        std::error_code ec;
+        std::filesystem::remove(m_root / std::filesystem::path(texture.path), ec);
+        std::filesystem::remove(m_root / std::filesystem::path(font.path), ec);
+    };
+    const std::string_view pngText(reinterpret_cast<const char*>(png->data()), png->size());
+    if (auto written = m_files.writeText(texture.path, pngText); !written) return written.error();
+    if (auto written = m_files.writeText(font.path, project::serializeFont(baked->font)); !written) {
+        removeFiles();
+        return written.error();
+    }
+    if (auto added = m_manifest.assets.add(texture); !added) {
+        removeFiles();
+        return added.error();
+    }
+    if (auto added = m_manifest.assets.add(font); !added) {
+        (void)m_manifest.assets.remove(texture.id);
+        removeFiles();
+        return added.error();
+    }
+    if (auto saved = saveManifest(); !saved) {
+        (void)m_manifest.assets.remove(font.id);
+        (void)m_manifest.assets.remove(texture.id);
+        removeFiles();
+        return saved.error();
+    }
+    log::info("Made font '{}' from {}: {} letters in a {}x{} image{}", font.name, fileName, baked->font.glyphs.size(),
+              baked->image.width, baked->image.height,
+              baked->missing.empty() ? std::string() : std::format(" ({} characters are not in it)", baked->missing.size()));
+    return font.id;
 }
 
 Result<assets::AssetId> EditorProject::addLibraryAsset(const project::LibraryAsset& asset,
@@ -522,6 +610,10 @@ std::vector<AssetUse> EditorProject::findUses(
             auto clip = loadAnimation(entry.id);
             if (clip && clip.value().texture == id) uses.push_back({entry.id, entry.name, {}, entry.type});
             continue;
+        }
+        if (entry.type == assets::AssetType::Font) {
+            auto font = project::loadFont(m_files, m_manifest.assets, entry.id);
+            if (font && font->texture == id) uses.push_back({entry.id, entry.name, {}, entry.type});
         }
         if (entry.type == assets::AssetType::Tileset) {
             auto tileset = loadTileset(entry.id);

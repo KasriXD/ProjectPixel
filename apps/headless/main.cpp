@@ -17,11 +17,16 @@
 
 #include "NetTools.hpp"
 
+#include "px/assets/Image.hpp"
+#include "px/audio/GameAudio.hpp"
+#include "px/audio/Mixer.hpp"
 #include "px/core/FileSystem.hpp"
 #include "px/core/Log.hpp"
 #include "px/core/Sandbox.hpp"
 #include "px/core/Version.hpp"
+#include "px/fontbake/FontBaker.hpp"
 #include "px/project/Animation.hpp"
+#include "px/project/Font.hpp"
 #include "px/project/Package.hpp"
 #include "px/project/Prefab.hpp"
 #include "px/project/SceneFormat.hpp"
@@ -37,11 +42,16 @@
 #include "px/online/PlatformClient.hpp"
 #endif
 
+#include <algorithm>
 #include <charconv>
+#include <cmath>
+#include <cstdlib>
 #include <filesystem>
 #include <cstdio>
 #include <format>
+#include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -92,6 +102,16 @@ struct Options {
     std::string title;
     std::string notes;
     bool play = false;
+    // Sound (docs/audio.md#checking-sound-without-a-speaker).
+    std::string audioOut;  // --audio-out FILE.wav: what a player would hear
+    bool expectSound = false; // --expect-sound: fail if the run made no sound
+    // Fonts (docs/text.md#fonts).
+    std::string bakeFont;  // --bake-font FONT.ttf: write a bitmap font (--output NAME: NAME.png, NAME.font.json)
+    int fontSize = 16;     // --size N
+    int lineHeight = 0;    // --line-height N (0: as the font says)
+    std::string fontSource; // --source TEXT: what the font was made from (credit, licence)
+    bool smooth = false;   // --smooth: anti-aliased instead of pixel
+    std::string textureId; // --texture-id GUID: the texture asset the font refers to (default: a new id)
 };
 
 void printUsage() {
@@ -100,6 +120,7 @@ void printUsage() {
                  "usage: px-headless <project-dir> [--ticks N] [--input-script FILE]\n"
                  "                   [--expect-level-complete] [--expect-no-script-errors]\n"
                  "                   [--log-events] [--trace-every N] [--verbose]\n"
+                 "                   [--audio-out FILE.wav] [--expect-sound]   (what a player would hear)\n"
                  "       px-headless <project-dir> --resave   (rewrite project.json, scenes, prefabs,\n"
                  "                                             animations, tilesets and visual scripts\n"
                  "                                             as Studio saves them)\n"
@@ -124,7 +145,10 @@ void printUsage() {
                  "                                            (join a published game as a scripted bot)\n"
                  "       px-headless --print-api-reference\n"
                  "       px-headless --compile-graph FILE.graph.json   (print the Luau a visual script runs as)\n"
-                 "       px-headless --print-component-reference\n",
+                 "       px-headless --print-component-reference\n"
+                 "       px-headless --bake-font FONT.ttf --output NAME [--size N] [--smooth] [--line-height N]\n"
+                 "                   [--texture-id GUID] [--source TEXT]\n"
+                 "                                            (a bitmap font: NAME.png and NAME.font.json)\n",
                  version::productName, version::string);
 }
 
@@ -151,6 +175,12 @@ std::optional<Options> parseArgs(int argc, char** argv) {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
         const auto needValue = [&]() -> const char* { return i + 1 < argc ? argv[++i] : nullptr; };
+        const auto take = [&](std::string& out) {
+            const char* v = needValue();
+            if (v == nullptr) return false;
+            out = v;
+            return true;
+        };
         if (arg == "--ticks") {
             int n = 0;
             if (!parseInt(needValue(), n)) return std::nullopt;
@@ -206,40 +236,58 @@ std::optional<Options> parseArgs(int argc, char** argv) {
         } else if (arg == "--print-component-reference") {
             o.printComponentReference = true;
         } else if (arg == "--compile-graph") {
-            o.compileGraph = needValue();
+            if (!take(o.compileGraph)) return std::nullopt;
         } else if (arg == "--platform") {
-            o.platformUrl = needValue();
+            if (!take(o.platformUrl)) return std::nullopt;
         } else if (arg == "--user") {
-            o.user = needValue();
+            if (!take(o.user)) return std::nullopt;
         } else if (arg == "--password") {
-            o.password = needValue();
+            if (!take(o.password)) return std::nullopt;
         } else if (arg == "--register") {
             o.registerAccount = true;
         } else if (arg == "--publish") {
             o.publish = true;
         } else if (arg == "--title") {
-            o.title = needValue();
+            if (!take(o.title)) return std::nullopt;
         } else if (arg == "--notes") {
-            o.notes = needValue();
+            if (!take(o.notes)) return std::nullopt;
         } else if (arg == "--game" || arg == "--play") {
             o.play = o.play || arg == "--play";
             try {
-                o.game = std::stoll(std::string(needValue()));
+                std::string id;
+                if (!take(id)) return std::nullopt;
+                o.game = std::stoll(id);
             } catch (...) {
                 return std::nullopt;
             }
         } else if (arg == "--pack") {
-            o.packTo = needValue();
+            if (!take(o.packTo)) return std::nullopt;
         } else if (arg == "--check-package") {
-            o.checkPackage = needValue();
+            if (!take(o.checkPackage)) return std::nullopt;
         } else if (arg == "--output") {
-            o.checkOutput = needValue();
+            if (!take(o.checkOutput)) return std::nullopt;
         } else if (arg == "--check-thumbnail") {
-            o.checkThumbnail = needValue();
+            if (!take(o.checkThumbnail)) return std::nullopt;
+        } else if (arg == "--audio-out") {
+            if (!take(o.audioOut)) return std::nullopt;
+        } else if (arg == "--expect-sound") {
+            o.expectSound = true;
+        } else if (arg == "--bake-font") {
+            if (!take(o.bakeFont)) return std::nullopt;
+        } else if (arg == "--size") {
+            if (!parseInt(needValue(), o.fontSize)) return std::nullopt;
+        } else if (arg == "--line-height") {
+            if (!parseInt(needValue(), o.lineHeight)) return std::nullopt;
+        } else if (arg == "--source") {
+            if (!take(o.fontSource)) return std::nullopt;
+        } else if (arg == "--smooth") {
+            o.smooth = true;
+        } else if (arg == "--texture-id") {
+            if (!take(o.textureId)) return std::nullopt;
         } else if (arg == "--sandbox") {
             o.sandbox = true;
         } else if (arg == "--thumbnail") {
-            o.thumbnail = needValue();
+            if (!take(o.thumbnail)) return std::nullopt;
         } else if (arg == "--help" || arg == "-h") {
             return std::nullopt;
         } else if (!arg.starts_with("--") && o.projectDir.empty()) {
@@ -250,7 +298,8 @@ std::optional<Options> parseArgs(int argc, char** argv) {
         }
     }
     if (o.projectDir.empty() && !o.printApiReference && !o.printComponentReference && o.compileGraph.empty() &&
-        o.checkPackage.empty() && o.checkThumbnail.empty() && !(o.play && !o.platformUrl.empty())) {
+        o.checkPackage.empty() && o.checkThumbnail.empty() && o.bakeFont.empty() &&
+        !(o.play && !o.platformUrl.empty())) {
         return std::nullopt;
     }
     return o;
@@ -563,6 +612,65 @@ int resaveProject(DirectoryFileSystem& files) {
     return 0;
 }
 
+// Bakes a TrueType or OpenType font the developer chose into a bitmap font.
+int bakeFontCommand(const Options& o) {
+    if (o.checkOutput.empty()) {
+        log::error("--bake-font needs --output NAME (writes NAME.png and NAME.font.json)");
+        return 2;
+    }
+    std::ifstream in(o.bakeFont, std::ios::binary);
+    if (!in) {
+        log::error("Cannot read {}", o.bakeFont);
+        return 1;
+    }
+    std::ostringstream bytes;
+    bytes << in.rdbuf();
+    const std::string data = bytes.str();
+    fontbake::BakeOptions bake;
+    bake.pixelSize = o.fontSize;
+    bake.smooth = o.smooth;
+    bake.lineHeight = o.lineHeight;
+    auto baked = fontbake::bakeFont(std::span(reinterpret_cast<const std::uint8_t*>(data.data()), data.size()), bake);
+    if (!baked) {
+        log::error("{}: {}", o.bakeFont, baked.error().message);
+        return 1;
+    }
+    baked->font.source = o.fontSource.empty() ? baked->familyName : o.fontSource;
+    if (o.textureId.empty()) {
+        baked->font.texture = assets::AssetId{Guid::generate()};
+    } else {
+        const auto id = Guid::parse(o.textureId);
+        if (!id || id->isNil()) {
+            log::error("--texture-id: not a GUID: {}", o.textureId);
+            return 2;
+        }
+        baked->font.texture = assets::AssetId{*id};
+    }
+    auto png = assets::encodePng(baked->image);
+    if (!png) {
+        log::error("{}", png.error().message);
+        return 1;
+    }
+    const std::filesystem::path base(o.checkOutput);
+    const auto write = [](const std::filesystem::path& path, std::string_view content) {
+        std::ofstream out(path, std::ios::binary | std::ios::trunc);
+        out.write(content.data(), static_cast<std::streamsize>(content.size()));
+        return static_cast<bool>(out);
+    };
+    const std::filesystem::path pngPath = base.string() + ".png";
+    const std::filesystem::path jsonPath = base.string() + ".font.json";
+    if (!write(pngPath, std::string_view(reinterpret_cast<const char*>(png->data()), png->size())) ||
+        !write(jsonPath, project::serializeFont(baked->font))) {
+        log::error("Cannot write {}", base.string());
+        return 1;
+    }
+    std::printf("%s: %zu letters (%s), %dx%d image, line height %d, texture %s\n", baked->familyName.c_str(),
+                baked->font.glyphs.size(), o.smooth ? "smooth" : "pixel", baked->image.width, baked->image.height,
+                baked->font.lineHeight, baked->font.texture.toString().c_str());
+    if (!baked->missing.empty()) std::printf("%zu characters are not in the font\n", baked->missing.size());
+    return 0;
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -600,6 +708,7 @@ int main(int argc, char** argv) {
         std::fwrite(md.data(), 1, md.size(), stdout);
         return 0;
     }
+    if (!options->bakeFont.empty()) return bakeFontCommand(*options);
     if (!options->checkPackage.empty()) return checkPackageCommand(*options);
     if (!options->checkThumbnail.empty()) return checkThumbnailCommand(*options);
     if (!options->platformUrl.empty()) {
@@ -729,9 +838,40 @@ int main(int argc, char** argv) {
                            body != nullptr && body->onGround);
     };
 
+    // What a player would hear, mixed tick by tick (no audio device).
+    std::unique_ptr<audio::Mixer> mixer;
+    std::unique_ptr<audio::SoundLibrary> sounds;
+    std::unique_ptr<audio::GameAudio> gameAudio;
+    audio::PcmSound heard;
+    std::size_t soundsStarted = 0;
+    double framesDue = 0.0;
+    std::vector<float> block;
+    const Vec2 viewport{static_cast<float>(game->manifest.settings.display.virtualResolution.x),
+                        static_cast<float>(game->manifest.settings.display.virtualResolution.y)};
+    if (!options->audioOut.empty() || options->expectSound) {
+        mixer = std::make_unique<audio::Mixer>(48000);
+        sounds = std::make_unique<audio::SoundLibrary>(*files, game->manifest.assets);
+        sounds->preload();
+        gameAudio = std::make_unique<audio::GameAudio>(*mixer, *sounds);
+        heard.sampleRate = mixer->sampleRate();
+        heard.channels = 2;
+    }
+
     for (int i = 0; i < ticks; ++i) {
         const runtime::InputFrame frame = script ? script->next() : runtime::InputFrame{};
         session.tick(frame);
+        if (gameAudio) {
+            soundsStarted += session.sounds().size();
+            gameAudio->play(session.sounds(), session.scene());
+            gameAudio->update(session.scene(), session.musicFor(runtime::kNoPlayer),
+                              audio::listenerForScene(session.scene(), viewport));
+            framesDue += static_cast<double>(mixer->sampleRate()) / game->manifest.settings.tickRate;
+            const auto n = static_cast<std::size_t>(framesDue);
+            framesDue -= static_cast<double>(n);
+            block.resize(n * 2);
+            mixer->render(block.data(), n);
+            for (const float v : block) heard.samples.push_back(static_cast<std::int16_t>(std::lround(v * 32767.0f)));
+        }
         if (options->traceEvery > 0 && session.tickCount() % static_cast<std::uint64_t>(options->traceEvery) == 0) {
             std::printf("tick %llu held=0x%x %s\n", static_cast<unsigned long long>(session.tickCount()), frame.held,
                         describePlayer().c_str());
@@ -755,6 +895,25 @@ int main(int argc, char** argv) {
                 stats.instances - stats.disabledInstances, stats.instances, stats.memoryBytes / 1024,
                 describePlayer().c_str());
 
+    if (gameAudio) {
+        int peak = 0;
+        for (const std::int16_t v : heard.samples) peak = std::max(peak, std::abs(static_cast<int>(v)));
+        std::printf("sound: %zu sounds started, %zu sounds loaded, peak %.3f, %.2f s\n", soundsStarted, sounds->loaded(),
+                    peak / 32767.0, static_cast<double>(heard.frames()) / heard.sampleRate);
+        if (!options->audioOut.empty()) {
+            const auto wav = audio::encodeWav(heard);
+            std::ofstream out(options->audioOut, std::ios::binary | std::ios::trunc);
+            out.write(reinterpret_cast<const char*>(wav.data()), static_cast<std::streamsize>(wav.size()));
+            if (!out) {
+                log::error("Cannot write {}", options->audioOut);
+                return 1;
+            }
+        }
+        if (options->expectSound && (soundsStarted == 0 || peak < 33)) {
+            log::error("Expected the game to make sound");
+            return 3;
+        }
+    }
     if (options->expectLevelComplete && !state.levelComplete) {
         log::error("Expected the level to be completed");
         return 3;

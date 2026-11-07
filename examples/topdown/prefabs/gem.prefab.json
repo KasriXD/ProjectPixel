@@ -48,7 +48,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ]

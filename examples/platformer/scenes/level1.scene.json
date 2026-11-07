@@ -546,7 +546,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -601,7 +602,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -656,7 +658,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -711,7 +714,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -766,7 +770,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -821,7 +826,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -876,7 +882,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -931,7 +938,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -986,7 +994,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1041,7 +1050,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1096,7 +1106,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1151,7 +1162,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1206,7 +1218,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1261,7 +1274,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 1,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Coin"
             }
           }
         ],
@@ -1316,7 +1330,10 @@
             "script": "266a7d98-31f7-5d51-aeac-56482d711e1c",
             "properties": {
               "tag": "coin",
-              "message": "ALL COINS COLLECTED!"
+              "message": "ALL COINS COLLECTED!",
+              "music": "Theme",
+              "completeSound": "Complete",
+              "scoreText": "Score"
             }
           },
           {
@@ -1326,6 +1343,58 @@
             }
           }
         ]
+      }
+    },
+    {
+      "id": "5fe5e5a3-bef5-5731-b31f-3b81ff283b9e",
+      "name": "Score",
+      "components": {
+        "Transform": {
+          "position": [-6, 6],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Text": {
+          "text": "SCORE 0",
+          "scale": 1,
+          "color": "#fff3b0",
+          "anchor": "top-right",
+          "align": "right",
+          "wrapWidth": 0,
+          "lineSpacing": 0,
+          "shadow": "#1d2b53",
+          "background": "#00000000",
+          "padding": 2,
+          "layer": 100,
+          "screen": true,
+          "visible": true
+        }
+      }
+    },
+    {
+      "id": "2b1b2976-277a-5029-91fe-410754f97f15",
+      "name": "Hint",
+      "components": {
+        "Transform": {
+          "position": [96, 128],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Text": {
+          "text": "COLLECT\nEVERY COIN!",
+          "scale": 1,
+          "color": "#ffffff",
+          "anchor": "bottom",
+          "align": "center",
+          "wrapWidth": 0,
+          "lineSpacing": 0,
+          "shadow": "#1d2b53",
+          "background": "#00000000",
+          "padding": 2,
+          "layer": 2,
+          "screen": false,
+          "visible": true
+        }
       }
     },
     {
@@ -1375,7 +1444,15 @@
           "coyoteTime": 0.08,
           "jumpBufferTime": 0.1
         },
-        "Player": {}
+        "Player": {},
+        "Scripts": [
+          {
+            "script": "6e53734d-90bb-5b1c-91a1-ea27e5731b40",
+            "properties": {
+              "jump": "Jump"
+            }
+          }
+        ]
       }
     }
   ]

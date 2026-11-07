@@ -9,6 +9,7 @@ local Coin = {
     properties = {
         value = 1, -- points awarded when collected
         effect = "", -- name of a prefab to spawn where the coin was (e.g. "Sparkle"); empty for none
+        sound = "", -- name of a sound to play where the coin was (e.g. "Coin"); empty for none
     },
 }
 
@@ -21,6 +22,9 @@ function Coin:TriggerEnter(other)
     Events.emit("coin_collected", self.value)
     if self.effect ~= "" then
         World.spawn(self.effect, self.entity.position)
+    end
+    if self.sound ~= "" then
+        Sound.playAt(self.sound, self.entity.position)
     end
     self.entity:destroy()
 end

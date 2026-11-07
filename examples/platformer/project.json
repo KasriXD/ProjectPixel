@@ -155,6 +155,36 @@
       "path": "scripts/best_time.luau"
     },
     {
+      "id": "6e53734d-90bb-5b1c-91a1-ea27e5731b40",
+      "type": "script",
+      "name": "Player Sounds",
+      "path": "scripts/player_sounds.luau"
+    },
+    {
+      "id": "140f2013-6837-5471-b6a5-756ec2df9fe5",
+      "type": "sound",
+      "name": "Coin",
+      "path": "sounds/coin.wav"
+    },
+    {
+      "id": "ce7a2c3c-bcfb-56e4-8bbb-f615aa674512",
+      "type": "sound",
+      "name": "Jump",
+      "path": "sounds/jump.wav"
+    },
+    {
+      "id": "9d02d54c-c57d-52cf-9adf-3bb1fd0141cf",
+      "type": "sound",
+      "name": "Complete",
+      "path": "sounds/complete.wav"
+    },
+    {
+      "id": "054111fa-f759-5400-a8d0-bc96f2e11ec9",
+      "type": "sound",
+      "name": "Theme",
+      "path": "sounds/theme.ogg"
+    },
+    {
       "id": "83b8999f-374a-543e-a1ac-897ab87c299d",
       "type": "graph",
       "name": "Drift",

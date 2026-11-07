@@ -1,9 +1,11 @@
 #include "px/assets/Image.hpp"
 
+#include <algorithm>
 #include <climits>
 #include <cstring>
 
 #include <stb_image.h>
+#include <stb_image_write.h>
 
 namespace px::assets {
 
@@ -39,6 +41,28 @@ Result<Image> decodeImage(std::span<const std::uint8_t> bytes, std::string_view 
     std::memcpy(image.pixels.data(), decoded, byteCount);
     stbi_image_free(decoded);
     return image;
+}
+
+namespace {
+void appendPng(void* context, void* data, int size) {
+    auto* out = static_cast<std::vector<std::uint8_t>*>(context);
+    const auto* p = static_cast<const std::uint8_t*>(data);
+    out->insert(out->end(), p, p + size);
+}
+} // namespace
+
+Result<std::vector<std::uint8_t>> encodePng(const Image& image) {
+    if (image.width <= 0 || image.height <= 0 ||
+        image.pixels.size() != static_cast<std::size_t>(image.width) * static_cast<std::size_t>(image.height) * 4u) {
+        return makeError(ErrorCode::InvalidArgument, "an image of {}x{} needs {} bytes of pixels", image.width,
+                         image.height, static_cast<std::size_t>(std::max(image.width, 0)) * std::max(image.height, 0) * 4u);
+    }
+    std::vector<std::uint8_t> png;
+    if (stbi_write_png_to_func(appendPng, &png, image.width, image.height, 4, image.pixels.data(), image.width * 4) == 0 ||
+        png.empty()) {
+        return makeError(ErrorCode::InvalidData, "the PNG could not be written");
+    }
+    return png;
 }
 
 } // namespace px::assets

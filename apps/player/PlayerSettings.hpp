@@ -16,6 +16,10 @@ struct PlayerSettings {
     Scaling scaling = Scaling::GameDefault;
     bool showFps = false;
     TouchMode touch = TouchMode::Auto;
+    // Sound, in percent (steps of 10).
+    int volume = 80;
+    int musicVolume = 100;
+    int effectsVolume = 100;
 
     // "key=value" lines; unknown keys and bad values are ignored.
     [[nodiscard]] static PlayerSettings load(const std::filesystem::path& file);

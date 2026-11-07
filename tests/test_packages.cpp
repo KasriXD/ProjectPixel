@@ -7,6 +7,8 @@
 
 #include <doctest.h>
 
+#include "px/audio/Sound.hpp"
+
 #include <algorithm>
 
 using namespace px;
@@ -131,10 +133,55 @@ TEST_CASE("Packages: the platform's check validates, re-encodes images and simul
         CHECK(file->data[2] == 'N');
         CHECK(file->data[3] == 'G');
     }
+    // Every sound is now QOA the engine wrote, and still plays.
+    CHECK(report->sounds == 5);
+    CHECK(report->soundSeconds > 15.0);
+    for (const auto& entry : manifest->assets.entries()) {
+        if (entry.type != assets::AssetType::Sound) continue;
+        const auto* file = package.find(entry.path);
+        REQUIRE(file != nullptr);
+        REQUIRE(file->data.size() > 8);
+        CHECK(std::string(file->data.begin(), file->data.begin() + 4) == "qoaf");
+        auto info = audio::probeSound(file->data);
+        REQUIRE(info.ok());
+        CHECK(info->format == audio::SoundFormat::Qoa);
+        CHECK(audio::decodeSound(file->data).ok());
+    }
     auto json = online::reportToJson(report.value());
     auto back = online::reportFromJson(json);
     REQUIRE(back.ok());
     CHECK(back->images == report->images);
+    CHECK(back->sounds == report->sounds);
+
+    // Fonts: letters must be inside their image.
+    const auto withFont = [&](int glyphX) {
+        Package p = must(collectPackage(example("topdown")));
+        auto fsCopy = p.toFileSystem();
+        auto m = loadProjectManifest(*fsCopy);
+        REQUIRE(m.ok());
+        const auto* gem = m->assets.findByName("Gem");
+        REQUIRE(gem != nullptr);
+        for (auto& f : p.files) {
+            if (f.path != "project.json") continue;
+            std::string text(f.data.begin(), f.data.end());
+            const auto at = text.find("\"assets\": [");
+            REQUIRE(at != std::string::npos);
+            text.insert(at + 11, std::format(R"({{"id": "aaaaaaaa-0000-4000-8000-0000000000f0", "type": "font",
+                "name": "Tiny", "path": "fonts/tiny.font.json"}},)"));
+            f.data.assign(text.begin(), text.end());
+        }
+        const std::string font = std::format(R"({{"format": "px.font", "formatVersion": 1, "texture": "{}",
+            "size": 8, "lineHeight": 10, "ascent": 8, "glyphs": [[65, {}, 0, 8, 8, 0, 0, 8]]}})",
+                                              gem->id.toString(), glyphX);
+        p.files.push_back({"fonts/tiny.font.json", std::vector<std::uint8_t>(font.begin(), font.end())});
+        return online::checkPackage(p);
+    };
+    auto fine = withFont(0);
+    REQUIRE_MESSAGE(fine.ok(), (fine.ok() ? "" : fine.error().message));
+    CHECK(fine->fonts == 1);
+    auto outside = withFont(4000);
+    REQUIRE_FALSE(outside.ok());
+    CHECK(contains(outside.error().message, "outside"));
 
     // A broken script or image is refused with a message naming it.
     Package broken = must(collectPackage(example("platformer")));
@@ -149,5 +196,12 @@ TEST_CASE("Packages: the platform's check validates, re-encodes images and simul
         if (f.path.ends_with("tiles.png")) f.data.resize(40);
     }
     CHECK_FALSE(online::checkPackage(badImage).ok());
+    Package badSound = must(collectPackage(example("platformer")));
+    for (auto& f : badSound.files) {
+        if (f.path.ends_with("coin.wav")) f.data.resize(30); // cut off inside its header
+    }
+    auto noSound = online::checkPackage(badSound);
+    REQUIRE_FALSE(noSound.ok());
+    CHECK(contains(noSound.error().message, "coin.wav"));
 }
 #endif

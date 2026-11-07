@@ -1,4 +1,5 @@
 // Sound files and mixing (docs/audio.md).
+#include "px/audio/GameAudio.hpp"
 #include "px/audio/Mixer.hpp"
 #include "px/audio/Sound.hpp"
 #include "px/core/FileSystem.hpp"
@@ -328,4 +329,114 @@ TEST_CASE("Mixer: long sounds play while they are decoded") {
     CHECK(rms(out, 0, 0, 48000) > 0.3);
     CHECK(rms(out, 0, 5 * 48000 + 1000) == 0.0);
     CHECK(once.activeVoices() == 0);
+}
+
+TEST_CASE("Game audio: one-shot sounds, AudioSource components and music") {
+    MemoryFileSystem files;
+    files.addFile("sounds/beep.wav", encodeWav(constant(48000, 0.2, 8000)));
+    files.addFile("sounds/hum.wav", encodeWav(constant(48000, 0.5, 4000)));
+    files.addFile("sounds/song.wav", encodeWav(sine(48000, 2, 1.0, 220.0)));
+    files.addFile("sounds/other.wav", encodeWav(sine(48000, 2, 1.0, 330.0)));
+    files.addFile("sounds/broken.wav", std::string_view("RIFF....WAVEjunk"));
+    assets::AssetRegistry registry;
+    const assets::AssetId beep{Guid(1, 1)}, hum{Guid(1, 2)}, song{Guid(1, 3)}, other{Guid(1, 4)}, broken{Guid(1, 5)};
+    REQUIRE(registry.add({beep, assets::AssetType::Sound, "Beep", "sounds/beep.wav"}));
+    REQUIRE(registry.add({hum, assets::AssetType::Sound, "Hum", "sounds/hum.wav"}));
+    REQUIRE(registry.add({song, assets::AssetType::Sound, "Song", "sounds/song.wav"}));
+    REQUIRE(registry.add({other, assets::AssetType::Sound, "Other", "sounds/other.wav"}));
+    REQUIRE(registry.add({broken, assets::AssetType::Sound, "Broken", "sounds/broken.wav"}));
+    SoundLibrary library(files, registry);
+    CHECK(library.get(broken) == nullptr); // reported once, then silent
+    CHECK(library.get(broken) == nullptr);
+    library.preload();
+    CHECK(library.loaded() == 4);
+
+    Mixer mixer(48000);
+    auto audio = std::make_unique<GameAudio>(mixer, library);
+    scene::Scene scene;
+    const scene::Entity cam = scene.createEntity("Camera");
+    scene.set(cam, scene::Transform{});
+    scene::Camera camera;
+    camera.position = {160, 90};
+    camera.zoom = 2.0f;
+    scene.set(cam, camera);
+    const Listener listener = listenerForScene(scene, {320, 180});
+    CHECK(listener.position == Vec2{160, 90});
+    CHECK(listener.halfView == Vec2{80, 45});
+
+    // One-shot sounds: everyone's, someone else's (skipped), one from an entity.
+    const scene::Entity bird = scene.createEntity("Bird");
+    scene.set(bird, scene::Transform{{100, 90}});
+    const Guid birdId = scene.get<scene::EntityInfo>(bird).id;
+    std::vector<runtime::SoundEvent> sounds(3);
+    sounds[0].sound = beep;
+    sounds[1].sound = beep;
+    sounds[1].player = 2;
+    sounds[2].sound = beep;
+    sounds[2].entity = birdId;
+    sounds[2].position = Vec2{0, 0}; // where it was on the server; the view's position wins
+    audio->play(sounds, scene, 1);
+    CHECK(mixer.activeVoices() == 2);
+    audio->update(scene, {}, listener);
+    auto out = renderSeconds(mixer, 0.1);
+    // The bird is left of centre (in view): the left channel is louder.
+    CHECK(rms(out, 0, 1000) > rms(out, 1, 1000));
+    renderSeconds(mixer, 0.2);
+    audio->update(scene, {}, listener);
+    CHECK(mixer.activeVoices() == 0);
+
+    // A looping AudioSource plays while `playing`; a one-off plays once.
+    const scene::Entity fan = scene.createEntity("Fan");
+    scene.set(fan, scene::Transform{{160, 90}});
+    scene.set(fan, scene::AudioSource{hum});
+    const scene::Entity bell = scene.createEntity("Bell");
+    scene.set(bell, scene::Transform{{160, 90}});
+    scene::AudioSource once{beep};
+    once.loop = false;
+    scene.set(bell, once);
+    audio->update(scene, {}, listener);
+    CHECK(audio->sourcesPlaying() == 2);
+    renderSeconds(mixer, 0.6);
+    audio->update(scene, {}, listener);
+    CHECK(audio->sourcesPlaying() == 1); // the bell rang once; the fan loops
+    renderSeconds(mixer, 0.6);
+    audio->update(scene, {}, listener);
+    CHECK(audio->sourcesPlaying() == 1);
+    scene.get<scene::AudioSource>(bell).playing = false;
+    audio->update(scene, {}, listener);
+    scene.get<scene::AudioSource>(bell).playing = true; // rings again
+    audio->update(scene, {}, listener);
+    CHECK(audio->sourcesPlaying() == 2);
+    scene.get<scene::AudioSource>(fan).playing = false;
+    scene.destroyEntity(bell);
+    audio->update(scene, {}, listener);
+    renderSeconds(mixer, 0.1);
+    CHECK(audio->sourcesPlaying() == 0);
+    CHECK(mixer.activeVoices() == 0);
+
+    // Music: starts, changes volume without restarting, crossfades to another song.
+    runtime::MusicState music{song, 0.5f, 0.0f};
+    audio->update(scene, music, listener);
+    CHECK(mixer.activeVoices() == 1);
+    music.volume = 0.25f;
+    audio->update(scene, music, listener);
+    CHECK(mixer.activeVoices() == 1);
+    music = {other, 1.0f, 0.5f};
+    audio->update(scene, music, listener);
+    CHECK(mixer.activeVoices() == 2); // both while they cross
+    renderSeconds(mixer, 0.6);
+    CHECK(mixer.activeVoices() == 1);
+    CHECK(audio->music().sound == other);
+    audio->update(scene, runtime::MusicState{{}, 1.0f, 0.2f}, listener); // silence, after a short fade
+    renderSeconds(mixer, 0.3);
+    CHECK(mixer.activeVoices() == 0);
+
+    // Going away fades everything it started.
+    audio->update(scene, music, listener);
+    scene.get<scene::AudioSource>(fan).playing = true;
+    audio->update(scene, music, listener);
+    CHECK(mixer.activeVoices() == 2);
+    audio.reset();
+    renderSeconds(mixer, 0.2);
+    CHECK(mixer.activeVoices() == 0);
 }

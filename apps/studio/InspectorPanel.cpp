@@ -1,6 +1,7 @@
 #include "Panels.hpp"
 #include "StudioApp.hpp"
 
+#include "px/core/Utf8.hpp"
 #include "px/editor/Picking.hpp"
 #include "px/editor/Prefabs.hpp"
 #include "px/scene/ComponentInfo.hpp"
@@ -481,7 +482,30 @@ bool InspectorPanel::drawField(StudioApp& app, Scene& scene, const ComponentInfo
         }
         case FieldKind::String: {
             std::string v = f.ref<std::string>(data);
-            changed = m_edit.commit(ImGui::InputText("##v", &v), undoLabel, [&] { f.ref<std::string>(data) = v; });
+            if (!f.choices.empty()) {
+                // One of a few words (an anchor, an alignment): a list to pick from.
+                bool picked = false;
+                if (ImGui::BeginCombo("##v", v.c_str())) {
+                    for (const std::string_view choice : f.choices) {
+                        const bool selected = choice == v;
+                        if (ImGui::Selectable(std::string(choice).c_str(), selected) && !selected) {
+                            v = std::string(choice);
+                            picked = true;
+                        }
+                        if (selected) ImGui::SetItemDefaultFocus();
+                    }
+                    ImGui::EndCombo();
+                }
+                changed = m_edit.commit(picked, undoLabel, [&] { f.ref<std::string>(data) = v; });
+            } else if ((f.flags & scene::kFieldMultiline) != 0) {
+                const float lines = std::clamp(static_cast<float>(std::count(v.begin(), v.end(), '\n') + 2), 3.0f, 8.0f);
+                const bool edited = ImGui::InputTextMultiline(
+                    "##v", &v, {-1.0f, ImGui::GetTextLineHeight() * lines + ImGui::GetStyle().FramePadding.y * 2.0f});
+                if (v.size() > f.maxLength) v.resize(utf8::truncate(v, f.maxLength).size());
+                changed = m_edit.commit(edited, undoLabel, [&] { f.ref<std::string>(data) = v; });
+            } else {
+                changed = m_edit.commit(ImGui::InputText("##v", &v), undoLabel, [&] { f.ref<std::string>(data) = v; });
+            }
             break;
         }
         case FieldKind::Vec2: {

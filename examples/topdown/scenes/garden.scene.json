@@ -107,7 +107,10 @@
               "tag": "coin",
               "label": "GEMS",
               "message": "ALL GEMS FOUND!",
-              "complete": false
+              "complete": false,
+              "music": "Theme",
+              "completeSound": "Complete",
+              "scoreText": "Score"
             }
           },
           {
@@ -117,6 +120,32 @@
             }
           }
         ]
+      }
+    },
+    {
+      "id": "75817e97-dcab-5518-8353-e84ee5d53b47",
+      "name": "Score",
+      "components": {
+        "Transform": {
+          "position": [-6, 6],
+          "rotation": 0,
+          "scale": [1, 1]
+        },
+        "Text": {
+          "text": "SCORE 0",
+          "scale": 1,
+          "color": "#fff3b0",
+          "anchor": "top-right",
+          "align": "right",
+          "wrapWidth": 0,
+          "lineSpacing": 0,
+          "shadow": "#1d2b53",
+          "background": "#00000000",
+          "padding": 2,
+          "layer": 100,
+          "screen": true,
+          "visible": true
+        }
       }
     },
     {
@@ -185,7 +214,8 @@
           {
             "script": "edb40871-ac38-570a-96f5-ffb6058e25e6",
             "properties": {
-              "keyName": "gold"
+              "keyName": "gold",
+              "sound": "Key"
             }
           }
         ]
@@ -221,7 +251,8 @@
           {
             "script": "52f5b8e2-24f3-5141-b6ea-0695e3359de0",
             "properties": {
-              "keyName": "gold"
+              "keyName": "gold",
+              "sound": "Gate"
             }
           }
         ]
@@ -314,7 +345,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ],
@@ -369,7 +401,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ],
@@ -424,7 +457,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ],
@@ -479,7 +513,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ],
@@ -534,7 +569,8 @@
             "script": "6e4305bc-7bc9-5d55-ac23-da6ce36fc45a",
             "properties": {
               "value": 5,
-              "effect": "Sparkle"
+              "effect": "Sparkle",
+              "sound": "Gem"
             }
           }
         ],
