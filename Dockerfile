@@ -65,9 +65,10 @@ RUN git clone --depth 1 https://github.com/emscripten-core/emsdk.git /emsdk \
  && /emsdk/emsdk activate "${EMSDK_VERSION}"
 WORKDIR /src
 COPY . .
-RUN . /emsdk/emsdk_env.sh \
+# (emsdk_env.sh needs bash to find its own folder.)
+RUN bash -c 'source /emsdk/emsdk_env.sh \
  && cmake --preset wasm \
- && cmake --build --preset wasm --target px_player \
+ && cmake --build --preset wasm --target px_player' \
  && mkdir -p /out \
  && cp build/wasm/apps/player/px-player.js build/wasm/apps/player/px-player.wasm build/wasm/apps/player/px-player.data /out/
 

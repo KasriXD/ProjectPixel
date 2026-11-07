@@ -415,8 +415,9 @@ jobs:
         shell: bash
         run: |
           PIXEL_DOMAIN=play.example.com PIXEL_EMAIL=ops@example.com docker compose -f deploy/compose.yaml config > /dev/null
-          # (The unit names /opt/pixel/px-platform, which is not installed here.)
-          sudo systemd-analyze verify deploy/systemd/pixel-platform.service 2>&1 | grep -v "/opt/pixel" | tee unit.log
+          # Any complaint about the unit fails the step.
+          sudo systemd-analyze verify deploy/systemd/pixel-platform.service > unit.log 2>&1 || true
+          cat unit.log
           [ ! -s unit.log ]
 
       - name: Upload the image check's logs

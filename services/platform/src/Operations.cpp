@@ -16,8 +16,10 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <ctime>
 #include <fstream>
+#include <iterator>
 #include <sstream>
 
 #if defined(__linux__)
@@ -68,7 +70,8 @@ std::int64_t daysFromCivil(std::int64_t y, unsigned m, unsigned d) {
     y -= m <= 2 ? 1 : 0;
     const std::int64_t era = (y >= 0 ? y : y - 399) / 400;
     const unsigned yoe = static_cast<unsigned>(y - era * 400);
-    const unsigned doy = (153 * (m + (m > 2 ? -3 : 9)) + 2) / 5 + d - 1;
+    const unsigned mp = m > 2 ? m - 3 : m + 9; // March is month 0
+    const unsigned doy = (153 * mp + 2) / 5 + d - 1;
     const unsigned doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
     return era * 146097 + static_cast<std::int64_t>(doe) - 719468;
 }

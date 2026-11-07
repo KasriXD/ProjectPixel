@@ -141,11 +141,11 @@ TEST_CASE("Operations: backups while running, and restoring one") {
 
     auto backups = platform::listBackups(p.dir / "backups");
     REQUIRE(backups.size() == 1);
-    const platform::BackupInfo& first = backups.front();
+    const platform::BackupInfo first = backups.front(); // (a copy: the list is read again below)
     CHECK(first.files == 2); // the package and the picture
     CHECK(first.missing.empty());
     CHECK(first.schemaVersion >= 3);
-    const auto& folder = first.folder;
+    const std::filesystem::path folder = first.folder;
     CHECK(std::filesystem::is_regular_file(folder / "platform.db"));
     CHECK_FALSE(std::filesystem::exists(folder / "platform.db-wal"));
     CHECK(std::filesystem::is_regular_file(folder / "platform.key"));
