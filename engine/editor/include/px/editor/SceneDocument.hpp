@@ -28,6 +28,8 @@ enum class EntityPreset {
     Player,     // a ready-to-play platformer character
     TopDownPlayer, // a ready-to-play top-down character
     Camera,     // Transform + Camera (follows the player if there is one)
+    Text,       // Transform + Text (the asset given is its font)
+    SoundSource, // Transform + AudioSource (the asset given is its sound)
 };
 [[nodiscard]] std::string_view presetName(EntityPreset preset);
 

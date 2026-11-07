@@ -792,9 +792,11 @@ TEST_CASE("Client realm: authority-only API is absent and entity state is read-o
     for (const auto& m : scripting::apiReference()) {
         if (m.availability == scripting::ApiAvailability::AuthorityOnly) ++authorityOnly;
     }
-    CHECK(authorityOnly == 15); // addScore, setObjective, completeLevel, spawn, destroy, setParent, respawn,
+    CHECK(authorityOnly == 23); // addScore, setObjective, completeLevel, spawn, destroy, setParent, respawn,
                                 // playAnimation, Data.get, Data.set, Data.increment, Leaderboard.submit,
-                                // Leaderboard.best, Leaderboard.rank, Leaderboard.top
+                                // Leaderboard.best, Leaderboard.rank, Leaderboard.top, Sound.play,
+                                // Sound.playAt, Sound.playFor, Sound.playMusic, Sound.playMusicFor,
+                                // Sound.stopMusic, Sound.music, playSound
 }
 
 TEST_CASE("math.random is deterministic per session seed") {
@@ -1089,10 +1091,12 @@ TEST_CASE("API reference document is up to date") {
     const bool upToDate = onDisk == scripting::generateApiReferenceMarkdown();
     CHECK_MESSAGE(upToDate, "docs/scripting-api.md is out of date; regenerate it with px-headless --print-api-reference");
 
-    // Every member is uniquely named within its group and documented.
+    // Every member is uniquely named within its group, documented, and listed.
     std::set<std::string> seen;
+    const std::string generated = scripting::generateApiReferenceMarkdown();
     for (const auto& m : scripting::apiReference()) {
         CHECK(seen.insert(std::string(m.group) + "." + std::string(m.name)).second);
+        CHECK_MESSAGE(contains(generated, "`" + std::string(m.signature) + "`"), m.signature);
         CHECK_FALSE(m.description.empty());
         CHECK_FALSE(m.signature.empty());
     }
@@ -1127,4 +1131,165 @@ TEST_CASE("Performance: scripted Tick cost stays small") {
     CHECK(stats.instances == kTicking + kIdle);
     // Generous bound so slow CI and sanitizer builds pass; catches pathological regressions.
     CHECK(ms < 100.0);
+}
+
+// --- sounds, music and text --------------------------------------------------------------------
+
+namespace {
+
+constexpr assets::AssetId kCoinSound{Guid(0x50000000u, 1)};
+constexpr assets::AssetId kSongSound{Guid(0x50000000u, 2)};
+
+void addSounds(TestGame& game) {
+    REQUIRE(game.project.assets.add({kCoinSound, assets::AssetType::Sound, "Coin", "sounds/coin.wav"}));
+    REQUIRE(game.project.assets.add({kSongSound, assets::AssetType::Sound, "Song", "sounds/song.ogg"}));
+}
+
+} // namespace
+
+TEST_CASE("Sounds: scripts play them and the session reports this tick's sounds") {
+    LogCapture capture;
+    TestGame game;
+    addSounds(game);
+    const auto script = game.addScript("scripts/sounds.luau", R"lua(
+        local S = {}
+        local ticks = 0
+        function S:Start()
+            Sound.play("Coin")
+            Sound.playAt("Coin", Vec2(10, 20), 0.5, 2)
+            self.entity:playSound("Coin", 9, 0.1) -- clamped to 4 and 0.25
+            print(pcall(Sound.play, "Coins"))
+            print(pcall(Sound.playFor, self.entity, "Coin")) -- not a player's character
+        end
+        function S:Tick()
+            ticks += 1
+            if ticks == 2 then -- the first tick runs Start, then Tick
+                print(pcall(function() for i = 1, 40 do Sound.play("Coin") end end))
+            end
+        end
+        return S
+    )lua");
+    const Entity speaker = game.addEntity("Speaker", script);
+    game.scene.get<Transform>(speaker).position = {5, 6};
+    auto session = game.mustStart();
+
+    session->tick({}); // Start
+    const auto& first = session->sounds();
+    REQUIRE(first.size() == 3);
+    CHECK(first[0].sound == kCoinSound);
+    CHECK(first[0].volume == 1.0f);
+    CHECK(first[0].pitch == 1.0f);
+    CHECK_FALSE(first[0].position);
+    CHECK(first[0].entity.isNil());
+    CHECK(first[0].player == kNoPlayer);
+    REQUIRE(first[1].position);
+    CHECK(*first[1].position == Vec2{10, 20});
+    CHECK(first[1].volume == 0.5f);
+    CHECK(first[1].pitch == 2.0f);
+    CHECK(first[2].entity == session->scene().get<EntityInfo>(speaker).id);
+    REQUIRE(first[2].position);
+    CHECK(*first[2].position == Vec2{5, 6});
+    CHECK(first[2].volume == 4.0f);
+    CHECK(first[2].pitch == 0.25f);
+    const auto printed = capture.printed();
+    REQUIRE(printed.size() == 2);
+    CHECK(contains(printed[0], "false"));
+    CHECK(contains(printed[0], "no sound named 'Coins'"));
+    CHECK(contains(printed[0], "Coin"));
+    CHECK(contains(printed[1], "not a player's character"));
+
+    // At most 32 a tick; then they are an error (and the earlier ones still play).
+    session->tick({});
+    CHECK(session->sounds().size() == kMaxSoundsPerTick);
+    REQUIRE(capture.printed().size() == 3);
+    CHECK(contains(capture.printed()[2], "too many sounds this tick"));
+    session->tick({});
+    CHECK(session->sounds().empty()); // each tick starts afresh
+}
+
+TEST_CASE("Music: everyone's and a player's own, and what Sound.music says") {
+    LogCapture capture;
+    TestGame game;
+    addSounds(game);
+    const auto script = game.addScript("scripts/music.luau", R"lua(
+        local S = {}
+        local ticks = 0
+        function S:Tick()
+            ticks += 1
+            if ticks == 1 then
+                Sound.playMusic("Song", 0.8, 2)
+                print(Sound.music())
+            elseif ticks == 2 then
+                Sound.playMusic("Song", 0.5, 9) -- same song: only the volume changes
+            elseif ticks == 3 then
+                Sound.playMusicFor(Players.getAll()[1], "Coin", 1, 0)
+            elseif ticks == 4 then
+                Sound.playMusicFor(Players.getAll()[1], nil)
+                Sound.stopMusic(0.5)
+                print(Sound.music() == "")
+            end
+        end
+        return S
+    )lua");
+    game.addEntity("Rules", script);
+    const Entity hero = game.addEntity("Hero");
+    game.scene.set(hero, Player{});
+    game.scene.set(hero, BoxCollider{});
+    game.scene.set(hero, KinematicBody{});
+    auto session = game.mustStart();
+
+    session->tick({}); // Start, then the first Tick
+    CHECK(session->state().music.sound == kSongSound);
+    CHECK(session->state().music.volume == doctest::Approx(0.8f));
+    CHECK(session->state().music.fadeSeconds == doctest::Approx(2.0f));
+    session->tick({});
+    CHECK(session->state().music.volume == doctest::Approx(0.5f));
+    CHECK(session->state().music.fadeSeconds == doctest::Approx(2.0f));
+    session->tick({});
+    CHECK(session->musicFor(kNoPlayer).sound == kCoinSound); // playing alone: the own music
+    CHECK(session->state().music.sound == kSongSound);       // everyone's is unchanged
+    session->tick({});
+    CHECK(session->musicFor(kNoPlayer).sound.isNil());
+    CHECK(session->state().music.sound.isNil());
+    CHECK(session->state().music.fadeSeconds == doctest::Approx(0.5f));
+    CHECK(session->state().scriptErrors == 0);
+    CHECK(capture.printed() == std::vector<std::string>{"Song", "true"});
+}
+
+TEST_CASE("Text: scripts change what it says, its colour and visibility; AudioSource starts and stops") {
+    LogCapture capture;
+    TestGame game;
+    const auto script = game.addScript("scripts/hud.luau", R"lua(
+        local S = {}
+        function S:Start()
+            print(self.entity.text, self.entity.textColor, self.entity.soundPlaying)
+            self.entity.text = "Coins: " .. 3
+            self.entity.textColor = "#ff8000"
+            self.entity.visible = false
+            self.entity.soundPlaying = false
+            print(pcall(function() self.entity.textColor = "orange" end))
+            print(pcall(function() self.entity.text = string.rep("x", 2001) end))
+            print(self.entity.textColor)
+        end
+        return S
+    )lua");
+    const Entity hud = game.addEntity("Hud", script);
+    Text label;
+    label.text = "Coins: 0";
+    game.scene.set(hud, label);
+    game.scene.set(hud, AudioSource{});
+    auto session = game.mustStart();
+    session->tick({});
+    const Entity e = session->scene().findByName("Hud");
+    const Text& text = need(session->scene().tryGet<Text>(e));
+    CHECK(text.text == "Coins: 3");
+    CHECK(text.color == Color{255, 128, 0, 255});
+    CHECK_FALSE(text.visible);
+    CHECK_FALSE(need(session->scene().tryGet<AudioSource>(e)).playing);
+    const auto printed = capture.printed();
+    REQUIRE(printed.size() == 4);
+    CHECK(printed[0] == "Coins: 0\t#ffffffff\ttrue");
+    CHECK(contains(printed[1], "false"));
+    CHECK(contains(printed[2], "at most 2000 bytes"));
+    CHECK(printed[3] == "#ff8000ff");
 }

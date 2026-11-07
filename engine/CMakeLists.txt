@@ -10,6 +10,7 @@
 #   scripting - Luau sandbox, limits, gameplay API, Script lifecycle
 #   runtime   - headless game simulation (fixed tick, input actions, gameplay systems)
 #   net       - multiplayer: transports, protocol, snapshot replication, game server and client
+#   audio     - sound files (WAV, Ogg Vorbis, QOA), mixing, a game's sounds and music (no device)
 #   online    - the platform from the engine's side: package checks, wire types, HTTP client
 #   render    - renderer interface, camera, scene-to-draw-call extraction (no backend)
 #   editor    - Studio's editor model: projects, scene documents, undo, play mode (no UI)
@@ -24,6 +25,7 @@ add_subdirectory(project)
 add_subdirectory(scripting)
 add_subdirectory(runtime)
 add_subdirectory(net)
+add_subdirectory(audio)
 if(PX_ENABLE_PLATFORM)
     add_subdirectory(online)
 endif()

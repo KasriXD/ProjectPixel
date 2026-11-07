@@ -1150,7 +1150,8 @@ void StudioApp::drawMenuBar() {
         for (const auto preset : {editor::EntityPreset::Empty, editor::EntityPreset::Group, editor::EntityPreset::Sprite,
                                   editor::EntityPreset::Tilemap, editor::EntityPreset::SolidBlock,
                                   editor::EntityPreset::Trigger, editor::EntityPreset::Player,
-                                  editor::EntityPreset::Camera}) {
+                                  editor::EntityPreset::Camera, editor::EntityPreset::Text,
+                                  editor::EntityPreset::SoundSource}) {
             if (ImGui::MenuItem(std::string(editor::presetName(preset)).c_str())) createEntity(preset);
         }
         ImGui::EndMenu();

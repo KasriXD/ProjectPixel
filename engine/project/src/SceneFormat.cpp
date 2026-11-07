@@ -241,6 +241,7 @@ void readField(const FieldInfo& f, void* data, const Json& j, const std::string&
             std::string& text = f.ref<std::string>(data);
             detail::readValue(j, path, text);
             if (text.size() > f.maxLength) fail(path, std::format("is longer than {} characters", f.maxLength));
+            if (!f.allows(text)) fail(path, describeChoices(f));
             break;
         }
         case FieldKind::Vec2: detail::readValue(j, path, f.ref<Vec2>(data)); break;

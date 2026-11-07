@@ -282,6 +282,101 @@ struct Bindings {
         return 1;
     }
 
+    // --- Sound: sounds and music (docs/audio.md) --------------------------------------
+
+    static assets::AssetId checkSound(lua_State* L, int idx, const char* what) {
+        size_t length = 0;
+        const char* name = luaL_checklstring(L, idx, &length);
+        ScriptSystem& s = system(L);
+        const assets::AssetId id = s.m_host.findSound(std::string_view(name, length));
+        if (id.isNil()) {
+            const std::string hint = suggestName(name, s.m_host.soundNames());
+            luaL_errorL(L, "%s: no sound named '%s'%s", what, name, hint.c_str());
+        }
+        return id;
+    }
+    static float optionalLevel(lua_State* L, int idx, double fallback, double lo, double hi) {
+        if (lua_isnoneornil(L, idx)) return static_cast<float>(fallback);
+        return static_cast<float>(std::clamp(checkFinite(L, idx), lo, hi));
+    }
+    static void play(lua_State* L, const char* what, SoundRequest request) {
+        if (auto played = system(L).m_host.playSound(request); !played) {
+            luaL_errorL(L, "%s: %s", what, played.error().message.c_str());
+        }
+    }
+    static int soundPlay(lua_State* L) {
+        requireAuthority(L, "Sound.play");
+        SoundRequest r;
+        r.sound = checkSound(L, 1, "Sound.play");
+        r.volume = optionalLevel(L, 2, 1.0, 0.0, 4.0);
+        r.pitch = optionalLevel(L, 3, 1.0, 0.25, 4.0);
+        play(L, "Sound.play", r);
+        return 0;
+    }
+    static int soundPlayAt(lua_State* L) {
+        requireAuthority(L, "Sound.playAt");
+        SoundRequest r;
+        r.sound = checkSound(L, 1, "Sound.playAt");
+        r.position = checkVec2(L, 2);
+        r.volume = optionalLevel(L, 3, 1.0, 0.0, 4.0);
+        r.pitch = optionalLevel(L, 4, 1.0, 0.25, 4.0);
+        play(L, "Sound.playAt", r);
+        return 0;
+    }
+    static int soundPlayFor(lua_State* L) {
+        requireAuthority(L, "Sound.playFor");
+        SoundRequest r;
+        r.listener = checkLiveEntity(L, 1);
+        r.sound = checkSound(L, 2, "Sound.playFor");
+        r.volume = optionalLevel(L, 3, 1.0, 0.0, 4.0);
+        r.pitch = optionalLevel(L, 4, 1.0, 0.25, 4.0);
+        play(L, "Sound.playFor", r);
+        return 0;
+    }
+    static int entityPlaySound(lua_State* L) {
+        requireAuthority(L, "Entity:playSound");
+        SoundRequest r;
+        r.at = checkLiveEntity(L, 1);
+        r.sound = checkSound(L, 2, "playSound");
+        r.volume = optionalLevel(L, 3, 1.0, 0.0, 4.0);
+        r.pitch = optionalLevel(L, 4, 1.0, 0.25, 4.0);
+        play(L, "playSound", r);
+        return 0;
+    }
+    static void music(lua_State* L, const char* what, scene::Entity player, int nameIdx) {
+        const assets::AssetId sound = lua_isnoneornil(L, nameIdx) ? assets::AssetId{} : checkSound(L, nameIdx, what);
+        const float volume = optionalLevel(L, nameIdx + 1, 1.0, 0.0, 4.0);
+        const float fade = optionalLevel(L, nameIdx + 2, 1.0, 0.0, 60.0);
+        if (auto ok = system(L).m_host.playMusic(player, sound, volume, fade); !ok) {
+            luaL_errorL(L, "%s: %s", what, ok.error().message.c_str());
+        }
+    }
+    static int soundPlayMusic(lua_State* L) {
+        requireAuthority(L, "Sound.playMusic");
+        (void)luaL_checkstring(L, 1);
+        music(L, "Sound.playMusic", scene::kNullEntity, 1);
+        return 0;
+    }
+    static int soundPlayMusicFor(lua_State* L) {
+        requireAuthority(L, "Sound.playMusicFor");
+        music(L, "Sound.playMusicFor", checkLiveEntity(L, 1), 2);
+        return 0;
+    }
+    static int soundStopMusic(lua_State* L) {
+        requireAuthority(L, "Sound.stopMusic");
+        const float fade = optionalLevel(L, 1, 1.0, 0.0, 60.0);
+        if (auto ok = system(L).m_host.playMusic(scene::kNullEntity, {}, 1.0f, fade); !ok) {
+            luaL_errorL(L, "Sound.stopMusic: %s", ok.error().message.c_str());
+        }
+        return 0;
+    }
+    static int soundMusic(lua_State* L) {
+        ScriptSystem& s = system(L);
+        const std::string name = s.m_host.soundName(s.m_host.music());
+        lua_pushlstring(L, name.data(), name.size());
+        return 1;
+    }
+
     // The tile of `map` (on entity e) at world point p, if there is one.
     static std::optional<int> tileAt(const scene::Scene& scene, scene::Entity e, const scene::Tilemap& map, Vec2 p) {
         if (map.tileSize.x <= 0.0f || map.tileSize.y <= 0.0f) return std::nullopt;
@@ -681,11 +776,60 @@ struct Bindings {
         lua_pushboolean(L, need<scene::KinematicBody>(L, s, e, "KinematicBody").onGround);
     }
     static void getVisible(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        if (const auto* text = s.m_scene.tryGet<scene::Text>(e); text != nullptr && s.m_scene.tryGet<scene::Sprite>(e) == nullptr) {
+            lua_pushboolean(L, text->visible);
+            return;
+        }
         lua_pushboolean(L, need<scene::Sprite>(L, s, e, "Sprite").visible);
     }
     static void setVisible(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
         luaL_checktype(L, idx, LUA_TBOOLEAN);
-        need<scene::Sprite>(L, s, e, "Sprite").visible = lua_toboolean(L, idx) != 0;
+        const bool visible = lua_toboolean(L, idx) != 0;
+        auto* sprite = s.m_scene.tryGet<scene::Sprite>(e);
+        auto* text = s.m_scene.tryGet<scene::Text>(e);
+        if (sprite == nullptr && text == nullptr) (void)need<scene::Sprite>(L, s, e, "Sprite or Text");
+        if (sprite != nullptr) sprite->visible = visible;
+        if (text != nullptr) text->visible = visible;
+    }
+    static void getText(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const std::string& text = need<scene::Text>(L, s, e, "Text").text;
+        lua_pushlstring(L, text.data(), text.size());
+    }
+    static void setText(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        size_t length = 0;
+        const char* text = luaL_checklstring(L, idx, &length);
+        if (length > scene::kMaxTextLength) {
+            luaL_errorL(L, "entity.text: at most %d bytes", static_cast<int>(scene::kMaxTextLength));
+        }
+        need<scene::Text>(L, s, e, "Text").text.assign(text, length);
+    }
+    static void getTextColor(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        const Color c = need<scene::Text>(L, s, e, "Text").color;
+        const std::string hex = std::format("#{:02x}{:02x}{:02x}{:02x}", c.r, c.g, c.b, c.a);
+        lua_pushlstring(L, hex.data(), hex.size());
+    }
+    static void setTextColor(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        const std::string hex = luaL_checkstring(L, idx);
+        const auto digit = [](char c) -> int {
+            if (c >= '0' && c <= '9') return c - '0';
+            if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+            if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+            return -1;
+        };
+        const auto byteAt = [&](std::size_t i) { return digit(hex[i]) * 16 + digit(hex[i + 1]); };
+        bool ok = (hex.size() == 7 || hex.size() == 9) && hex[0] == '#';
+        for (std::size_t i = 1; ok && i < hex.size(); ++i) ok = digit(hex[i]) >= 0;
+        if (!ok) luaL_errorL(L, "entity.textColor: expected \"#rrggbb\" or \"#rrggbbaa\" (got \"%s\")", hex.c_str());
+        Color c{static_cast<std::uint8_t>(byteAt(1)), static_cast<std::uint8_t>(byteAt(3)),
+                static_cast<std::uint8_t>(byteAt(5)), static_cast<std::uint8_t>(hex.size() == 9 ? byteAt(7) : 255)};
+        need<scene::Text>(L, s, e, "Text").color = c;
+    }
+    static void getSoundPlaying(lua_State* L, ScriptSystem& s, scene::Entity e) {
+        lua_pushboolean(L, need<scene::AudioSource>(L, s, e, "AudioSource").playing);
+    }
+    static void setSoundPlaying(lua_State* L, ScriptSystem& s, scene::Entity e, int idx) {
+        luaL_checktype(L, idx, LUA_TBOOLEAN);
+        need<scene::AudioSource>(L, s, e, "AudioSource").playing = lua_toboolean(L, idx) != 0;
     }
     static void getSpawnPoint(lua_State* L, ScriptSystem& s, scene::Entity e) {
         const Vec2 v = need<scene::Player>(L, s, e, "Player").spawnPoint;
@@ -1000,6 +1144,37 @@ const Binding kBindings[] = {
       "On the platform the list is refreshed from it every few seconds.", false, true},
      &Bindings::leaderboardTop},
 
+    // Sound: sounds and music (docs/audio.md).
+    {{"Sound", "play", K::Function, A::AuthorityOnly, "Sound.play(name: string, volume: number?, pitch: number?)",
+      "Plays a sound (by its name in the project) for everyone, the same everywhere. volume 1 is as it is (0 to "
+      "4); pitch 2 is an octave up and twice as fast (0.25 to 4). At most 32 sounds start per tick."},
+     &Bindings::soundPlay},
+    {{"Sound", "playAt", K::Function, A::AuthorityOnly,
+      "Sound.playAt(name: string, position: vector, volume: number?, pitch: number?)",
+      "Plays a sound from a point in the world: full volume while it is on screen, fading out beyond, and "
+      "panned to its side."},
+     &Bindings::soundPlayAt},
+    {{"Sound", "playFor", K::Function, A::AuthorityOnly,
+      "Sound.playFor(player: Entity, name: string, volume: number?, pitch: number?)",
+      "Plays a sound only `player` (a character) hears, the same everywhere: a reward, a warning."},
+     &Bindings::soundPlayFor},
+    {{"Sound", "playMusic", K::Function, A::AuthorityOnly,
+      "Sound.playMusic(name: string, volume: number?, fadeSeconds: number?)",
+      "Plays music for everyone, looping, fading over from the music before (default 1 second). The same music "
+      "again only changes its volume."},
+     &Bindings::soundPlayMusic},
+    {{"Sound", "playMusicFor", K::Function, A::AuthorityOnly,
+      "Sound.playMusicFor(player: Entity, name: string?, volume: number?, fadeSeconds: number?)",
+      "Plays music only `player` hears instead of everyone's (an area of the level, a boss). nil puts them back "
+      "on everyone's music."},
+     &Bindings::soundPlayMusicFor},
+    {{"Sound", "stopMusic", K::Function, A::AuthorityOnly, "Sound.stopMusic(fadeSeconds: number?)",
+      "Fades everyone's music out (default 1 second)."},
+     &Bindings::soundStopMusic},
+    {{"Sound", "music", K::Function, A::AuthorityOnly, "Sound.music(): string",
+      "The name of everyone's music now (empty: none).", false, true},
+     &Bindings::soundMusic},
+
     // Events: messages between scripts.
     {{"Events", "emit", K::Function, A::Everywhere, "Events.emit(name: string, value: any?)",
       "Queues an event. Listeners run after the current phase, in registration order. value must be nil, "
@@ -1044,10 +1219,21 @@ const Binding kBindings[] = {
     {{"Entity", "onGround", K::Property, A::Everywhere, "entity.onGround: boolean",
       "True if the body is standing on something (KinematicBody).", false, true},
      nullptr, &Bindings::getOnGround},
-    {{"Entity", "visible", K::Property, A::Everywhere, "entity.visible: boolean", "Whether the Sprite is drawn.",
+    {{"Entity", "visible", K::Property, A::Everywhere, "entity.visible: boolean",
+      "Whether the entity is drawn (its Sprite and its Text).",
       true, true}, nullptr, &Bindings::getVisible, &Bindings::setVisible},
     {{"Entity", "flipX", K::Property, A::Everywhere, "entity.flipX: boolean", "Mirrors the Sprite horizontally.",
       true, true}, nullptr, &Bindings::getFlipX, &Bindings::setFlipX},
+    {{"Entity", "text", K::Property, A::Everywhere, "entity.text: string",
+      "What the entity's Text says. Assign to change it (at most 2000 bytes), e.g. "
+      "`self.entity.text = \"Coins: \" .. coins`.", true, true},
+     nullptr, &Bindings::getText, &Bindings::setText},
+    {{"Entity", "textColor", K::Property, A::Everywhere, "entity.textColor: string",
+      "The colour of the Text as \"#rrggbbaa\"; assign \"#rrggbb\" or \"#rrggbbaa\".", true, true},
+     nullptr, &Bindings::getTextColor, &Bindings::setTextColor},
+    {{"Entity", "soundPlaying", K::Property, A::Everywhere, "entity.soundPlaying: boolean",
+      "Whether the entity's AudioSource plays. Assign to start or stop it.", true, true},
+     nullptr, &Bindings::getSoundPlaying, &Bindings::setSoundPlaying},
     {{"Entity", "animation", K::Property, A::Everywhere, "entity.animation: string",
       "Asset name of the animation clip the Animator is playing (empty if none).", false, true},
      nullptr, &Bindings::getAnimation},
@@ -1083,6 +1269,9 @@ const Binding kBindings[] = {
       "until another is chosen; a clip that does not loop plays once, then the Animator chooses again (idle, "
       "run, ...). nil goes back to the automatic choice at once."},
      &Bindings::entityPlayAnimation},
+    {{"Entity", "playSound", K::Method, A::AuthorityOnly, "entity:playSound(name: string, volume: number?, pitch: number?)",
+      "Plays a sound from the entity, following it while it plays (louder on screen, panned to its side)."},
+     &Bindings::entityPlaySound},
     {{"Entity", "getChildren", K::Method, A::Everywhere, "entity:getChildren(): {Entity}",
       "The entity's direct children, in hierarchy order.", false, true},
      &Bindings::entityGetChildren},
@@ -1122,7 +1311,7 @@ void Bindings::registerApi(lua_State* L, ScriptSystem& s) {
     };
 
     // Globals and library tables.
-    for (const char* group : {"Game", "World", "Input", "Players", "Data", "Leaderboard", "Events"}) {
+    for (const char* group : {"Game", "World", "Input", "Players", "Data", "Leaderboard", "Sound", "Events"}) {
         lua_createtable(L, 0, 8);
         for (const Binding& b : kBindings) {
             if (b.info.group != group || b.function == nullptr || !available(b)) continue;
@@ -1324,8 +1513,8 @@ std::string generateApiReferenceMarkdown() {
     md += "Guide and examples: [scripting.md](scripting.md). *Available in*: **all** means authority and "
           "client scripts; **authority** means only where game state is decided (single-player session, "
           "server). *Pure* members have no side effects (data nodes in visual scripting).\n";
-    const char* groups[] = {"Lifecycle", "Globals", "Game",        "World",  "Input",
-                            "Players",   "Data",    "Leaderboard", "Events", "Entity"};
+    const char* groups[] = {"Lifecycle", "Globals",     "Game",  "World",  "Input", "Players",
+                            "Data",      "Leaderboard", "Sound", "Events", "Entity"};
     const char* intro[] = {
         "Functions a behaviour table may define. The engine calls them; see the lifecycle rules in scripting.md.",
         "Global functions.",
@@ -1338,6 +1527,10 @@ std::string generateApiReferenceMarkdown() {
         "Loaded before PlayerJoined, saved while they play and when they leave.",
         "Leaderboards declared in project.json (`leaderboards`): each player's best score, shared between "
         "everyone who plays the game on the platform (docs/leaderboards.md).",
+        "Sound effects and music (docs/audio.md). Sounds are named by their asset name, as Studio shows it (e.g. \"Coin\"). "
+        "Volume 1 (the default) plays a sound as recorded, up to 4; pitch is 0.25..4 (2 is an octave up and twice as fast). "
+        "At most 32 sounds start per tick; more are an error. In multiplayer every player hears them "
+        "unless they are played for one player.",
         "Custom events between scripts. Values must be serializable.",
         "An `Entity` is a handle to a scene entity. Properties need the named component; accessing a "
         "destroyed entity is an error except `isValid()`. Writable properties can only be assigned by "

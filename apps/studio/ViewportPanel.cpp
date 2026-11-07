@@ -363,6 +363,22 @@ void ViewportPanel::handleDrop(StudioApp& app, ImVec2 origin) {
                 }
                 case assets::AssetType::Scene: app.requestOpenScene(id); break;
                 case assets::AssetType::Prefab: app.placePrefab(id, world); break;
+                case assets::AssetType::Sound:
+                    (void)doc->createEntity(editor::EntityPreset::SoundSource, entry->name, kNullEntity, world, id);
+                    break;
+                case assets::AssetType::Font: {
+                    // Onto a text: its font; elsewhere: a new text in that font.
+                    const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));
+                    if (!target.isNull() && doc->scene().tryGet<Text>(target) != nullptr) {
+                        doc->beginEdit("Set Font");
+                        doc->sceneForEdit().get<Text>(target).font = id;
+                        doc->markChanged();
+                        doc->endEdit();
+                    } else {
+                        (void)doc->createEntity(editor::EntityPreset::Text, {}, kNullEntity, world, id);
+                    }
+                    break;
+                }
                 case assets::AssetType::Tileset: app.openTileset(id); break;
                 case assets::AssetType::Graph: {
                     const Entity target = editor::pick(doc->scene(), screenToWorld(ImGui::GetMousePos(), origin));

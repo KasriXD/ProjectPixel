@@ -124,6 +124,7 @@ private:
     void applyInputs();
     void restartLevel();
     void sendSnapshots();
+    void sendSounds();
     [[nodiscard]] NetGameState gameState() const;
     [[nodiscard]] runtime::PlayerId allocatePlayerId();
     [[nodiscard]] std::string uniqueName(std::string wanted) const;

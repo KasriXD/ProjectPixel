@@ -18,7 +18,8 @@
 namespace px::net {
 
 inline constexpr std::uint32_t kProtocolMagic = 0x31584E50; // "PNX1" in memory order
-inline constexpr std::uint16_t kProtocolVersion = 3; // 2: Hello carries a connect token; 3: encrypted (Secure.hpp)
+// 2: Hello carries a connect token; 3: encrypted (Secure.hpp); 4: sounds and music
+inline constexpr std::uint16_t kProtocolVersion = 4;
 inline constexpr std::uint16_t kDefaultPort = 7777;
 
 // Clients only ever send small messages; anything larger is refused.
@@ -35,6 +36,7 @@ enum class MessageType : std::uint8_t {
     Welcome = 16,  // reliable: you are player N
     Reject = 17,   // reliable, then disconnect: why you cannot play
     Snapshot = 18, // unreliable: the world, as a change from a state you have
+    Sounds = 19,   // reliable: sounds the server's scripts started for you in one tick
 };
 
 // Why the server ended (or refused) a connection. Also the transport's
@@ -87,6 +89,22 @@ struct RejectMessage {
     std::string text;
 };
 
+// Sounds a tick started (docs/audio.md#multiplayer). Entities are network
+// ids (Replication.hpp); a sound whose entity the client does not have yet
+// is heard from `position`.
+struct NetSound {
+    assets::AssetId sound;
+    float volume = 1.0f;
+    float pitch = 1.0f;
+    std::uint32_t entity = 0; // 0: none
+    std::optional<Vec2> position;
+};
+inline constexpr std::size_t kMaxSoundsPerMessage = 64;
+struct SoundsMessage {
+    std::uint32_t tick = 0;
+    std::vector<NetSound> sounds;
+};
+
 // The snapshot body (the world change) is encoded by Replication.hpp.
 struct SnapshotHeader {
     std::uint32_t epoch = 0;        // increases when the server restarts the level
@@ -100,6 +118,7 @@ struct SnapshotHeader {
 [[nodiscard]] std::vector<std::uint8_t> encodeGoodbye();
 [[nodiscard]] std::vector<std::uint8_t> encode(const WelcomeMessage& m);
 [[nodiscard]] std::vector<std::uint8_t> encode(const RejectMessage& m);
+[[nodiscard]] std::vector<std::uint8_t> encode(const SoundsMessage& m);
 // Writes the type byte and header; the caller appends the body.
 void writeSnapshotHeader(ByteWriter& w, const SnapshotHeader& h);
 
@@ -110,6 +129,7 @@ void writeSnapshotHeader(ByteWriter& w, const SnapshotHeader& h);
 [[nodiscard]] Result<InputMessage> decodeInput(std::span<const std::uint8_t> data);
 [[nodiscard]] Result<WelcomeMessage> decodeWelcome(std::span<const std::uint8_t> data);
 [[nodiscard]] Result<RejectMessage> decodeReject(std::span<const std::uint8_t> data);
+[[nodiscard]] Result<SoundsMessage> decodeSounds(std::span<const std::uint8_t> data);
 // Reads the type byte and header; `reader` is left at the body.
 [[nodiscard]] Result<SnapshotHeader> readSnapshotHeader(ByteReader& reader);
 

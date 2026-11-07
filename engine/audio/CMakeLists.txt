@@ -1,0 +1,9 @@
+px_add_module(audio
+    SOURCES
+        src/Mixer.cpp
+        src/Sound.cpp
+    DEPS
+        px::core
+    PRIVATE_DEPS
+        px_stb_vorbis
+        px_qoa)

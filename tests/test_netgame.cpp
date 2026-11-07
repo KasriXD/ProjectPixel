@@ -382,3 +382,79 @@ TEST_CASE("Netgame: saved data that cannot be loaded keeps the player out") {
     CHECK(store->saves == 0); // never overwrite data that was not loaded
     CHECK(store->releases == 1);
 }
+
+TEST_CASE("Netgame: sounds and music reach the players they are for, in step with the view") {
+    runtime::LoadedGame game = loadExample("platformer");
+    const assets::AssetId beep{Guid(0x50000000u, 1)};
+    const assets::AssetId song{Guid(0x50000000u, 2)};
+    REQUIRE(game.manifest.assets.add({beep, assets::AssetType::Sound, "Beep", "sounds/beep.wav"}));
+    REQUIRE(game.manifest.assets.add({song, assets::AssetType::Sound, "Song", "sounds/song.ogg"}));
+    auto scripts = std::make_shared<scripting::ScriptLibrary>(*game.scripts);
+    const assets::AssetId jukebox{Guid(0x5c000000u, 99)};
+    REQUIRE(scripts->add(jukebox, "scripts/jukebox.luau", R"lua(
+        local S = {}
+        local done = false
+        function S:Tick()
+            if done or Players.count() < 2 then return end
+            done = true
+            local players = Players.getAll()
+            Sound.play("Beep")                           -- everyone
+            Sound.playFor(players[1], "Beep", 0.5)       -- only the first player
+            players[1]:playSound("Beep", 1, 2)           -- from the first player's character
+            Sound.playAt("Beep", Vec2(100, 50), 0.25)    -- at a place in the world
+            Sound.playMusic("Song", 0.6, 1)
+            Sound.playMusicFor(players[2], "Beep", 1, 0) -- the second player hears their own
+        end
+        return S
+    )lua"));
+    game.scripts = scripts;
+    const Entity box = game.startScene.createEntity("Jukebox");
+    game.startScene.set(box, Transform{});
+    game.startScene.set(box, Scripts{{AttachedScript{jukebox, {}}}});
+
+    Harness h(std::move(game));
+    LinkConditions link;
+    link.latencyMs = 30;
+    GameClient& ada = h.addClient("Ada", link);
+    GameClient& bo = h.addClient("Bo", link);
+    h.runUntilPlaying();
+    std::vector<runtime::SoundEvent> heardByAda;
+    std::vector<runtime::SoundEvent> heardByBo;
+    for (int i = 0; i < 120; ++i) {
+        h.step();
+        for (auto& s : ada.takeSounds()) heardByAda.push_back(s);
+        for (auto& s : bo.takeSounds()) heardByBo.push_back(s);
+    }
+    CHECK(h.server->session().state().scriptErrors == 0);
+
+    REQUIRE(heardByAda.size() == 4);
+    REQUIRE(heardByBo.size() == 3);
+    const Guid adaCharacter = ada.view().get<EntityInfo>(ada.character()).id;
+    // Ada hears her own character's sound first: it is not held back for the view.
+    CHECK(heardByAda[0].entity == adaCharacter);
+    CHECK(heardByAda[0].pitch == 2.0f);
+    REQUIRE(heardByAda[0].position);
+    int forAdaOnly = 0;
+    for (const auto& s : heardByAda) forAdaOnly += s.volume == 0.5f ? 1 : 0;
+    CHECK(forAdaOnly == 1);
+    for (const auto& s : heardByBo) CHECK(s.volume != 0.5f);
+    // Bo hears Ada's character's sound from where Ada's character is in his view.
+    bool fromAda = false;
+    for (const auto& s : heardByBo) {
+        if (s.entity.isNil()) continue;
+        fromAda = true;
+        bool known = false;
+        for (const Entity e : bo.view().entities()) known = known || bo.view().get<EntityInfo>(e).id == s.entity;
+        CHECK(known);
+    }
+    CHECK(fromAda);
+    bool placed = false;
+    for (const auto& s : heardByBo) placed = placed || (s.position && *s.position == Vec2{100, 50} && s.volume == 0.25f);
+    CHECK(placed);
+
+    // Music: everyone's for Ada, Bo's own for Bo.
+    CHECK(ada.music().sound == song);
+    CHECK(ada.music().volume == doctest::Approx(0.6f));
+    CHECK(bo.music().sound == beep);
+    CHECK(bo.music().fadeSeconds == 0.0f);
+}

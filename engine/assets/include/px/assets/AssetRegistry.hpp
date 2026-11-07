@@ -11,7 +11,7 @@
 
 namespace px::assets {
 
-enum class AssetType { Texture, Scene, Script, Prefab, Animation, Tileset, Graph };
+enum class AssetType { Texture, Scene, Script, Prefab, Animation, Tileset, Graph, Sound, Font };
 
 // Scripts and visual scripts (graphs) are both behaviours: attached the same
 // way and run by the same scripting system.

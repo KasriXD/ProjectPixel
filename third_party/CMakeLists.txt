@@ -10,6 +10,29 @@ add_library(px_stb_image_write STATIC stb/stb_image_write_impl.c)
 target_include_directories(px_stb_image_write SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
 set_target_properties(px_stb_image_write PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+# stb_vorbis: Ogg Vorbis decoding (sounds in projects; docs/audio.md).
+add_library(px_stb_vorbis STATIC stb/stb_vorbis_impl.c)
+target_include_directories(px_stb_vorbis SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
+set_target_properties(px_stb_vorbis PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(MSVC)
+    target_compile_options(px_stb_vorbis PRIVATE /wd4244 /wd4245 /wd4456 /wd4457 /wd4701 /wd4996)
+else()
+    target_compile_options(px_stb_vorbis PRIVATE -w)
+endif()
+
+# stb_truetype: baking TrueType fonts into bitmap fonts (Studio and tools; docs/text.md).
+add_library(px_stb_truetype STATIC stb/stb_truetype_impl.c)
+target_include_directories(px_stb_truetype SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/stb")
+set_target_properties(px_stb_truetype PROPERTIES POSITION_INDEPENDENT_CODE ON)
+if(NOT MSVC)
+    target_compile_options(px_stb_truetype PRIVATE -w)
+endif()
+
+# QOA: the sound format of published games (encoder and decoder; docs/audio.md).
+add_library(px_qoa STATIC qoa/qoa_impl.c)
+target_include_directories(px_qoa SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/qoa")
+set_target_properties(px_qoa PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
 # Monocypher: password hashing (Argon2), signatures (EdDSA), hashing (BLAKE2b).
 add_library(px_monocypher STATIC monocypher/monocypher.c)
 target_include_directories(px_monocypher SYSTEM PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/monocypher")

@@ -1,6 +1,7 @@
 px_add_module(project
     SOURCES
         src/Animation.cpp
+        src/Font.cpp
         src/JsonUtil.cpp
         src/LibraryFormat.cpp
         src/Package.cpp

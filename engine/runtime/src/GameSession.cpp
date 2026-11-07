@@ -106,7 +106,11 @@ GameSession::GameSession(const project::ProjectManifest& project, Scene scene)
       m_characterActions(CharacterActions::from(m_actions)),
       m_viewSize(static_cast<float>(project.settings.display.virtualResolution.x),
                  static_cast<float>(project.settings.display.virtualResolution.y)),
-      m_dt(1.0f / static_cast<float>(std::max(1, project.settings.tickRate))) {}
+      m_dt(1.0f / static_cast<float>(std::max(1, project.settings.tickRate))) {
+    for (const auto& entry : project.assets.entries()) {
+        if (entry.type == assets::AssetType::Sound) m_soundAssets.emplace_back(entry.name, entry.id);
+    }
+}
 
 GameSession::~GameSession() {
     // Scripts reference the scene; release them first.
@@ -296,6 +300,7 @@ const InputFrame& GameSession::inputFor(Entity entity) const {
 
 void GameSession::tick(const InputFrame& input) {
     m_events.clear();
+    m_sounds.clear();
     if (m_multiplayer) {
         // Without a player argument, input means "any player".
         m_input = {};
@@ -616,6 +621,79 @@ assets::AssetId GameSession::findAnimation(std::string_view name) const {
 std::string GameSession::animationName(assets::AssetId clip) const {
     const auto* entry = m_animations != nullptr ? m_animations->find(clip) : nullptr;
     return entry != nullptr ? entry->name : std::string();
+}
+
+// --- sounds and music ----------------------------------------------------------------------
+
+assets::AssetId GameSession::findSound(std::string_view name) const {
+    for (const auto& [n, id] : m_soundAssets) {
+        if (n == name) return id;
+    }
+    return {};
+}
+
+std::string GameSession::soundName(assets::AssetId sound) const {
+    for (const auto& [n, id] : m_soundAssets) {
+        if (id == sound) return n;
+    }
+    return {};
+}
+
+std::vector<std::string> GameSession::soundNames() const {
+    std::vector<std::string> names;
+    for (const auto& entry : m_soundAssets) names.push_back(entry.first);
+    return names;
+}
+
+Status GameSession::playSound(const scripting::SoundRequest& request) {
+    if (m_sounds.size() >= kMaxSoundsPerTick) {
+        return makeError(ErrorCode::LimitExceeded, "too many sounds this tick (at most {})", kMaxSoundsPerTick);
+    }
+    SoundEvent event;
+    event.sound = request.sound;
+    event.volume = request.volume;
+    event.pitch = request.pitch;
+    event.position = request.position;
+    if (!request.at.isNull()) {
+        const auto* info = m_scene.tryGet<EntityInfo>(request.at);
+        if (info != nullptr) event.entity = info->id;
+        if (m_scene.tryGet<Transform>(request.at) != nullptr) event.position = m_scene.worldPosition(request.at);
+    }
+    if (!request.listener.isNull()) {
+        const auto* player = m_scene.tryGet<Player>(request.listener);
+        if (player == nullptr) return makeError(ErrorCode::InvalidArgument, "the listener is not a player's character");
+        event.player = static_cast<PlayerId>(player->owner);
+    }
+    m_sounds.push_back(event);
+    return {};
+}
+
+Status GameSession::playMusic(Entity player, assets::AssetId sound, float volume, float fadeSeconds) {
+    MusicState music{sound, volume, fadeSeconds};
+    if (player.isNull()) {
+        if (sound.isNil() && m_state.music.sound.isNil()) return {};
+        if (sound == m_state.music.sound) music.fadeSeconds = m_state.music.fadeSeconds; // only the volume changes
+        m_state.music = music;
+        return {};
+    }
+    const auto* character = m_scene.tryGet<Player>(player);
+    if (character == nullptr) return makeError(ErrorCode::InvalidArgument, "the entity is not a player's character");
+    std::optional<MusicState> own;
+    if (!sound.isNil()) own = music;
+    if (!m_multiplayer) {
+        m_localMusic = own;
+        return {};
+    }
+    for (PlayerSlot& slot : m_players) {
+        if (slot.id == character->owner) slot.music = own;
+    }
+    return {};
+}
+
+const MusicState& GameSession::musicFor(PlayerId player) const {
+    if (!m_multiplayer) return m_localMusic ? *m_localMusic : m_state.music;
+    const PlayerSlot* slot = findPlayer(player);
+    return slot != nullptr && slot->music ? *slot->music : m_state.music;
 }
 
 // --- saved player data ---------------------------------------------------------------------

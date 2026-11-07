@@ -23,6 +23,16 @@ struct LeaderboardRow {
     double score = 0.0;
 };
 
+// A sound a script plays (Sound.play and friends, docs/audio.md).
+struct SoundRequest {
+    assets::AssetId sound;
+    float volume = 1.0f;
+    float pitch = 1.0f;
+    scene::Entity at;             // heard from this entity, following it (kNullEntity: not)
+    std::optional<Vec2> position; // heard from this world point
+    scene::Entity listener;       // only this player's character hears it (kNullEntity: everyone)
+};
+
 // Services the game runtime provides to scripts. The scripting module has
 // no dependency on the runtime; GameSession implements this interface.
 // Every script API call that touches game state goes through here, which is
@@ -115,6 +125,24 @@ public:
                                                                             std::size_t /*count*/) const {
         return makeError(ErrorCode::Unsupported, "leaderboards are not available here");
     }
+
+    // --- Sounds and music, by asset name (authority realm only, docs/audio.md) ----------------
+    [[nodiscard]] virtual assets::AssetId findSound(std::string_view /*name*/) const { return {}; }
+    [[nodiscard]] virtual std::string soundName(assets::AssetId /*sound*/) const { return {}; }
+    [[nodiscard]] virtual std::vector<std::string> soundNames() const { return {}; }
+    // Errors (too many sounds this tick, a listener that is not a player) are
+    // shown to the script author.
+    [[nodiscard]] virtual Status playSound(const SoundRequest& /*request*/) {
+        return makeError(ErrorCode::Unsupported, "sounds are not available here");
+    }
+    // `player`: that character's own music; kNullEntity: everyone's. A nil
+    // sound stops everyone's music, or puts a player back on everyone's.
+    [[nodiscard]] virtual Status playMusic(scene::Entity /*player*/, assets::AssetId /*sound*/, float /*volume*/,
+                                           float /*fadeSeconds*/) {
+        return makeError(ErrorCode::Unsupported, "music is not available here");
+    }
+    // Everyone's music now (nil: none).
+    [[nodiscard]] virtual assets::AssetId music() const { return {}; }
 
     // --- Reporting --------------------------------------------------------------
     virtual void scriptLog(log::Level level, std::string_view script, std::string_view message) = 0;

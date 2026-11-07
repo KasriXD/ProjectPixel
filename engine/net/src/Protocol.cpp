@@ -4,6 +4,7 @@
 
 #include "px/net/Transport.hpp"
 
+#include <algorithm>
 #include <format>
 
 namespace px::net {
@@ -100,6 +101,26 @@ std::vector<std::uint8_t> encode(const RejectMessage& m) {
     return std::move(w.data());
 }
 
+std::vector<std::uint8_t> encode(const SoundsMessage& m) {
+    ByteWriter w = start(MessageType::Sounds);
+    w.varint(m.tick);
+    const std::size_t n = std::min(m.sounds.size(), kMaxSoundsPerMessage);
+    w.varint(n);
+    for (std::size_t i = 0; i < n; ++i) {
+        const NetSound& s = m.sounds[i];
+        w.guid(s.sound.guid);
+        w.f32(s.volume);
+        w.f32(s.pitch);
+        w.varint(s.entity);
+        w.boolean(s.position.has_value());
+        if (s.position) {
+            w.f32(s.position->x);
+            w.f32(s.position->y);
+        }
+    }
+    return std::move(w.data());
+}
+
 void writeSnapshotHeader(ByteWriter& w, const SnapshotHeader& h) {
     w.u8(static_cast<std::uint8_t>(MessageType::Snapshot));
     w.varint(h.epoch);
@@ -116,7 +137,8 @@ std::optional<MessageType> messageType(std::span<const std::uint8_t> data) {
         case MessageType::Goodbye:
         case MessageType::Welcome:
         case MessageType::Reject:
-        case MessageType::Snapshot: return static_cast<MessageType>(data[0]);
+        case MessageType::Snapshot:
+        case MessageType::Sounds: return static_cast<MessageType>(data[0]);
     }
     return std::nullopt;
 }
@@ -179,6 +201,32 @@ Result<RejectMessage> decodeReject(std::span<const std::uint8_t> data) {
     m.reason = static_cast<DisconnectReason>(r->u8());
     m.text = r->string(1024);
     if (!r->ok() || !r->atEnd()) return malformed("reject");
+    return m;
+}
+
+Result<SoundsMessage> decodeSounds(std::span<const std::uint8_t> data) {
+    auto r = open(data, MessageType::Sounds);
+    if (!r) return malformed("sounds");
+    SoundsMessage m;
+    const std::uint64_t tick = r->varint();
+    if (tick > 0xFFFFFFFFULL) r->fail();
+    m.tick = static_cast<std::uint32_t>(tick);
+    const std::size_t n = r->count(kMaxSoundsPerMessage, 26);
+    m.sounds.resize(n);
+    for (NetSound& s : m.sounds) {
+        s.sound.guid = r->guid();
+        s.volume = std::clamp(r->f32(), 0.0f, 4.0f);
+        s.pitch = std::clamp(r->f32(), 0.25f, 4.0f);
+        const std::uint64_t entity = r->varint();
+        if (entity > 0xFFFFFFFFULL) r->fail();
+        s.entity = static_cast<std::uint32_t>(entity);
+        if (r->boolean()) {
+            const float x = r->f32();
+            const float y = r->f32();
+            s.position = Vec2{x, y};
+        }
+    }
+    if (!r->ok() || !r->atEnd()) return malformed("sounds");
     return m;
 }
 

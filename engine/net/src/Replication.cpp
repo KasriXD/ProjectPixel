@@ -202,6 +202,8 @@ std::vector<ReplicatedComponent> buildReplicated() {
         {"Player", {}, false},
         // Camera is per client (it follows that client's own character).
         {"Tags", {}, false},
+        {"Text", {}, false},
+        {"AudioSource", {}, false},
         // Scripts run only on the server.
     };
     std::vector<ReplicatedComponent> out;
@@ -224,6 +226,23 @@ std::vector<ReplicatedComponent> buildReplicated() {
     return out;
 }
 
+void writeMusic(ByteWriter& w, const runtime::MusicState& m) {
+    w.guid(m.sound.guid);
+    w.f32(m.volume);
+    w.f32(m.fadeSeconds);
+}
+
+runtime::MusicState readMusic(ByteReader& r) {
+    runtime::MusicState m;
+    m.sound.guid = r.guid();
+    m.volume = r.f32();
+    m.fadeSeconds = r.f32();
+    if (!std::isfinite(m.volume) || !std::isfinite(m.fadeSeconds)) r.fail();
+    m.volume = std::clamp(m.volume, 0.0f, 4.0f);
+    m.fadeSeconds = std::clamp(m.fadeSeconds, 0.0f, 60.0f);
+    return m;
+}
+
 void writeGame(ByteWriter& w, const NetGameState& g) {
     w.svarint(g.score);
     w.string(g.objective);
@@ -236,8 +255,11 @@ void writeGame(ByteWriter& w, const NetGameState& g) {
     for (const NetPlayer& p : g.players) {
         w.u16(p.id);
         w.string(p.name);
+        w.boolean(p.music.has_value());
+        if (p.music) writeMusic(w, *p.music);
     }
     w.svarint(g.restartTicks);
+    writeMusic(w, g.music);
 }
 
 int readInt(ByteReader& r) {
@@ -263,8 +285,10 @@ NetGameState readGame(ByteReader& r) {
     for (NetPlayer& p : g.players) {
         p.id = r.u16();
         p.name = r.string(64);
+        if (r.boolean()) p.music = readMusic(r);
     }
     g.restartTicks = readInt(r);
+    g.music = readMusic(r);
     return g;
 }
 

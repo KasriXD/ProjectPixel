@@ -272,6 +272,62 @@ struct Tables {
             .ofAsset(assets::AssetType::Prefab)
             .withFlags(kFieldRequired),
     };
+    std::vector<FieldInfo> audioSource{
+        field<&AudioSource::sound>("sound", "The sound to play.")
+            .ofAsset(assets::AssetType::Sound)
+            .withFlags(kFieldOptional),
+        field<&AudioSource::volume>("volume", "1 plays it as it is, 0.5 at half volume.")
+            .withRange(0.0, 4.0)
+            .withStep(0.05f),
+        field<&AudioSource::pitch>("pitch", "Playback speed: 2 is an octave up and twice as fast.")
+            .withRange(0.25, 4.0)
+            .withStep(0.05f),
+        field<&AudioSource::loop>("loop", "Starts again at the end (false: plays once each time it starts)."),
+        field<&AudioSource::playing>("playing", "Plays while true; scripts switch it (entity.soundPlaying)."),
+        field<&AudioSource::positional>("positional", "Heard from where the entity is: louder on screen, panned to "
+                                                      "its side. False: the same everywhere."),
+        field<&AudioSource::range>("range", "Positional: silent this far from the camera's centre, in world units "
+                                            "(0: full volume on screen, fading over half a screen beyond it).")
+            .withRange(0.0, kInf)
+            .withStep(1.0f),
+    };
+    std::vector<std::string_view> anchors{"top-left", "top",    "top-right",   "left",  "center",
+                                          "right",    "bottom-left", "bottom", "bottom-right"};
+    std::vector<std::string_view> aligns{"left", "center", "right"};
+    std::vector<FieldInfo> text{
+        field<&Text::text>("text", "What it says (UTF-8; a new line starts a new line).")
+            .withLength(0, kMaxTextLength)
+            .withFlags(kFieldMultiline),
+        field<&Text::font>("font", "A font asset (none: the built-in 8-pixel font).")
+            .ofAsset(assets::AssetType::Font)
+            .withFlags(kFieldOptional),
+        field<&Text::scale>("scale", "Size: 2 draws every pixel of the font as 2 by 2 (whole numbers stay crisp).")
+            .withRange(0.0, 64.0, true)
+            .withStep(0.25f),
+        field<&Text::color>("color", "The colour of the letters."),
+        field<&Text::anchor>("anchor", "The point of the text placed at the entity's position. Screen texts: also "
+                                       "the corner or edge of the screen the position is measured from.")
+            .withChoices(anchors),
+        field<&Text::align>("align", "How the lines of a text of several lines line up.").withChoices(aligns),
+        field<&Text::wrapWidth>("wrapWidth", "Lines longer than this break between words, in font pixels (0: "
+                                             "only where the text has new lines).")
+            .withRange(0.0, kInf)
+            .withStep(1.0f),
+        field<&Text::lineSpacing>("lineSpacing", "Extra space between lines, in font pixels.")
+            .withRange(-64.0, 256.0)
+            .withStep(1.0f),
+        field<&Text::shadow>("shadow", "A drop shadow one pixel down and right (transparent: none)."),
+        field<&Text::background>("background", "A box behind the text (transparent: none)."),
+        field<&Text::padding>("padding", "Space around the text inside the box, in font pixels.")
+            .withRange(0.0, 256.0)
+            .withStep(1.0f),
+        field<&Text::layer>("layer", "Draw order: higher layers are drawn later (on top). Screen texts are above "
+                                     "the world and ordered among themselves."),
+        field<&Text::screen>("screen", "Part of the screen (a HUD) instead of the world: the position is in "
+                                       "screen pixels from the anchor. Inside a player's character only that "
+                                       "player sees it."),
+        field<&Text::visible>("visible", "Whether it is drawn."),
+    };
     std::vector<FieldInfo> scripts{
         wholeField("items", FieldKind::ScriptList, "Luau behaviours, each with its property values. They run in "
                                                    "this order.")
@@ -324,6 +380,12 @@ struct Tables {
                             {}, kComponentInlineField),
             component<Scripts>("Scripts", "Scripting", "Luau behaviours that run on this entity.", scripts, {},
                                kComponentInlineField),
+            component<AudioSource>("AudioSource", "Audio",
+                                   "Plays a sound from the entity while `playing` is true: a loop in the world "
+                                   "(a waterfall, a machine) or the music of a place.",
+                                   audioSource),
+            component<Text>("Text", "Rendering",
+                            "Text drawn with a bitmap font: in the world, or on the screen as part of the HUD.", text),
             component<PrefabInstance>("PrefabInstance", "General",
                                       "Marks a copy of a prefab. Studio updates it when the prefab changes; "
                                       "removing it unlinks the copy.",
@@ -336,6 +398,7 @@ const Tables& tables() {
     static const Tables t;
     return t;
 }
+
 
 std::string joinNames(const std::vector<std::string_view>& names) {
     std::string out;
@@ -372,6 +435,12 @@ void checkAsset(std::vector<ComponentProblem>& out, const ComponentInfo& c, std:
 }
 
 } // namespace
+
+std::string describeChoices(const FieldInfo& f) {
+    std::string out = "must be one of";
+    for (std::size_t i = 0; i < f.choices.size(); ++i) out += std::format("{} \"{}\"", i == 0 ? ":" : ",", f.choices[i]);
+    return out;
+}
 
 std::string_view fieldKindName(FieldKind kind) noexcept {
     switch (kind) {
@@ -542,8 +611,17 @@ std::vector<ComponentProblem> validateEntity(const Scene& scene, Entity entity, 
                     }
                     break;
                 }
+                case FieldKind::String: {
+                    const auto& text = f.ref<std::string>(data);
+                    if (!f.allows(text)) {
+                        out.push_back({std::string(c.name), std::string(f.name), describeChoices(f)});
+                    } else if (text.size() > f.maxLength) {
+                        out.push_back({std::string(c.name), std::string(f.name),
+                                       std::format("is longer than {} characters", f.maxLength)});
+                    }
+                    break;
+                }
                 case FieldKind::Bool:
-                case FieldKind::String:
                 case FieldKind::Rect:
                 case FieldKind::Color: break;
             }
@@ -706,6 +784,12 @@ std::string generateComponentReferenceMarkdown() {
             }
             std::string allowed = f.range.bounded() ? f.range.describe() : std::string();
             if (f.kind == FieldKind::Asset) allowed = std::format("a {} asset", assets::assetTypeName(f.assetType));
+            if (!f.choices.empty()) {
+                allowed.clear();
+                for (const std::string_view choice : f.choices) {
+                    allowed += std::format("{}`{}`", allowed.empty() ? "" : ", ", choice);
+                }
+            }
             if (f.maxCount != std::numeric_limits<std::size_t>::max() && f.kind != FieldKind::ScriptList) {
                 allowed = std::format("{} to {} entries", f.minCount, f.maxCount);
             }

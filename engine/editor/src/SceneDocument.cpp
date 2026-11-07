@@ -28,6 +28,8 @@ std::string defaultName(EntityPreset preset) {
         case EntityPreset::Player: return "Player";
         case EntityPreset::TopDownPlayer: return "Player";
         case EntityPreset::Camera: return "Camera";
+        case EntityPreset::Text: return "Text";
+        case EntityPreset::SoundSource: return "Sound";
     }
     return "Entity";
 }
@@ -65,6 +67,8 @@ std::string_view presetName(EntityPreset preset) {
         case EntityPreset::Player: return "Player";
         case EntityPreset::TopDownPlayer: return "Top-down Player";
         case EntityPreset::Camera: return "Camera";
+        case EntityPreset::Text: return "Text";
+        case EntityPreset::SoundSource: return "Sound Source";
     }
     return "Entity";
 }
@@ -353,6 +357,19 @@ Entity SceneDocument::createEntity(EntityPreset preset, std::string name, Entity
                 }
             }
             m_scene.set(e, cam);
+            break;
+        }
+        case EntityPreset::Text: {
+            Text text;
+            text.text = "Text";
+            text.font = texture;
+            m_scene.set(e, text);
+            break;
+        }
+        case EntityPreset::SoundSource: {
+            AudioSource source;
+            source.sound = texture;
+            m_scene.set(e, source);
             break;
         }
     }

@@ -38,6 +38,8 @@ const char* typeLabel(assets::AssetType type) {
         case assets::AssetType::Animation: return "animation";
         case assets::AssetType::Tileset: return "tileset";
         case assets::AssetType::Graph: return "visual script";
+        case assets::AssetType::Sound: return "sound";
+        case assets::AssetType::Font: return "font";
     }
     return "?";
 }

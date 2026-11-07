@@ -13,6 +13,8 @@ std::string_view assetTypeName(AssetType type) noexcept {
         case AssetType::Animation: return "animation";
         case AssetType::Tileset: return "tileset";
         case AssetType::Graph: return "graph";
+        case AssetType::Sound: return "sound";
+        case AssetType::Font: return "font";
     }
     return "unknown";
 }
@@ -25,6 +27,8 @@ std::optional<AssetType> assetTypeFromName(std::string_view name) noexcept {
     if (name == "animation") return AssetType::Animation;
     if (name == "tileset") return AssetType::Tileset;
     if (name == "graph") return AssetType::Graph;
+    if (name == "sound") return AssetType::Sound;
+    if (name == "font") return AssetType::Font;
     return std::nullopt;
 }
 

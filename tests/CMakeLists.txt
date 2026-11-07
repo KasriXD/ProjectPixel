@@ -20,13 +20,16 @@ add_executable(px_tests
     test_tilesets.cpp
     test_graphs.cpp
     test_packages.cpp
-    test_websocket.cpp)
+    test_websocket.cpp
+    test_audio.cpp)
 
 target_link_libraries(px_tests PRIVATE
     px_doctest
-    px::core px::crypto px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::render px::editor)
+    px::core px::crypto px::assets px::scene px::physics px::project px::scripting px::runtime px::net px::audio px::render
+    px::editor)
 target_compile_definitions(px_tests PRIVATE
     PX_EXAMPLES_DIR="${PX_EXAMPLES_DIR}"
+    PX_TEST_DATA_DIR="${CMAKE_CURRENT_SOURCE_DIR}/data"
     PX_DOCS_DIR="${CMAKE_SOURCE_DIR}/docs"
     PX_LIBRARY_DIR="${CMAKE_SOURCE_DIR}/library")
 px_target_defaults(px_tests)

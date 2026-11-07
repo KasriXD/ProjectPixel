@@ -37,7 +37,8 @@ bool isGroup(const Scene& scene, Entity e) {
 constexpr editor::EntityPreset kPresets[] = {
     editor::EntityPreset::Empty,      editor::EntityPreset::Group,   editor::EntityPreset::Sprite,
     editor::EntityPreset::Tilemap,    editor::EntityPreset::SolidBlock, editor::EntityPreset::Trigger,
-    editor::EntityPreset::Player,     editor::EntityPreset::Camera,
+    editor::EntityPreset::Player,     editor::EntityPreset::Camera,  editor::EntityPreset::Text,
+    editor::EntityPreset::SoundSource,
 };
 
 void createUnder(StudioApp& app, editor::EntityPreset preset, Entity parent) { app.createEntity(preset, parent); }

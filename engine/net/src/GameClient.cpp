@@ -9,6 +9,7 @@
 #include <cctype>
 #include <cmath>
 #include <format>
+#include <utility>
 
 namespace px::net {
 
@@ -20,6 +21,8 @@ constexpr std::size_t kMaxStates = 128;          // received snapshots kept (abo
 constexpr std::size_t kMaxPendingInputs = 256;   // unconfirmed inputs kept for prediction
 constexpr std::size_t kInputsPerMessage = 16;    // newest frames repeated in every input message
 constexpr float kSmoothingSeconds = 0.1f;        // corrections fade out over about this long
+constexpr std::size_t kMaxPendingSounds = 256;    // sounds waiting for the view
+constexpr double kStaleSoundTicks = 30.0;         // sounds this far behind the view are dropped
 constexpr float kCorrectionEpsilon = 0.01f;
 
 Scene prepare(const runtime::LoadedGame& game) {
@@ -150,8 +153,61 @@ void GameClient::handleMessage(const std::vector<std::uint8_t>& data, double now
         case MessageType::Snapshot:
             if (m_status == Status::Playing) handleSnapshot(data, now);
             break;
+        case MessageType::Sounds:
+            if (m_status == Status::Playing) handleSounds(data);
+            break;
         default: break;
     }
+}
+
+void GameClient::handleSounds(const std::vector<std::uint8_t>& data) {
+    auto message = decodeSounds(data);
+    if (!message) {
+        log::warn("Ignoring sounds: {}", message.error().message);
+        return;
+    }
+    for (const NetSound& s : message->sounds) {
+        m_pendingSounds.push_back({message->tick, s});
+        // A client that is not drawing (minimised, say) must not pile them up.
+        while (m_pendingSounds.size() > kMaxPendingSounds) m_pendingSounds.pop_front();
+    }
+}
+
+void GameClient::releaseSounds(double renderTick) {
+    const Entity own = character();
+    for (auto it = m_pendingSounds.begin(); it != m_pendingSounds.end();) {
+        const NetSound& s = it->sound;
+        const bool ownSound = !own.isNull() && s.entity != kNoNetId && m_viewReplica.entityOf(s.entity) == own;
+        // Sounds far older than the view (after a stall) are dropped, not played late.
+        if (static_cast<double>(it->tick) < renderTick - kStaleSoundTicks) {
+            it = m_pendingSounds.erase(it);
+            continue;
+        }
+        if (!ownSound && static_cast<double>(it->tick) > renderTick) {
+            ++it;
+            continue;
+        }
+        runtime::SoundEvent e;
+        e.sound = s.sound;
+        e.volume = s.volume;
+        e.pitch = s.pitch;
+        e.position = s.position;
+        e.player = m_player;
+        if (s.entity != kNoNetId) {
+            if (const Entity v = m_viewReplica.entityOf(s.entity); !v.isNull()) e.entity = m_view.get<EntityInfo>(v).id;
+        }
+        m_dueSounds.push_back(e);
+        it = m_pendingSounds.erase(it);
+    }
+}
+
+std::vector<runtime::SoundEvent> GameClient::takeSounds() { return std::exchange(m_dueSounds, {}); }
+
+runtime::MusicState GameClient::music() const {
+    for (const NetPlayer& p : m_game.players) {
+        if (p.id == m_player && p.music) return *p.music;
+    }
+    return m_game.music;
 }
 
 void GameClient::handleSnapshot(const std::vector<std::uint8_t>& data, double now) {
@@ -396,6 +452,7 @@ void GameClient::updateView(double now) {
         m_view.registry().each<Camera>([&](Entity, Camera& cam) { cam.follow = id; });
     }
     runtime::updateCameras(m_view, m_worldBounds, m_viewSize);
+    releaseSounds(renderTick);
 }
 
 ClientStats GameClient::stats() const {

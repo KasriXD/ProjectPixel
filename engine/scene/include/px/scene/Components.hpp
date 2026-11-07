@@ -218,4 +218,44 @@ struct PrefabInstance {
     assets::AssetId prefab;
 };
 
+// Plays a sound from the entity while `playing` is true: the loop of a
+// waterfall, a machine's hum, the music of a place (docs/audio.md).
+// Positional sounds are heard from where the entity is (louder on screen,
+// panned to their side); others the same everywhere.
+struct AudioSource {
+    assets::AssetId sound;
+    float volume = 1.0f;
+    float pitch = 1.0f;     // playback speed: 2 is an octave up
+    bool loop = true;
+    bool playing = true;
+    bool positional = true;
+    float range = 0.0f;     // positional: silent this far away (0: what is on screen, fading beyond it)
+};
+
+// Text drawn with a bitmap font (docs/text.md). In the world it moves with
+// the entity (a sign, a name above a head); on the screen (`screen`) it is
+// part of the HUD and stays put. A screen text inside a player's character
+// is shown only to that player.
+struct Text {
+    std::string text;              // UTF-8; "\n" starts a new line
+    assets::AssetId font;          // nil: the built-in pixel font
+    float scale = 1.0f;            // whole numbers keep pixel fonts crisp
+    Color color = colors::white;
+    // The point of the text placed at the position: "top-left", "top",
+    // "top-right", "left", "center", "right", "bottom-left", "bottom",
+    // "bottom-right". On the screen also the point of the screen measured from.
+    std::string anchor = "top-left";
+    std::string align = "left";    // lines within the text: "left", "center", "right"
+    float wrapWidth = 0.0f;        // longer lines break at spaces (0: only at new lines)
+    float lineSpacing = 0.0f;      // extra pixels between lines
+    Color shadow = colors::transparent;     // a one-pixel drop shadow (transparent: none)
+    Color background = colors::transparent; // a box behind the text (transparent: none)
+    float padding = 2.0f;          // around the text inside the box
+    int layer = 100;               // draw order (screen texts: among themselves, above the world)
+    bool screen = false;
+    bool visible = true;
+};
+
+inline constexpr std::size_t kMaxTextLength = 2000; // bytes
+
 } // namespace px::scene

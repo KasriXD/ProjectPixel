@@ -8,6 +8,7 @@
 #include "px/scene/Scene.hpp"
 
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
 #include <unordered_map>
@@ -27,6 +28,7 @@ inline constexpr NetId kNoNetId = 0;
 struct NetPlayer {
     runtime::PlayerId id = runtime::kNoPlayer;
     std::string name;
+    std::optional<runtime::MusicState> music{}; // their own music (Sound.playMusicFor)
     bool operator==(const NetPlayer&) const = default;
 };
 
@@ -41,6 +43,7 @@ struct NetGameState {
     std::string lastScriptError;
     std::vector<NetPlayer> players; // in join order
     int restartTicks = -1;          // ticks until the level restarts (-1: not scheduled)
+    runtime::MusicState music;      // everyone's music
     bool operator==(const NetGameState&) const = default;
 };
 

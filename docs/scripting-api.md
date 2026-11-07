@@ -96,6 +96,20 @@ Leaderboards declared in project.json (`leaderboards`): each player's best score
 | `Leaderboard.rank(player: Entity, board: string): number?` | function, pure | authority | The player's place on the board (1 is best; equal scores share a place), or nil without a score. |
 | `Leaderboard.top(board: string, count: number?): { {rank: number, name: string, score: number} }` | function, pure | authority | The best `count` (default 10, at most 100) scores, best first, as tables with rank, name and score. On the platform the list is refreshed from it every few seconds. |
 
+## Sound
+
+Sound effects and music (docs/audio.md). Sounds are named by their asset name, as Studio shows it (e.g. "Coin"). Volume 1 (the default) plays a sound as recorded, up to 4; pitch is 0.25..4 (2 is an octave up and twice as fast). At most 32 sounds start per tick; more are an error. In multiplayer every player hears them unless they are played for one player.
+
+| Member | Kind | Available in | Description |
+|---|---|---|---|
+| `Sound.play(name: string, volume: number?, pitch: number?)` | function | authority | Plays a sound (by its name in the project) for everyone, the same everywhere. volume 1 is as it is (0 to 4); pitch 2 is an octave up and twice as fast (0.25 to 4). At most 32 sounds start per tick. |
+| `Sound.playAt(name: string, position: vector, volume: number?, pitch: number?)` | function | authority | Plays a sound from a point in the world: full volume while it is on screen, fading out beyond, and panned to its side. |
+| `Sound.playFor(player: Entity, name: string, volume: number?, pitch: number?)` | function | authority | Plays a sound only `player` (a character) hears, the same everywhere: a reward, a warning. |
+| `Sound.playMusic(name: string, volume: number?, fadeSeconds: number?)` | function | authority | Plays music for everyone, looping, fading over from the music before (default 1 second). The same music again only changes its volume. |
+| `Sound.playMusicFor(player: Entity, name: string?, volume: number?, fadeSeconds: number?)` | function | authority | Plays music only `player` hears instead of everyone's (an area of the level, a boss). nil puts them back on everyone's music. |
+| `Sound.stopMusic(fadeSeconds: number?)` | function | authority | Fades everyone's music out (default 1 second). |
+| `Sound.music(): string` | function, pure | authority | The name of everyone's music now (empty: none). |
+
 ## Events
 
 Custom events between scripts. Values must be serializable.
@@ -122,8 +136,11 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity.parent: Entity?` | property (read-only), pure | all | The parent entity, or nil for top-level entities. Change it with setParent. |
 | `entity.velocity: vector` | property (read/write), pure | all | Velocity in units per second (KinematicBody). |
 | `entity.onGround: boolean` | property (read-only), pure | all | True if the body is standing on something (KinematicBody). |
-| `entity.visible: boolean` | property (read/write), pure | all | Whether the Sprite is drawn. |
+| `entity.visible: boolean` | property (read/write), pure | all | Whether the entity is drawn (its Sprite and its Text). |
 | `entity.flipX: boolean` | property (read/write), pure | all | Mirrors the Sprite horizontally. |
+| `entity.text: string` | property (read/write), pure | all | What the entity's Text says. Assign to change it (at most 2000 bytes), e.g. `self.entity.text = "Coins: " .. coins`. |
+| `entity.textColor: string` | property (read/write), pure | all | The colour of the Text as "#rrggbbaa"; assign "#rrggbb" or "#rrggbbaa". |
+| `entity.soundPlaying: boolean` | property (read/write), pure | all | Whether the entity's AudioSource plays. Assign to start or stop it. |
 | `entity.animation: string` | property (read-only), pure | all | Asset name of the animation clip the Animator is playing (empty if none). |
 | `entity.spawnPoint: vector` | property (read/write), pure | all | Where a Player respawns (its starting position unless changed). Set it in a checkpoint to make the player come back there. |
 | `entity.playerName: string` | property (read-only), pure | all | The name of the player controlling this character (playing alone: the character's name). |
@@ -134,5 +151,6 @@ An `Entity` is a handle to a scene entity. Properties need the named component; 
 | `entity:hasTag(tag: string): boolean` | method, pure | all | True if the entity's Tags component contains the tag. |
 | `entity:hasComponent(name: string): boolean` | method, pure | all | True if the entity has the named component, e.g. "Player" (see docs/components.md). |
 | `entity:playAnimation(name: string?)` | method | authority | Plays the animation clip with this asset name from its start (needs an Animator). A looping clip plays until another is chosen; a clip that does not loop plays once, then the Animator chooses again (idle, run, ...). nil goes back to the automatic choice at once. |
+| `entity:playSound(name: string, volume: number?, pitch: number?)` | method | authority | Plays a sound from the entity, following it while it plays (louder on screen, panned to its side). |
 | `entity:getChildren(): {Entity}` | method, pure | all | The entity's direct children, in hierarchy order. |
 | `entity:setParent(parent: Entity?)` | method | authority | Moves the entity (with its children) under another entity, or to the top level with nil. It stays where it is in the world. Errors if the parent is the entity itself or one of its descendants. |

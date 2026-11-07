@@ -166,6 +166,41 @@ Written as a list of text directly: `"Tags": [...]`. Labels scripts can search f
 
 Written as a list of scripts directly: `"Scripts": [...]`. Luau behaviours, each with its property values. They run in this order.
 
+## AudioSource
+
+*Audio.* Plays a sound from the entity while `playing` is true: a loop in the world (a waterfall, a machine) or the music of a place.
+
+| Field | Type | Default | Allowed values | Description |
+|---|---|---|---|---|
+| `sound` | asset | none | a sound asset | The sound to play. |
+| `volume` | number | 1 | must be between 0 and 4 | 1 plays it as it is, 0.5 at half volume. |
+| `pitch` | number | 1 | must be between 0.25 and 4 | Playback speed: 2 is an octave up and twice as fast. |
+| `loop` | boolean | true |  | Starts again at the end (false: plays once each time it starts). |
+| `playing` | boolean | true |  | Plays while true; scripts switch it (entity.soundPlaying). |
+| `positional` | boolean | true |  | Heard from where the entity is: louder on screen, panned to its side. False: the same everywhere. |
+| `range` | number | 0 | may not be negative | Positional: silent this far from the camera's centre, in world units (0: full volume on screen, fading over half a screen beyond it). |
+
+## Text
+
+*Rendering.* Text drawn with a bitmap font: in the world, or on the screen as part of the HUD.
+
+| Field | Type | Default | Allowed values | Description |
+|---|---|---|---|---|
+| `text` | text | "" |  | What it says (UTF-8; a new line starts a new line). |
+| `font` | asset | none | a font asset | A font asset (none: the built-in 8-pixel font). |
+| `scale` | number | 1 | must be greater than 0 and at most 64 | Size: 2 draws every pixel of the font as 2 by 2 (whole numbers stay crisp). |
+| `color` | colour | #ffffff |  | The colour of the letters. |
+| `anchor` | text | "top-left" | `top-left`, `top`, `top-right`, `left`, `center`, `right`, `bottom-left`, `bottom`, `bottom-right` | The point of the text placed at the entity's position. Screen texts: also the corner or edge of the screen the position is measured from. |
+| `align` | text | "left" | `left`, `center`, `right` | How the lines of a text of several lines line up. |
+| `wrapWidth` | number | 0 | may not be negative | Lines longer than this break between words, in font pixels (0: only where the text has new lines). |
+| `lineSpacing` | number | 0 | must be between -64 and 256 | Extra space between lines, in font pixels. |
+| `shadow` | colour | #00000000 |  | A drop shadow one pixel down and right (transparent: none). |
+| `background` | colour | #00000000 |  | A box behind the text (transparent: none). |
+| `padding` | number | 2 | must be between 0 and 256 | Space around the text inside the box, in font pixels. |
+| `layer` | integer | 100 |  | Draw order: higher layers are drawn later (on top). Screen texts are above the world and ordered among themselves. |
+| `screen` | boolean | false |  | Part of the screen (a HUD) instead of the world: the position is in screen pixels from the anchor. Inside a player's character only that player sees it. |
+| `visible` | boolean | true |  | Whether it is drawn. |
+
 ## PrefabInstance
 
 *General.* Marks a copy of a prefab. Studio updates it when the prefab changes; removing it unlinks the copy.

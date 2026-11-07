@@ -150,6 +150,7 @@ void GameServer::tick() {
         }
     }
 
+    sendSounds();
     saveChangedData(false);
     if (m_session->tickCount() % static_cast<std::uint64_t>(m_options.snapshotInterval) == 0) sendSnapshots();
     m_endpoint->flush();
@@ -422,6 +423,30 @@ void GameServer::restartLevel() {
     log::info("Level restarted ({} playing)", players.size());
 }
 
+// Each player gets the sounds of this tick that are for everyone or for them.
+void GameServer::sendSounds() {
+    const auto& sounds = m_session->sounds();
+    if (sounds.empty()) return;
+    for (const auto& [peer, c] : m_clients) {
+        if (!c.joined) continue;
+        SoundsMessage m;
+        m.tick = static_cast<std::uint32_t>(m_session->tickCount());
+        for (const runtime::SoundEvent& s : sounds) {
+            if (s.player != runtime::kNoPlayer && s.player != c.player) continue;
+            NetSound n;
+            n.sound = s.sound;
+            n.volume = s.volume;
+            n.pitch = s.pitch;
+            // An entity spawned since the last snapshot has no id yet: it gets
+            // the one its first snapshot will carry.
+            n.entity = s.entity.isNil() ? kNoNetId : m_ids.idFor(s.entity);
+            n.position = s.position;
+            m.sounds.push_back(n);
+        }
+        if (!m.sounds.empty()) (void)m_endpoint->send(peer, Delivery::Reliable, encode(m));
+    }
+}
+
 NetGameState GameServer::gameState() const {
     const auto& s = m_session->state();
     NetGameState g;
@@ -432,8 +457,9 @@ NetGameState GameServer::gameState() const {
     g.respawns = s.respawns;
     g.scriptErrors = s.scriptErrors;
     g.lastScriptError = s.lastScriptError;
-    for (const auto& p : m_session->players()) g.players.push_back({p.id, p.name});
+    for (const auto& p : m_session->players()) g.players.push_back({p.id, p.name, p.music});
     g.restartTicks = m_restartCountdown;
+    g.music = s.music;
     return g;
 }
 

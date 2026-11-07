@@ -44,6 +44,7 @@ enum FieldFlags : std::uint32_t {
     kFieldRuntime = 1u << 0,  // simulation state: not saved; Studio shows it read-only while playing
     kFieldRequired = 1u << 1, // must be present in files
     kFieldOptional = 1u << 2, // written only when it has a value (EntityRef or Asset that is not nil)
+    kFieldMultiline = 1u << 3, // text that may span lines (Studio edits it in a bigger box)
 };
 
 inline constexpr double kUnbounded = std::numeric_limits<double>::infinity();
@@ -76,6 +77,7 @@ struct FieldInfo {
     std::size_t minCount = 0;                           // list fields
     std::size_t maxLength = std::numeric_limits<std::size_t>::max(); // strings / list items
     std::size_t minLength = 0;
+    std::span<const std::string_view> choices; // String fields: the allowed values (empty: any text)
 
     [[nodiscard]] bool isRuntime() const { return (flags & kFieldRuntime) != 0; }
     [[nodiscard]] bool isRequired() const { return (flags & kFieldRequired) != 0; }
@@ -100,6 +102,15 @@ struct FieldInfo {
     constexpr FieldInfo& ofAsset(assets::AssetType t) { assetType = t; return *this; }
     constexpr FieldInfo& withCount(std::size_t lo, std::size_t hi) { minCount = lo; maxCount = hi; return *this; }
     constexpr FieldInfo& withLength(std::size_t lo, std::size_t hi) { minLength = lo; maxLength = hi; return *this; }
+    constexpr FieldInfo& withChoices(std::span<const std::string_view> c) { choices = c; return *this; }
+    // Whether `value` is allowed by `choices`.
+    [[nodiscard]] bool allows(std::string_view value) const {
+        if (choices.empty()) return true;
+        for (const std::string_view c : choices) {
+            if (c == value) return true;
+        }
+        return false;
+    }
 };
 
 enum ComponentFlags : std::uint32_t {
@@ -139,6 +150,9 @@ inline constexpr std::size_t kMaxScriptProperties = 64;
 inline constexpr std::size_t kMaxScriptStringLength = 1000;
 inline constexpr std::size_t kMaxAnimationFrames = 1024;
 inline constexpr int kMaxTilemapDimension = 4096;
+
+// "must be one of: "a", "b"" for a String field with choices.
+[[nodiscard]] std::string describeChoices(const FieldInfo& f);
 
 // A problem with an entity's components that would make its scene fail to
 // load, e.g. a missing required component. Checked by the file format and

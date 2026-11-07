@@ -87,6 +87,12 @@ public:
     [[nodiscard]] const Rect& worldBounds() const { return m_worldBounds; }
     // Where the own character is predicted to be now (world), if known.
     [[nodiscard]] std::optional<Vec2> predictedPosition() const;
+    // Sounds that are due now: they are held back until the view reaches the
+    // tick they were played on, except those of the own character, which is
+    // shown ahead of the rest. Entities are view() entity GUIDs.
+    [[nodiscard]] std::vector<runtime::SoundEvent> takeSounds();
+    // The music this player should hear.
+    [[nodiscard]] runtime::MusicState music() const;
 
 private:
     struct Predicted {
@@ -103,6 +109,8 @@ private:
 
     void handleMessage(const std::vector<std::uint8_t>& data, double now);
     void handleSnapshot(const std::vector<std::uint8_t>& data, double now);
+    void handleSounds(const std::vector<std::uint8_t>& data);
+    void releaseSounds(double renderTick);
     void setDisconnected(std::string why);
     void sendInputs();
     void reconcile(const WorldState& newest, std::uint32_t lastInputSequence);
@@ -156,6 +164,14 @@ private:
     std::deque<PendingInput> m_pending;
     std::optional<Predicted> m_predicted;
     Vec2 m_smoothing{}; // visual offset that decays after a correction
+
+    // Sounds waiting for the view to catch up, and those that are due.
+    struct PendingSound {
+        std::uint32_t tick;
+        NetSound sound;
+    };
+    std::deque<PendingSound> m_pendingSounds;
+    std::vector<runtime::SoundEvent> m_dueSounds;
 
     ClientStats m_stats;
     std::vector<NetEvent> m_events;

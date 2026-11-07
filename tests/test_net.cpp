@@ -53,6 +53,14 @@ Scene replicationScene() {
     scene.set(child, Transform{{1, 2}});
     const Entity cam = scene.createEntity("Camera");
     scene.set(cam, Camera{});
+    const Entity label = scene.createEntity("Label");
+    scene.set(label, Transform{{8, 8}});
+    Text text;
+    text.text = "Score: 0";
+    text.anchor = "top";
+    text.screen = true;
+    scene.set(label, text);
+    scene.set(label, AudioSource{assets::AssetId{Guid(5, 5)}});
     return scene;
 }
 
@@ -185,6 +193,40 @@ TEST_CASE("Net: protocol messages round-trip; malformed ones are rejected") {
     REQUIRE(rm);
     CHECK(rm->reason == DisconnectReason::ServerFull);
 
+    SoundsMessage sounds;
+    sounds.tick = 1234;
+    sounds.sounds = {{assets::AssetId{Guid(1, 2)}, 0.5f, 2.0f, 7, Vec2{3, 4}},
+                     {assets::AssetId{Guid(3, 4)}, 1.0f, 1.0f, kNoNetId, std::nullopt}};
+    auto sm = decodeSounds(encode(sounds));
+    REQUIRE(sm);
+    CHECK(messageType(encode(sounds)) == MessageType::Sounds);
+    CHECK(sm->tick == 1234);
+    REQUIRE(sm->sounds.size() == 2);
+    CHECK(sm->sounds[0].sound == assets::AssetId{Guid(1, 2)});
+    CHECK(sm->sounds[0].volume == 0.5f);
+    CHECK(sm->sounds[0].pitch == 2.0f);
+    CHECK(sm->sounds[0].entity == 7);
+    CHECK(sm->sounds[0].position == std::optional<Vec2>(Vec2{3, 4}));
+    CHECK_FALSE(sm->sounds[1].position);
+    // Levels out of range are clamped; at most kMaxSoundsPerMessage are sent.
+    SoundsMessage loud;
+    loud.sounds = {{assets::AssetId{Guid(1, 2)}, 100.0f, 0.0f, 0, std::nullopt}};
+    auto lm = decodeSounds(encode(loud));
+    REQUIRE(lm);
+    CHECK(lm->sounds[0].volume == 4.0f);
+    CHECK(lm->sounds[0].pitch == 0.25f);
+    SoundsMessage many;
+    many.sounds.resize(kMaxSoundsPerMessage + 10);
+    auto mm = decodeSounds(encode(many));
+    REQUIRE(mm);
+    CHECK(mm->sounds.size() == kMaxSoundsPerMessage);
+    ByteWriter tooMany;
+    tooMany.u8(static_cast<std::uint8_t>(MessageType::Sounds));
+    tooMany.varint(1);
+    tooMany.varint(kMaxSoundsPerMessage + 1);
+    for (std::size_t i = 0; i < (kMaxSoundsPerMessage + 1) * 26; ++i) tooMany.u8(0);
+    CHECK_FALSE(decodeSounds(tooMany.data()));
+
     // Wrong type, truncation, trailing bytes, too many frames.
     CHECK_FALSE(decodeHello(encode(input)));
     auto truncated = encode(hello);
@@ -218,8 +260,12 @@ TEST_CASE("Net: decoders survive random and mutated input") {
     InputMessage input;
     input.lastSequence = 5;
     input.frames = {{1, 0}, {1, 1}};
+    SoundsMessage sounds;
+    sounds.tick = 9;
+    sounds.sounds = {{assets::AssetId{Guid(1, 2)}, 0.5f, 2.0f, 7, Vec2{3, 4}}, {}};
     const std::vector<std::vector<std::uint8_t>> valid = {encode(hello), encode(input), encode(WelcomeMessage{1, 60, 2, "s"}),
-                                                          encode(RejectMessage{DisconnectReason::Kicked, "x"})};
+                                                          encode(RejectMessage{DisconnectReason::Kicked, "x"}),
+                                                          encode(sounds)};
     const Scene scene = replicationScene();
     NetIdMap ids;
     ids.assignInitial(scene);
@@ -233,7 +279,7 @@ TEST_CASE("Net: decoders survive random and mutated input") {
         if (i % 2 == 0) {
             data.resize(rng() % 64);
             for (auto& b : data) b = static_cast<std::uint8_t>(rng());
-            if (!data.empty()) data[0] = static_cast<std::uint8_t>(1 + rng() % 18);
+            if (!data.empty()) data[0] = static_cast<std::uint8_t>(1 + rng() % 19);
         } else {
             data = i % 4 == 1 ? valid[rng() % valid.size()] : full.data();
             const int flips = 1 + static_cast<int>(rng() % 4);
@@ -244,6 +290,12 @@ TEST_CASE("Net: decoders survive random and mutated input") {
         decodedOk += decodeInput(data) ? 1 : 0;
         decodedOk += decodeWelcome(data) ? 1 : 0;
         decodedOk += decodeReject(data) ? 1 : 0;
+        if (auto s = decodeSounds(data)) {
+            ++decodedOk;
+            for (const NetSound& n : s->sounds) {
+                CHECK((n.volume >= 0.0f && n.volume <= 4.0f && n.pitch >= 0.25f && n.pitch <= 4.0f));
+            }
+        }
         ByteReader r(data);
         decodedOk += readWorldDelta(r, WorldState{}) ? 1 : 0;
         ByteReader r2(data);
@@ -284,9 +336,15 @@ TEST_CASE("Net: world deltas reproduce the current state from any baseline") {
     scene.set(freshChild, Sprite{});
     (void)scene.setParent(scene.findByName("Coin"), fresh);
     WorldState changed = captureWorld(scene, ids, 5);
+    Text& label = scene.get<Text>(scene.findByName("Label"));
+    label.text = "Score: 7";
+    label.color = Color{255, 0, 0, 255};
+    scene.get<AudioSource>(scene.findByName("Label")).playing = false;
+    changed = captureWorld(scene, ids, 5);
     changed.game.score = 7;
-    changed.game.players = {{1, "Ada"}, {2, "Bo"}};
+    changed.game.players = {{1, "Ada"}, {2, "Bo", runtime::MusicState{assets::AssetId{Guid(6, 6)}, 0.5f, 0.0f}}};
     changed.game.objective = "GO";
+    changed.game.music = runtime::MusicState{assets::AssetId{Guid(7, 7)}, 0.75f, 2.0f};
 
     const WorldState fromInitial = roundTrip(initial, changed);
     checkSameWorld(fromInitial, changed);
@@ -320,6 +378,8 @@ TEST_CASE("Net: a client's scene replica follows the world states") {
     s.set(fresh, Player{{70, 20}, 1, "Ada"});
     const Entity hat = s.createEntity("Hat", fresh);
     s.set(hat, Transform{{0, -8}});
+    s.get<Text>(s.findByName("Label")).text = "Score: 1";
+    s.get<AudioSource>(s.findByName("Label")).playing = false;
     const WorldState state = roundTrip(initial, captureWorld(s, ids, 2));
 
     SceneReplica replica(client);
@@ -332,6 +392,9 @@ TEST_CASE("Net: a client's scene replica follows the world states") {
     CHECK(client.get<Player>(hero).name == "Ada");
     CHECK(client.worldPosition(client.findByName("Hat")) == Vec2{70, 12});
     CHECK(client.get<Transform>(client.findByName("Body")).position == Vec2{40, 20});
+    CHECK(client.get<Text>(client.findByName("Label")).text == "Score: 1");
+    CHECK(client.get<Text>(client.findByName("Label")).anchor == "top");
+    CHECK_FALSE(client.get<AudioSource>(client.findByName("Label")).playing);
     // Client-only components are left alone.
     CHECK(client.tryGet<Camera>(client.findByName("Camera")) != nullptr);
     CHECK(client.tryGet<SpriteAnimation>(client.findByName("Coin")) != nullptr);

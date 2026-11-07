@@ -38,6 +38,31 @@ struct GameEvent {
     int value = 0;
 };
 
+// Identifies a player in a multiplayer session. 0 means "no player".
+using PlayerId = std::uint16_t;
+inline constexpr PlayerId kNoPlayer = 0;
+
+// A sound a script started this tick (docs/audio.md). Sounds are output:
+// they never change the simulation.
+struct SoundEvent {
+    assets::AssetId sound;
+    float volume = 1.0f;
+    float pitch = 1.0f;
+    Guid entity;                  // heard from this entity, following it (nil: not)
+    std::optional<Vec2> position; // heard from this point
+    PlayerId player = kNoPlayer;  // only this player hears it (kNoPlayer: everyone)
+};
+
+// What music plays (Sound.playMusic): nil sound is silence.
+struct MusicState {
+    assets::AssetId sound;
+    float volume = 1.0f;
+    float fadeSeconds = 1.0f; // how the change to it fades
+    bool operator==(const MusicState&) const = default;
+};
+
+inline constexpr std::size_t kMaxSoundsPerTick = 32;
+
 // Authoritative game state that is not part of the scene. In multiplayer
 // this is what the server replicates to clients.
 struct GameState {
@@ -48,6 +73,7 @@ struct GameState {
     int respawns = 0;
     int scriptErrors = 0;
     std::string lastScriptError; // for on-screen display in development builds
+    MusicState music;            // everyone's music
 };
 
 struct SessionOptions {
@@ -74,9 +100,6 @@ struct SessionOptions {
 // project::kMaxEntitiesPerScene.
 inline constexpr std::size_t kMaxSpawnedEntitiesPerTick = 1000;
 
-// Identifies a player in a multiplayer session. 0 means "no player".
-using PlayerId = std::uint16_t;
-inline constexpr PlayerId kNoPlayer = 0;
 inline constexpr std::size_t kMaxPlayers = 64;
 inline constexpr std::size_t kMaxPlayerNameLength = 24;
 
@@ -88,6 +111,7 @@ struct PlayerSlot {
     PlayerData data;                // saved data (Data.get / Data.set)
     bool dataChanged = false;       // since takeChangedPlayerData
     std::string account;            // leaderboard identity: the platform account, else the name
+    std::optional<MusicState> music; // their own music instead of everyone's (Sound.playMusicFor)
 };
 
 // The scene's Player entities, removed from it to be copied for each player.
@@ -165,6 +189,10 @@ public:
     [[nodiscard]] const GameState& state() const { return m_state; }
     // Events raised during the most recent tick.
     [[nodiscard]] const std::vector<GameEvent>& events() const { return m_events; }
+    // Sounds scripts started during the most recent tick.
+    [[nodiscard]] const std::vector<SoundEvent>& sounds() const { return m_sounds; }
+    // The music `player` hears: their own, else everyone's (playing alone: kNoPlayer).
+    [[nodiscard]] const MusicState& musicFor(PlayerId player) const;
     [[nodiscard]] const ActionSet& actions() const { return m_actions; }
     [[nodiscard]] const physics::CollisionWorld& collisionWorld() const { return m_collision; }
     [[nodiscard]] scripting::ScriptSystem& scripts() { return *m_scripts; }
@@ -236,6 +264,12 @@ private:
     };
     [[nodiscard]] Result<Scorer> scorer(scene::Entity player, std::string_view board) const;
     [[nodiscard]] Result<const project::LeaderboardDef*> findBoard(std::string_view board) const;
+    assets::AssetId findSound(std::string_view name) const override;
+    std::string soundName(assets::AssetId sound) const override;
+    std::vector<std::string> soundNames() const override;
+    Status playSound(const scripting::SoundRequest& request) override;
+    Status playMusic(scene::Entity player, assets::AssetId sound, float volume, float fadeSeconds) override;
+    assets::AssetId music() const override { return m_state.music.sound; }
     void scriptLog(log::Level level, std::string_view script, std::string_view message) override;
     void scriptError(const scripting::ScriptError& error) override;
     void scriptEvent(std::string_view name, std::string_view valueText) override;
@@ -272,6 +306,9 @@ private:
     Rect m_worldBounds{};
     GameState m_state;
     std::vector<GameEvent> m_events;
+    std::vector<SoundEvent> m_sounds;
+    std::vector<std::pair<std::string, assets::AssetId>> m_soundAssets; // the project's sounds by name
+    std::optional<MusicState> m_localMusic; // playing alone: Sound.playMusicFor the local character
     std::unique_ptr<scripting::ScriptSystem> m_scripts;
     std::vector<scene::Entity> m_pendingDestroy;
     std::shared_ptr<const project::PrefabLibrary> m_prefabs;
