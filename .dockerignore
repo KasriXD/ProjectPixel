@@ -1,0 +1,8 @@
+# Only the sources go into the image build (docs/deployment.md).
+.git
+build
+out
+**/node_modules
+tools/browser/*.png
+*.log
+CMakeUserPresets.json

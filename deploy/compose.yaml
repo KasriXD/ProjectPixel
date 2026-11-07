@@ -1,0 +1,112 @@
+# Project Pixel's platform on one server with Docker Compose
+# (docs/deployment.md). Put these in deploy/.env (or the environment):
+#
+#   PIXEL_DOMAIN=play.example.com      the server's name in DNS
+#   PIXEL_EMAIL=you@example.com        for Let's Encrypt's expiry warnings
+#   PIXEL_NAME=My Pixel Platform       shown to players (optional)
+#   PX_METRICS_TOKEN=...               for scraping /metrics (optional)
+#   PX_SMTP_PASSWORD=...               with the --smtp lines below (optional)
+#
+# then:  docker compose -f deploy/compose.yaml up -d --build
+#
+# Open ports: 80 (certificate renewals), 443 (the platform: its API, /play
+# and the browser player), 27960-27979 UDP and TCP (game servers). The
+# plain HTTP port stays on this computer (127.0.0.1:8730: /metrics, tools).
+
+name: pixel
+
+services:
+  # Gets the certificate, then looks twice a day whether it is due for
+  # renewal; the platform takes a renewed one into use by itself.
+  certbot:
+    image: certbot/certbot:v3.1.0
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certs:/certs
+    environment:
+      PIXEL_DOMAIN: ${PIXEL_DOMAIN:?set PIXEL_DOMAIN}
+      PIXEL_EMAIL: ${PIXEL_EMAIL:?set PIXEL_EMAIL}
+    # The platform runs as uid 10001 and cannot read certbot's files: after
+    # every renewal it gets a copy of its own (the key first, then the
+    # certificate, each replaced in one step).
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        copy='cp -L "/etc/letsencrypt/live/$$PIXEL_DOMAIN/privkey.pem" /certs/privkey.pem.new &&
+              cp -L "/etc/letsencrypt/live/$$PIXEL_DOMAIN/fullchain.pem" /certs/fullchain.pem.new &&
+              chown 10001:10001 /certs/privkey.pem.new /certs/fullchain.pem.new &&
+              chmod 600 /certs/privkey.pem.new &&
+              mv /certs/privkey.pem.new /certs/privkey.pem && mv /certs/fullchain.pem.new /certs/fullchain.pem'
+        trap exit TERM
+        certbot certonly --standalone --non-interactive --agree-tos -m "$$PIXEL_EMAIL" -d "$$PIXEL_DOMAIN" \
+          --keep-until-expiring && sh -c "$$copy"
+        while :; do
+          sleep 12h & wait $$!
+          certbot renew --standalone --deploy-hook "$$copy"
+        done
+
+  platform:
+    build:
+      context: ..
+      target: platform-web # with the browser player; "platform" builds faster without it
+    image: pixel-platform
+    restart: unless-stopped
+    depends_on:
+      - certbot
+    ports:
+      - "443:8731"
+      - "127.0.0.1:8730:8730"
+      - "27960-27979:27960-27979/udp"
+      - "27960-27979:27960-27979/tcp"
+    volumes:
+      - pixel-data:/data
+      - certs:/certs:ro
+    environment:
+      PX_SMTP_PASSWORD: ${PX_SMTP_PASSWORD:-}
+      PX_METRICS_TOKEN: ${PX_METRICS_TOKEN:-}
+    # Until certbot has the first certificate, HTTPS cannot start: Docker
+    # restarts the platform until then (a minute or so).
+    command:
+      - --name
+      - ${PIXEL_NAME:-Project Pixel}
+      - --public-host
+      - ${PIXEL_DOMAIN}
+      - --public-url
+      - https://${PIXEL_DOMAIN}
+      - --https-port
+      - "8731"
+      - --tls-cert
+      - /certs/fullchain.pem
+      - --tls-key
+      - /certs/privkey.pem
+      - --server-ports
+      - "27960:20"
+      - --max-servers
+      - "20"
+      # Email: written into the data volume until a mail server is set up.
+      # For real email, replace these two lines with
+      #   - --smtp
+      #   - smtps://smtp.example.com:465
+      #   - --smtp-user
+      #   - pixel@example.com
+      #   - --mail-from
+      #   - Pixel <noreply@play.example.com>
+      # (and PX_SMTP_PASSWORD in deploy/.env).
+      - --mail-dir
+      - /data/outbox
+    # Game servers run inside this container: give it room.
+    deploy:
+      resources:
+        limits:
+          memory: 8g
+    ulimits:
+      nofile: 65536
+
+volumes:
+  pixel-data:
+  letsencrypt:
+  certs:

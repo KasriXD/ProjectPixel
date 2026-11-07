@@ -382,6 +382,75 @@ jobs:
             accounts-*/*.png
             accounts-*/*.log
 
+  # The platform's container image (docs/deployment.md): built from the
+  # Dockerfile, then played through: HTTPS, a sandboxed checker and game
+  # server inside the container, a bot over the published UDP port,
+  # /metrics, Docker's health check, a backup restored into a new volume and
+  # a renewed certificate. Also checks deploy/compose.yaml and the systemd unit.
+  container:
+    name: Container image
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        shell: bash
+        run: |
+          docker build --target platform -t pixel-platform . > image-build.log 2>&1 ||
+            { tail -60 image-build.log; exit 1; }
+          docker image ls pixel-platform --format 'pixel-platform: {{.Size}}'
+
+      - name: Play through the image
+        shell: bash
+        run: |
+          set +e
+          tools/deploy/container_check.sh pixel-platform container-run > container-check.log 2>&1
+          status=$?
+          cat container-check.log
+          body=$(tail -c 6000 container-check.log | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          if [ $status -ne 0 ]; then echo "::error title=Container image::${body}"; else echo "::notice title=Container image::${body}"; fi
+          exit $status
+
+      - name: Compose file and systemd unit
+        shell: bash
+        run: |
+          PIXEL_DOMAIN=play.example.com PIXEL_EMAIL=ops@example.com docker compose -f deploy/compose.yaml config > /dev/null
+          # (The unit names /opt/pixel/px-platform, which is not installed here.)
+          sudo systemd-analyze verify deploy/systemd/pixel-platform.service 2>&1 | grep -v "/opt/pixel" | tee unit.log
+          [ ! -s unit.log ]
+
+      - name: Upload the image check's logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: container
+          path: |
+            image-build.log
+            container-check.log
+            container-run/*.log
+            container-run/metrics.txt
+
+  # The image with the browser player (what deploy/compose.yaml builds):
+  # Emscripten inside the build, then /play serves the player.
+  container-web:
+    name: Container image with the browser player (experimental)
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and start it
+        shell: bash
+        run: |
+          docker build --target platform-web -t pixel-platform:web . > image-build.log 2>&1 ||
+            { tail -60 image-build.log; exit 1; }
+          docker run -d --name pixel-web -p 18730:8730 pixel-platform:web > /dev/null
+          for _ in $(seq 1 100); do curl -sf http://127.0.0.1:18730/healthz > /dev/null && break; sleep 0.3; done
+          curl -sf http://127.0.0.1:18730/api/v1/platform | grep -q '"webPlayer":true'
+          for f in px-player.js px-player.wasm px-player.data; do
+            curl -sf -o /dev/null -w "$f: %{http_code}, %{size_download} bytes\n" "http://127.0.0.1:18730/play/player/$f"
+          done
+          docker rm -f pixel-web > /dev/null
+
   android:
     name: Android app
     runs-on: ubuntu-24.04

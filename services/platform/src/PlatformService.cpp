@@ -35,7 +35,7 @@ struct PlatformService::Impl : PlatformService::Context {
 
     // --- handlers: accounts -------------------------------------------------------------
     void registerAccount(const httplib::Request& req, httplib::Response& res) {
-        limit("register:" + req.remote_addr, 10, 3600);
+        limit("register:" + clientAddress(req), 10, 3600);
         const json body = parseBody(req);
         const std::string username = stringField(body, "username", 64, true, "The name");
         const std::string password = stringField(body, "password", online::kMaxPasswordLength, true, "The password");
@@ -66,7 +66,7 @@ struct PlatformService::Impl : PlatformService::Context {
     }
 
     void login(const httplib::Request& req, httplib::Response& res) {
-        limit("login:" + req.remote_addr, 20, 60);
+        limit("login:" + clientAddress(req), 20, 60);
         const json body = parseBody(req);
         const std::string username = stringField(body, "username", 64, true, "The name");
         const std::string password = stringField(body, "password", online::kMaxPasswordLength, true, "The password");
@@ -406,14 +406,20 @@ struct PlatformService::Impl : PlatformService::Context {
             std::filesystem::copy_file(made, stored, std::filesystem::copy_options::overwrite_existing, ec);
             if (ec) throw std::runtime_error("cannot store the thumbnail: " + ec.message());
         }
-        std::lock_guard lock(s.m_dbMutex);
-        auto old = db().prepare("SELECT thumbnail FROM games WHERE id = ?1");
-        old.bind(1, id);
-        const std::string previous = old.step() ? old.text(0) : std::string();
-        auto st = db().prepare("UPDATE games SET thumbnail = ?1 WHERE id = ?2");
-        st.bind(1, hash).bind(2, id);
-        st.run();
+        std::string previous;
+        {
+            std::lock_guard lock(s.m_dbMutex);
+            auto old = db().prepare("SELECT thumbnail FROM games WHERE id = ?1");
+            old.bind(1, id);
+            previous = old.step() ? old.text(0) : std::string();
+            auto st = db().prepare("UPDATE games SET thumbnail = ?1 WHERE id = ?2");
+            st.bind(1, hash).bind(2, id);
+            st.run();
+        }
         if (!previous.empty() && previous != hash) {
+            // (Backups take the files lock, then the database's: the same order here.)
+            std::lock_guard files(s.m_fileRemovalMutex);
+            std::lock_guard lock(s.m_dbMutex);
             auto used = db().prepare("SELECT COUNT(*) FROM games WHERE thumbnail = ?1");
             used.bind(1, previous);
             if (used.step() && used.integer(0) == 0) std::filesystem::remove(thumbnailPath(previous), ec);
@@ -860,6 +866,11 @@ Status PlatformService::initialize() {
         return makeError(ErrorCode::IoError, "Cannot set up the database: {}", e.what());
     }
     m_limits.setEnabled(m_config.rateLimits);
+    auto proxies = AddressRanges::parse(m_config.trustedProxies);
+    if (!proxies) return makeError(ErrorCode::InvalidArgument, "Trusted proxies: {}", proxies.error().message);
+    m_trustedProxies = std::move(proxies.value());
+    m_metrics->started = now();
+    if (const auto backups = listBackups(backupDir()); !backups.empty()) m_metrics->lastBackup = backups.front().created;
     m_impl = std::make_unique<Impl>(*this);
     auto dummy = crypto::hashPassword("not a real password", m_config.passwordHashing);
     if (!dummy) return dummy.error();
@@ -1068,6 +1079,7 @@ void PlatformService::registerRoutes(httplib::Server& http) {
     registerSocialRoutes(http, i);
     registerLeaderboardRoutes(http, i);
     registerAccountRoutes(http, i);
+    registerOperationRoutes(http, i);
     http.Get("/play", bind(&Impl::playPage));
     http.Get("/play/", i.wrap([](const httplib::Request&, httplib::Response& res) { res.set_redirect("/play"); }));
     http.Get(R"(/play/(play\.(?:js|css)|avatars\.png))", bind(&Impl::playPage));
@@ -1127,6 +1139,15 @@ Status PlatformService::start() {
         server.set_read_timeout(120, 0);
         server.set_write_timeout(120, 0);
         server.set_keep_alive_max_count(100);
+        server.set_logger([this](const httplib::Request& req, const httplib::Response& res) {
+            const auto cls = static_cast<std::size_t>(std::clamp(res.status / 100, 1, 5));
+            ++m_metrics->requests[cls];
+            if (req.start_time_ != std::chrono::steady_clock::time_point::min()) {
+                m_metrics->requestMicros += static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - req.start_time_)
+                        .count());
+            }
+        });
         registerRoutes(server);
     };
     m_http = std::make_unique<httplib::Server>();
@@ -1141,6 +1162,7 @@ Status PlatformService::start() {
         }
         m_https = std::move(https);
         configure(*m_https);
+        if (auto loaded = reloadCertificates(true); !loaded) return loaded;
         const std::string bind = m_config.httpsBindAddress.empty() ? m_config.bindAddress : m_config.httpsBindAddress;
         if (m_config.httpsPort < 0) {
             m_httpsPort = m_https->bind_to_any_port(bind);
@@ -1192,10 +1214,25 @@ Status PlatformService::start() {
     if (m_https) m_httpsListener = std::thread([this] { m_https->listen_after_bind(); });
     m_maintenance = std::thread([this] {
         int ticks = 0;
+        // The first backup a minute after starting, unless a recent one exists.
+        const double interval = m_config.backupHours * 3600.0;
+        std::int64_t nextBackup = m_metrics->lastBackup != 0 ? m_metrics->lastBackup + static_cast<std::int64_t>(interval)
+                                                             : now() + 60;
         while (m_running) {
             std::this_thread::sleep_for(std::chrono::milliseconds(250));
             if (++ticks % 4 != 0) continue;
             m_fleet->maintain();
+            if (ticks % (4 * 60) == 0) {
+                if (auto reloaded = reloadCertificates(); !reloaded) log::warn("{}", reloaded.error().message);
+            }
+            if (interval > 0.0 && now() >= nextBackup && !m_backupRunning.exchange(true)) {
+                nextBackup = now() + static_cast<std::int64_t>(interval);
+                if (m_backupThread.joinable()) m_backupThread.join();
+                m_backupThread = std::thread([this] {
+                    (void)backup();
+                    m_backupRunning = false;
+                });
+            }
             if (ticks % (4 * 3600) == 0) {
                 try {
                     std::lock_guard lock(m_dbMutex);
@@ -1224,6 +1261,7 @@ void PlatformService::stop() {
     if (m_listener.joinable()) m_listener.join();
     if (m_httpsListener.joinable()) m_httpsListener.join();
     if (m_maintenance.joinable()) m_maintenance.join();
+    if (m_backupThread.joinable()) m_backupThread.join();
     if (m_fleet) m_fleet->stopAll();
 }
 

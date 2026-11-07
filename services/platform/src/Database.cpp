@@ -2,6 +2,9 @@
 
 #include <sqlite3.h>
 
+#include <chrono>
+#include <thread>
+
 #include <format>
 
 namespace px::platform {
@@ -71,7 +74,81 @@ Result<std::unique_ptr<Database>> Database::open(const std::filesystem::path& fi
     return out;
 }
 
+Result<std::unique_ptr<Database>> Database::openReadOnly(const std::filesystem::path& file) {
+    sqlite3* db = nullptr;
+    const int rc = sqlite3_open_v2(file.string().c_str(), &db, SQLITE_OPEN_READONLY | SQLITE_OPEN_NOMUTEX, nullptr);
+    if (rc != SQLITE_OK) {
+        std::string message = db != nullptr ? sqlite3_errmsg(db) : "out of memory";
+        sqlite3_close(db);
+        return makeError(ErrorCode::IoError, "Cannot open the database {}: {}", file.string(), message);
+    }
+    return std::unique_ptr<Database>(new Database(db));
+}
+
 Database::~Database() { sqlite3_close(m_db); }
+
+Status Database::backupTo(const std::filesystem::path& file, std::mutex& lock) {
+    std::error_code ec;
+    if (std::filesystem::exists(file, ec)) return makeError(ErrorCode::InvalidArgument, "{} exists already", file.string());
+    sqlite3* dest = nullptr;
+    if (sqlite3_open_v2(file.string().c_str(), &dest, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX,
+                        nullptr) != SQLITE_OK) {
+        std::string message = dest != nullptr ? sqlite3_errmsg(dest) : "out of memory";
+        sqlite3_close(dest);
+        return makeError(ErrorCode::IoError, "Cannot create {}: {}", file.string(), message);
+    }
+    sqlite3_backup* backup = nullptr;
+    {
+        std::lock_guard guard(lock);
+        backup = sqlite3_backup_init(dest, "main", m_db, "main");
+    }
+    if (backup == nullptr) {
+        std::string message = sqlite3_errmsg(dest);
+        sqlite3_close(dest);
+        return makeError(ErrorCode::IoError, "Cannot back up the database: {}", message);
+    }
+    int rc = SQLITE_OK;
+    do {
+        {
+            std::lock_guard guard(lock);
+            rc = sqlite3_backup_step(backup, 256);
+        }
+        if (rc == SQLITE_BUSY || rc == SQLITE_LOCKED) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        } else {
+            std::this_thread::yield(); // requests get the database between steps
+        }
+    } while (rc == SQLITE_OK || rc == SQLITE_BUSY || rc == SQLITE_LOCKED);
+    {
+        std::lock_guard guard(lock);
+        sqlite3_backup_finish(backup);
+    }
+    std::string check;
+    if (rc == SQLITE_DONE) {
+        // A single file: no write-ahead log next to it.
+        sqlite3_exec(dest, "PRAGMA journal_mode=DELETE", nullptr, nullptr, nullptr);
+        sqlite3_stmt* st = nullptr;
+        if (sqlite3_prepare_v2(dest, "PRAGMA quick_check", -1, &st, nullptr) == SQLITE_OK && sqlite3_step(st) == SQLITE_ROW) {
+            check = reinterpret_cast<const char*>(sqlite3_column_text(st, 0));
+        }
+        sqlite3_finalize(st);
+    }
+    const std::string message = sqlite3_errstr(rc);
+    sqlite3_close(dest);
+    if (rc != SQLITE_DONE) return makeError(ErrorCode::IoError, "Backing up the database failed: {}", message);
+    if (check != "ok") return makeError(ErrorCode::InvalidData, "The database copy failed its check: {}", check);
+    return {};
+}
+
+std::string Database::integrityCheck() {
+    auto st = prepare("PRAGMA integrity_check");
+    std::string out;
+    while (st.step()) {
+        if (!out.empty()) out += "; ";
+        out += st.text(0);
+    }
+    return out;
+}
 
 void Database::exec(std::string_view sql) {
     char* error = nullptr;

@@ -140,6 +140,14 @@ public:
     void maintain();
     [[nodiscard]] std::vector<SessionInfo> sessions() const;
 
+    // For /metrics: servers started, and how they ended ("finished",
+    // "stopped", "failed", "exited", "cpu_limit").
+    struct Counters {
+        std::uint64_t started = 0;
+        std::map<std::string, std::uint64_t> ended;
+    };
+    [[nodiscard]] Counters counters() const;
+
 private:
     using Clock = std::chrono::steady_clock;
     struct Session {
@@ -167,7 +175,7 @@ private:
     // reconnect to `wanted`), or an error.
     [[nodiscard]] Result<Session*> currentSessionFor(const std::string& userId, std::int64_t gameId, int version);
     [[nodiscard]] bool alive(const Session& s) const { return s.state != Session::State::Ended; }
-    void endSession(Session& s, const char* why);
+    void endSession(Session& s, const char* why, const char* kind);
     [[nodiscard]] std::size_t occupancy(const Session& s) const;
     [[nodiscard]] Session* find(const std::string& id);
     [[nodiscard]] const Session* find(const std::string& id) const;
@@ -176,6 +184,7 @@ private:
     mutable std::mutex m_mutex;
     std::condition_variable m_changed;
     std::map<std::string, std::unique_ptr<Session>> m_sessions;
+    Counters m_counters;
     std::map<std::string, std::string> m_userSession; // userId -> session id holding their data
 };
 

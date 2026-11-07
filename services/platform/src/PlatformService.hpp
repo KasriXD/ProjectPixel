@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Mail.hpp"
+#include "Operations.hpp"
 
 #include "Fleet.hpp"
 #include "RateLimiter.hpp"
@@ -64,6 +65,12 @@ struct ServiceConfig {
     MailConfig mail;
     std::string publicUrl;             // what people open; default: the HTTPS address, else the HTTP one
     bool requireVerifiedEmail = false; // publishing needs a confirmed email address
+    // Running on the internet (docs/deployment.md).
+    std::vector<std::string> trustedProxies; // reverse proxies whose X-Forwarded-For is believed ("127.0.0.1", "10.0.0.0/8")
+    std::string metricsToken;                // /metrics wants "Authorization: Bearer <token>"; empty: this computer only
+    std::filesystem::path backupDir;         // default: dataDir/backups
+    double backupHours = 24.0;               // a backup this often (0: only when asked)
+    int backupKeep = 7;                      // the newest ones stay (0: all)
 };
 
 class PlatformService {
@@ -92,6 +99,15 @@ public:
     // The address people open: links in emails point there.
     [[nodiscard]] std::string publicUrl() const;
 
+    // A backup of the database, the platform key and the files the database
+    // refers to, while the platform runs (docs/deployment.md#backups).
+    [[nodiscard]] Result<BackupInfo> backup();
+    [[nodiscard]] std::filesystem::path backupDir() const;
+    // HTTPS: takes a renewed certificate into use (checked every minute, so
+    // only tests and impatient operators call this).
+    [[nodiscard]] Status reloadCertificates(bool force = false);
+    [[nodiscard]] const ServiceMetrics& metrics() const { return *m_metrics; }
+
     // Internal: shared by the service's handler groups (ServiceContext.hpp).
     struct Context;
 
@@ -111,6 +127,14 @@ private:
     crypto::SigningKey m_key;
     std::unique_ptr<Fleet> m_fleet;
     std::unique_ptr<Mailer> m_mailer;
+    std::unique_ptr<ServiceMetrics> m_metrics = std::make_unique<ServiceMetrics>();
+    AddressRanges m_trustedProxies;
+    std::mutex m_fileRemovalMutex; // backups and removing packages or pictures take turns (then the database)
+    std::mutex m_backupMutex;      // one backup at a time
+    std::thread m_backupThread;
+    std::atomic<bool> m_backupRunning{false};
+    std::filesystem::file_time_type m_certTime{};
+    std::filesystem::file_time_type m_keyTime{};
     std::unique_ptr<httplib::Server> m_http;
     std::unique_ptr<httplib::Server> m_https; // an httplib::SSLServer
     std::thread m_httpsListener;

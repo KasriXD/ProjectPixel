@@ -17,6 +17,7 @@ add_library(px_platform_service STATIC
     src/Fleet.cpp
     src/Leaderboards.cpp
     src/Mail.cpp
+    src/Operations.cpp
     src/PlatformService.cpp
     src/Process.cpp
     src/Social.cpp

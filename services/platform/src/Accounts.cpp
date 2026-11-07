@@ -188,7 +188,7 @@ struct Accounts {
 
     // POST /email-verifications {token}: from the link in the email (no login needed).
     void verifyEmail(const httplib::Request& req, httplib::Response& res) {
-        c.limit("link:" + req.remote_addr, 30, 3600);
+        c.limit("link:" + c.clientAddress(req), 30, 3600);
         const json body = parseBody(req);
         const std::string token = stringField(body, "token", 100, true, "The link");
         std::lock_guard lock(c.dbMutex());
@@ -208,7 +208,7 @@ struct Accounts {
     // POST /password-resets {name}: a name or an email address. The answer is
     // the same whether or not an account matches.
     void requestReset(const httplib::Request& req, httplib::Response& res) {
-        c.limit("reset-ip:" + req.remote_addr, 10, 3600);
+        c.limit("reset-ip:" + c.clientAddress(req), 10, 3600);
         const json body = parseBody(req);
         const std::string name = lower(cleanLine(stringField(body, "name", kMaxEmailLength, true, "The name or email address"),
                                                  "The name or email address"));
@@ -242,7 +242,7 @@ struct Accounts {
 
     // POST /password-resets/complete {token, password}: from the link.
     void completeReset(const httplib::Request& req, httplib::Response& res) {
-        c.limit("link:" + req.remote_addr, 30, 3600);
+        c.limit("link:" + c.clientAddress(req), 30, 3600);
         const json body = parseBody(req);
         const std::string token = stringField(body, "token", 100, true, "The link");
         const std::string password = stringField(body, "password", online::kMaxPasswordLength, true, "The new password");
@@ -348,8 +348,9 @@ struct Accounts {
             tx.commit();
         }
         for (const std::int64_t g : games) c.fleet().stopGame(g);
-        // Files nothing refers to any more.
+        // Files nothing refers to any more (not while a backup collects them).
         std::error_code ec;
+        std::lock_guard files(c.fileRemovalMutex());
         for (const auto& hash : packages) {
             std::lock_guard lock(c.dbMutex());
             auto used = c.db().prepare("SELECT COUNT(*) FROM versions WHERE package_hash = ?1");

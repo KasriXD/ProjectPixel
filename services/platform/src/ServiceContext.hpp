@@ -204,7 +204,8 @@ struct PlatformService::Context {
     httplib::Server::Handler wrap(Handler handler) {
         return [this, handler](const httplib::Request& req, httplib::Response& res) {
             try {
-                if (!s.m_limits.allow("ip:" + req.remote_addr, 600, 60)) {
+                if (!s.m_limits.allow("ip:" + clientAddress(req), 600, 60)) {
+                    ++s.m_metrics->rateLimited;
                     fail(429, "rate_limited", "Too many requests; slow down");
                 }
                 handler(req, res);
@@ -217,8 +218,15 @@ struct PlatformService::Context {
         };
     }
 
+    // Who sent the request (behind a trusted reverse proxy: from X-Forwarded-For).
+    std::string clientAddress(const httplib::Request& req) const {
+        if (s.m_trustedProxies.empty()) return req.remote_addr;
+        return platform::clientAddress(s.m_trustedProxies, req.remote_addr, req.get_header_value("X-Forwarded-For"));
+    }
+
     void limit(const std::string& key, double perWindow, double windowSeconds) {
         if (!s.m_limits.allow(key, perWindow, windowSeconds)) {
+            ++s.m_metrics->rateLimited;
             fail(429, "rate_limited", "Too many attempts; please wait a little and try again");
         }
     }
@@ -291,6 +299,7 @@ struct PlatformService::Context {
     }
 
     Mailer& mailer() { return *s.m_mailer; }
+    std::mutex& fileRemovalMutex() { return s.m_fileRemovalMutex; }
 
     // Where packages (by content hash) and game pictures are kept.
     std::filesystem::path packagePath(const std::string& hash) const {
@@ -424,5 +433,8 @@ struct PlatformService::Context {
     }
 
 };
+
+// /healthz, /metrics and backups for administrators (Operations.cpp).
+void registerOperationRoutes(httplib::Server& http, PlatformService::Context& context);
 
 } // namespace px::platform

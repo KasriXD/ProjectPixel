@@ -1,0 +1,76 @@
+# Project Pixel's platform as a systemd service (docs/deployment.md#without-containers).
+#
+#   sudo useradd --system --home-dir /var/lib/pixel --shell /usr/sbin/nologin pixel
+#   sudo install -d -o root -g root /opt/pixel
+#   sudo cp px-platform px-server px-headless /opt/pixel/      (and web-player/ for /play)
+#   sudo cp deploy/systemd/pixel-platform.service /etc/systemd/system/
+#   sudo install -d -m 700 /etc/pixel && sudoedit /etc/pixel/platform.env   (see below)
+#   sudo systemctl daemon-reload && sudo systemctl enable --now pixel-platform
+#
+# /etc/pixel/platform.env (secrets stay out of the command line):
+#   PIXEL_OPTIONS=--name "My Pixel Platform" --public-host play.example.com
+#     --public-url https://play.example.com --https-port 443 --https-bind 0.0.0.0
+#     --tls-cert /etc/pixel/certs/fullchain.pem --tls-key /etc/pixel/certs/privkey.pem
+#     --server-ports 27960:20 --smtp smtps://smtp.example.com:465 --smtp-user pixel@example.com
+#     --mail-from "Pixel <noreply@play.example.com>"
+#   PX_SMTP_PASSWORD=...
+#   PX_METRICS_TOKEN=...
+# (PIXEL_OPTIONS on one line.) The plain HTTP port stays on 127.0.0.1 (game
+# servers, /metrics, tools). Certificates: a copy the pixel user can read,
+# e.g. from certbot's --deploy-hook; the platform notices renewed files.
+
+[Unit]
+Description=Project Pixel platform
+Documentation=https://github.com/KasriXD/ProjectPixel/blob/main/docs/deployment.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pixel
+Group=pixel
+EnvironmentFile=/etc/pixel/platform.env
+# (Through sh so that quotes in PIXEL_OPTIONS work: --name "My Platform".)
+ExecStart=/bin/sh -c 'eval exec /opt/pixel/px-platform --data /var/lib/pixel "$$PIXEL_OPTIONS"'
+Restart=on-failure
+RestartSec=5
+# Game servers get a few seconds to save their players' data.
+TimeoutStopSec=30
+KillMode=mixed
+
+# Everything the platform keeps: /var/lib/pixel (database, key, packages,
+# pictures, logs, backups).
+StateDirectory=pixel
+StateDirectoryMode=0700
+UMask=0077
+
+# Port 443 without root.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+# The service itself is locked down too; each game server and package check
+# also filters its own system calls and files (docs/security.md).
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallArchitectures=native
+LimitNOFILE=65536
+LimitCORE=0
+TasksMax=4096
+
+[Install]
+WantedBy=multi-user.target

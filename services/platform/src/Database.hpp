@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -61,6 +62,8 @@ private:
 class Database {
 public:
     [[nodiscard]] static Result<std::unique_ptr<Database>> open(const std::filesystem::path& file);
+    // For looking only (a backup): nothing about the file changes.
+    [[nodiscard]] static Result<std::unique_ptr<Database>> openReadOnly(const std::filesystem::path& file);
     ~Database();
     Database(const Database&) = delete;
     Database& operator=(const Database&) = delete;
@@ -69,6 +72,14 @@ public:
     [[nodiscard]] Statement prepare(std::string_view sql);
     [[nodiscard]] std::int64_t lastInsertId() const;
     [[nodiscard]] int changes() const;
+
+    // A consistent copy in `file` (which must not exist) while the database
+    // stays in use: a few pages at a time, holding `lock` (the one that
+    // guards this connection) only while copying them. The copy has no
+    // write-ahead log and passes SQLite's quick check.
+    [[nodiscard]] Status backupTo(const std::filesystem::path& file, std::mutex& lock);
+    // PRAGMA integrity_check: "ok", or what is wrong.
+    [[nodiscard]] std::string integrityCheck();
 
     // BEGIN IMMEDIATE ... COMMIT, rolled back if not committed.
     class Transaction {

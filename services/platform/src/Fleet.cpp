@@ -131,6 +131,7 @@ Result<Fleet::Session*> Fleet::startSession(const GameRef& game) {
               game.version, port, session->process->pid());
     Session* raw = session.get();
     m_sessions.emplace(raw->id, std::move(session));
+    ++m_counters.started;
     return raw;
 }
 
@@ -223,11 +224,11 @@ Result<Seat> Fleet::seatWhenReady(std::unique_lock<std::mutex>& lock, const std:
             return Seat{s->id, m_config.publicHost, s->port, ws, s->identity};
         }
         if (s->process->exitCode()) {
-            endSession(*s, "exited while starting");
+            endSession(*s, "exited while starting", "failed");
             continue;
         }
         if (Clock::now() >= deadline) {
-            endSession(*s, "not ready in time");
+            endSession(*s, "not ready in time", "failed");
             continue;
         }
         m_changed.wait_for(lock, std::chrono::milliseconds(100));
@@ -282,8 +283,9 @@ bool Fleet::heartbeat(const std::string& session, const std::vector<std::string>
     return s->stopRequested;
 }
 
-void Fleet::endSession(Session& s, const char* why) {
+void Fleet::endSession(Session& s, const char* why, const char* kind) {
     if (!alive(s)) return;
+    ++m_counters.ended[kind];
     s.state = Session::State::Ended;
     if (s.process) s.process->kill();
     for (auto it = m_userSession.begin(); it != m_userSession.end();) {
@@ -298,7 +300,7 @@ void Fleet::ended(const std::string& session) {
     if (Session* s = find(session)) {
         // A clean exit: give the process a moment to finish by itself.
         if (s->process) (void)s->process->wait(2.0);
-        endSession(*s, "the server finished");
+        endSession(*s, "the server finished", "finished");
     }
 }
 
@@ -360,7 +362,7 @@ void Fleet::stopGame(std::int64_t gameId) {
 
 void Fleet::stopAll() {
     std::lock_guard lock(m_mutex);
-    for (auto& [id, s] : m_sessions) endSession(*s, "the platform is stopping");
+    for (auto& [id, s] : m_sessions) endSession(*s, "the platform is stopping", "stopped");
 }
 
 void Fleet::maintain() {
@@ -372,19 +374,19 @@ void Fleet::maintain() {
     for (auto& [id, s] : m_sessions) {
         if (!alive(*s)) continue;
         if (s->process && s->process->exitCode()) {
-            endSession(*s, std::format("exited with code {}", *s->process->exitCode()).c_str());
+            endSession(*s, std::format("exited with code {}", *s->process->exitCode()).c_str(), "exited");
             continue;
         }
         if (s->state == Session::State::Starting && now - s->started > seconds(m_config.readySeconds)) {
-            endSession(*s, "not ready in time");
+            endSession(*s, "not ready in time", "failed");
             continue;
         }
         if (s->state == Session::State::Ready && now - s->lastHeartbeat > seconds(m_config.heartbeatSeconds)) {
-            endSession(*s, "no heartbeat");
+            endSession(*s, "no heartbeat", "failed");
             continue;
         }
         if (s->stopRequested && now - s->lastHeartbeat > seconds(m_config.heartbeatSeconds)) {
-            endSession(*s, "asked to stop");
+            endSession(*s, "asked to stop", "stopped");
             continue;
         }
         // A server that keeps more than its share of a processor busy (a
@@ -396,7 +398,8 @@ void Fleet::maintain() {
                 if (s->cpu->sample(t, *cpu)) {
                     endSession(*s, std::format("used {:.0f}% of a processor for too long (limit {}%)",
                                                s->cpu->percent(), m_config.cpuLimitPercent)
-                                       .c_str());
+                                       .c_str(),
+                               "cpu_limit");
                     continue;
                 }
             }
@@ -428,6 +431,11 @@ void Fleet::maintain() {
     for (auto it = m_sessions.begin(); it != m_sessions.end();) {
         it = alive(*it->second) ? std::next(it) : m_sessions.erase(it);
     }
+}
+
+Fleet::Counters Fleet::counters() const {
+    std::lock_guard lock(m_mutex);
+    return m_counters;
 }
 
 std::vector<SessionInfo> Fleet::sessions() const {

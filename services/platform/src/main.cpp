@@ -16,10 +16,18 @@
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <optional>
 #include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach-o/dyld.h>
+#endif
 
 using namespace px;
 
@@ -42,12 +50,52 @@ void usage() {
                  "                    resets; the SMTP password comes from PX_SMTP_PASSWORD; docs/accounts.md)\n"
                  "                        (each game server: memory, share of a processor before it is stopped\n"
                  "                         (0: no limit), and whether it locks itself down; docs/security.md)\n"
+                 "                   [--trusted-proxy ADDRESS[/BITS][,...]]   (believe its X-Forwarded-For)\n"
+                 "                   [--backup-dir DIR] [--backup-hours H] [--backup-keep N]   (docs/deployment.md;\n"
+                 "                    /metrics wants the token in PX_METRICS_TOKEN, else only this computer)\n"
                  "       px-platform --data DIR --make-admin NAME\n"
                  "       px-platform --data DIR --reset-link NAME [--public-url URL]   (a password reset link, 1 hour)\n"
                  "       px-platform --data DIR --dev-certificate HOST[,HOST...]   (self-signed, for testing HTTPS)\n"
+                 "       px-platform --data DIR --backup [--backup-dir DIR]   (one now, also while the platform runs)\n"
+                 "       px-platform --data NEW_DIR --restore BACKUP_DIR   (into an empty folder)\n"
+                 "       px-platform --check-health [URL]   (exit code 0 when URL/healthz answers; default this computer)\n"
                  "Defaults: --data ./platform-data --port 8730 --bind 127.0.0.1 --server-ports 27960:100\n"
-                 "          --server-memory 1024 --server-cpu 100\n",
+                 "          --server-memory 1024 --server-cpu 100 --backup-hours 24 --backup-keep 7\n",
                  version::productName, version::string);
+}
+
+// This program's own file: px-headless, px-server and web-player/ are found
+// next to it. (argv[0] alone is not enough when it was found through PATH.)
+std::filesystem::path selfPath(const char* argv0) {
+    std::error_code ec;
+#if defined(_WIN32)
+    std::wstring buffer(32768, L'\0');
+    const DWORD n = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (n > 0 && n < buffer.size()) return std::filesystem::path(buffer.substr(0, n));
+#elif defined(__APPLE__)
+    char buffer[4096];
+    std::uint32_t size = sizeof(buffer);
+    if (_NSGetExecutablePath(buffer, &size) == 0) {
+        auto p = std::filesystem::canonical(buffer, ec);
+        if (!ec) return p;
+    }
+#else
+    auto p = std::filesystem::read_symlink("/proc/self/exe", ec);
+    if (!ec) return p;
+#endif
+    const std::filesystem::path given(argv0);
+    if (given.has_parent_path()) return std::filesystem::absolute(given, ec);
+    if (const char* path = std::getenv("PATH")) {
+        std::string_view dirs(path);
+        while (!dirs.empty()) {
+            const auto colon = dirs.find(':');
+            const auto candidate = std::filesystem::path(dirs.substr(0, colon)) / given;
+            if (std::filesystem::is_regular_file(candidate, ec)) return std::filesystem::absolute(candidate, ec);
+            if (colon == std::string_view::npos) break;
+            dirs.remove_prefix(colon + 1);
+        }
+    }
+    return std::filesystem::absolute(given, ec);
 }
 
 // px-headless and px-server: next to this program (installed), else where
@@ -71,7 +119,10 @@ int main(int argc, char** argv) {
     std::string makeAdmin;
     std::string resetLink;
     std::string devCertificate;
-    const std::filesystem::path self = std::filesystem::absolute(argv[0]);
+    bool backupNow = false;
+    std::filesystem::path restoreFrom;
+    std::optional<std::string> checkHealthUrl;
+    const std::filesystem::path self = selfPath(argv[0]);
     config.headlessExe = findTool(self, "px-headless", PX_HEADLESS_PATH);
     config.serverExe = findTool(self, "px-server", PX_SERVER_PATH);
     // Installed next to this program: web-player/px-player.js and friends.
@@ -149,6 +200,26 @@ int main(int argc, char** argv) {
                 config.webPlayerDir = value();
             } else if (arg == "--dev-certificate") {
                 devCertificate = value();
+            } else if (arg == "--trusted-proxy") {
+                const std::string list = value();
+                for (std::size_t start = 0; start <= list.size();) {
+                    const auto comma = list.find(',', start);
+                    config.trustedProxies.push_back(list.substr(start, comma == std::string::npos ? std::string::npos : comma - start));
+                    if (comma == std::string::npos) break;
+                    start = comma + 1;
+                }
+            } else if (arg == "--backup-dir") {
+                config.backupDir = value();
+            } else if (arg == "--backup-hours") {
+                config.backupHours = std::stod(value());
+            } else if (arg == "--backup-keep") {
+                config.backupKeep = std::stoi(value());
+            } else if (arg == "--backup") {
+                backupNow = true;
+            } else if (arg == "--restore") {
+                restoreFrom = value();
+            } else if (arg == "--check-health") {
+                checkHealthUrl = i + 1 < argc && argv[i + 1][0] != '-' ? std::string(argv[++i]) : std::string();
             } else {
                 usage();
                 return 2;
@@ -159,6 +230,26 @@ int main(int argc, char** argv) {
         }
     }
 
+    if (checkHealthUrl) {
+        const std::string url = checkHealthUrl->empty() ? std::format("http://127.0.0.1:{}", config.port) : *checkHealthUrl;
+        if (auto healthy = platform::checkHealth(url); !healthy) {
+            std::fprintf(stderr, "%s\n", healthy.error().message.c_str());
+            return 1;
+        }
+        return 0;
+    }
+    if (!restoreFrom.empty()) {
+        auto restored = platform::restoreBackup(restoreFrom, config.dataDir);
+        if (!restored) {
+            log::error("{}", restored.error().message);
+            return 1;
+        }
+        log::info("Restored {} into {}: {} accounts, {} games, {} files", restoreFrom.string(), config.dataDir.string(),
+                  restored->accounts, restored->games, restored->files);
+        for (const auto& m : restored->missing) log::warn("Missing from the backup: {}", m);
+        log::info("Start the platform with --data {}", config.dataDir.string());
+        return restored->missing.empty() ? 0 : 3;
+    }
     if (!devCertificate.empty()) {
         std::vector<std::string> hosts;
         std::size_t start = 0;
@@ -180,6 +271,7 @@ int main(int argc, char** argv) {
         return 0;
     }
     if (const char* password = std::getenv("PX_SMTP_PASSWORD")) config.mail.password = password;
+    if (const char* token = std::getenv("PX_METRICS_TOKEN")) config.metricsToken = token;
     if (!config.mail.server.empty() && config.mail.from.empty()) {
         log::error("--smtp needs --mail-from ADDRESS (the sender of the platform's email)");
         return 2;
@@ -192,6 +284,12 @@ int main(int argc, char** argv) {
     if (!service) {
         log::error("{}", service.error().message);
         return 1;
+    }
+    if (backupNow) {
+        auto made = (*service)->backup();
+        if (!made) return 1;
+        std::printf("%s\n", made->folder.string().c_str());
+        return made->missing.empty() ? 0 : 3;
     }
     if (!resetLink.empty()) {
         auto link = (*service)->passwordResetLink(resetLink);

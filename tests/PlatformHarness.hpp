@@ -49,6 +49,7 @@ struct TestPlatform {
                                                       : static_cast<std::uint16_t>(29000 + std::random_device{}() % 2000);
         config.serverPortCount = 20;
         config.threads = 16;
+        config.backupHours = 0; // backups only when a test asks
         if (adjust) adjust(config);
         auto created = px::platform::PlatformService::create(config);
         REQUIRE_MESSAGE(created.ok(), (created.ok() ? "" : created.error().message));
