@@ -123,7 +123,10 @@ async function main() {
     // An email address, confirmed by the link in the mail.
     await page.click('#nav a[data-page=you]');
     await visible('#email-form');
-    if (!/No email address/.test(await text('#email-state'))) throw new Error('email state: ' + (await text('#email-state')));
+    // (The account settings arrive after the page opens.)
+    const stateIs = (re, what) => page.waitForFunction((src) => new RegExp(src).test(document.getElementById('email-state').textContent),
+      re.source, { timeout: 10000 }).catch(async () => { throw new Error(`${what}: ${await text('#email-state')}`); });
+    await stateIs(/No email address/, 'email state before');
     await page.fill('#email', 'Ana@Example.com');
     await page.fill('#email-password', 'wrong-password');
     await page.click('#email-form button[type=submit]');
@@ -132,7 +135,7 @@ async function main() {
     await page.click('#email-form button[type=submit]');
     await noticeSays('saving the address', /link is on its way to ana@example\.com/);
     await visible('#resend-email');
-    if (!/not confirmed/.test(await text('#email-state'))) throw new Error('email state: ' + (await text('#email-state')));
+    await stateIs(/not confirmed/, 'email state after saving');
     await fits('account');
     await shot('accounts-you.png');
     const verify = await nextLink('verify', 1);
@@ -142,7 +145,7 @@ async function main() {
     await noticeSays('confirming', /ana@example\.com is confirmed for ana/);
     if (page.url().includes('verify=')) throw new Error('the token stayed in the address: ' + page.url());
     await visible('#you');
-    await page.waitForFunction(() => /confirmed$/.test(document.getElementById('email-state').textContent));
+    await stateIs(/· confirmed$/, 'email state after confirming');
     if (await page.isVisible('#resend-email')) throw new Error('"send again" for a confirmed address');
     log(`Email address confirmed from the mail (${verify.url.replace(verify.token, '<token>')})`);
 

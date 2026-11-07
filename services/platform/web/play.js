@@ -625,8 +625,13 @@
     $('email-password').value = '';
   }
 
+  // Only the newest answer is drawn: an older request (the page opening)
+  // must not overwrite what a change just showed.
+  let accountRequests = 0;
   async function loadAccount() {
-    drawAccount(await api('GET', '/api/v1/me/account'));
+    const mine = ++accountRequests;
+    const acc = await api('GET', '/api/v1/me/account');
+    if (mine === accountRequests) drawAccount(acc);
   }
 
   async function saveEmail() {
